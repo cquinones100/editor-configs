@@ -1,0 +1,495 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "git push force",
+      "type": "shell",
+      "command": "git push origin head --force",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+    }, {
+      "label": "git checkout current file",
+      "type": "shell",
+      "command": "git checkout -- ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git checkout current file to main",
+      "type": "shell",
+      "command": "git checkout main -- ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git checkout branch",
+      "type": "shell",
+      "command": "git",
+      "args": ["checkout", "${input:gitBranch}"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git add current file",
+      "type": "shell",
+      "command": "git add -p ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git add ...",
+      "type": "shell",
+      "command": "git add ${input:gitAddFile}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git amend",
+      "type": "shell",
+      "command": "git commit --amend --no-edit",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git pr view",
+      "type": "shell",
+      "command": "gh pr view --web",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git repo view",
+      "type": "shell",
+      "command": "gh repo view --web",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git fetch",
+      "type": "shell",
+      "command": "git fetch",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git rebase onto main",
+      "type": "shell",
+      "command": "git fetch && git rebase origin/main",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git rebase abort",
+      "type": "shell",
+      "command": "git rebase --abort",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git log",
+      "type": "shell",
+      "command": "source ~/.zshrc && fzf-git",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "focus": true,
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git log current file",
+      "type": "shell",
+      "command": "git log -- ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git diff main file",
+      "type": "shell",
+      "command": "git diff main -- ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git diff main",
+      "type": "shell",
+      "command": "git diff main..HEAD",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git commit",
+      "type": "shell",
+      "command": "git commit",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "yarn test current file",
+      "type": "shell",
+      "command": "yarn test ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git rebase interactive",
+      "type": "shell",
+      "command": "git",
+      "args": ["rebase", "-i", "${input:commit}"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "remove current file",
+      "type": "shell",
+      "command": "rm ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+                "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git fetch",
+      "type": "shell",
+      "command": "git fetch",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+                "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git rebase continue",
+      "type": "shell",
+      "command": "git rebase --continue",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git rebase onto branch",
+      "type": "shell",
+      "command": "git",
+      "args": ["rebase", "${input:gitBranch}"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "close": true
+      },
+      "problemMatcher": []
+    }, {
+      "label": "run rspec on current file",
+      "type": "shell",
+      "command": "source ~/.zshrc && bin/rspec ${file}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "copy run rspec command for current file",
+      "type": "shell",
+      "command": "echo 'bin/rspec ${file}' | pbcopy",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "silent",
+        "close": true,
+      },
+      "problemMatcher": []
+    }, {
+      "label": "bin/tapioca dsl",
+      "type": "shell",
+      "command": "source ~/.zshrc && bin/tapioca dsl",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "bin/tapioca gem",
+      "type": "shell",
+      "command": "source ~/.zshrc && bin/tapioca gem",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git rebase interactive to last commit for file",
+      "type": "shell",
+      "command": "git rebase -i $(git log -n 2 --pretty=format:\"%H%n\" -- ${file} | tail -n 1)",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git rebase interactive to second to last commit for File",
+      "type": "shell",
+      "command": "git rebase -i $(git log -n 2 --pretty=format:\"%H%n\" -- ${file} | tail -n 2)",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git rebase interactive to second to last commit",
+      "type": "shell",
+      "command": "git rebase -i $(git log -n 2 --pretty=format:\"%H%n\" | tail -n 2)",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "lazygit",
+      "type": "shell",
+      "command": "lazygit",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "srb problems",
+      "type": "shell",
+      "command": "source ~/.zshrc && /Users/carlos.quinones/problems-explorer/bin/main srb 'code -g'",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "focus": true,
+      },
+      "problemMatcher": []
+    }, {
+      "label": "tsc problems",
+      "type": "shell",
+      "command": "source ~/.zshrc && ~/problems-explorer/bin/main 'tsc' 'code -g'",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "focus": true,
+      },
+      "problemMatcher": []
+    }, {
+      "label": "git status",
+      "type": "shell",
+      "command": "source ~/.zshrc && lazygit",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "focus": true,
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "bundle install",
+      "type": "shell",
+      "command": "source ~/.zshrc && bundle install",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+      },
+      "problemMatcher": []
+    }, {
+      "label": "repo view web",
+      "type": "shell",
+      "command": "source ~/.zshrc && gh repo view --web",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }, {
+      "label": "open file web",
+      "type": "shell",
+      "command": "source ~/.zshrc && gh-file ${relativeFile}#L${lineNumber}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "commit",
+      "type": "promptString",
+      "description": "Commit to rebase onto"
+    }, {
+      "id": "shellCommand",
+      "type": "promptString",
+      "description": "Command to run"
+    }, {
+      "id": "gitAddFile",
+      "type": "promptString",
+      "description": "File to add"
+    }, {
+      "id": "gitBranch",
+      "type": "promptString",
+      "description": "Git branch to checkout"
+    }
+  ]
+}

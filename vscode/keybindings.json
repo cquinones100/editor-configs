@@ -208,4 +208,9 @@
     "command": "editor.action.marker.prev",
     "when": "editorFocus"
   },
+  {
+    "key": "a",
+    "command": "explorer.newFile",
+    "when": "explorerViewletVisible && !inputFocus"
+}
 ]

@@ -195,12 +195,26 @@
         "git.revertSelectedRanges",
         "workbench.action.closeActiveEditor"
       ]
-    }
+    },
+    {
+      "command": "multiCommand.openCopilotChat",
+      "sequence": [
+        "workbench.panel.chat.view.copilot.focus",
+        "workbench.action.decreaseViewSize",
+        "workbench.action.decreaseViewSize",
+        "workbench.action.decreaseViewSize",
+        "workbench.action.decreaseViewSize",
+        "workbench.action.increaseViewSize",
+        "workbench.action.increaseViewSize",
+        "workbench.action.increaseViewSize",
+        "workbench.action.increaseViewSize",
+      ]
+    }, {
   ],
   "[ruby]": {
     "editor.defaultFormatter": "Shopify.ruby-lsp",
     "editor.formatOnSave": false
   },
-  "editor.accessibilitySupport": "on",
+  "editor.accessibilitySupport": "off",
   "sync.ignoredSettings": ["*"]
 }

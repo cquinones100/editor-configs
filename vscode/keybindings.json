@@ -101,7 +101,8 @@
   },
   {
     "key": "ctrl+shift+n",
-    "command": "workbench.panel.chat.view.copilot.focus"
+    "command": "extension.multiCommand.execute",
+    "args": { "command": "multiCommand.openCopilotChat" },
   },
   {
     "key": "enter",

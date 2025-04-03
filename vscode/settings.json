@@ -187,7 +187,6 @@
     }
   ],
   "[ruby]": {
-    "editor.defaultFormatter": "Shopify.ruby-lsp",
     "editor.formatOnSave": false
   },
   "editor.accessibilitySupport": "off",

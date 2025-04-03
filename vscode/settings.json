@@ -193,5 +193,6 @@
   "sync.ignoredSettings": ["*"],
   "sorbet.enabled": true,
   "sorbet.typedFalseCompletionNudges": false,
-  "rubyLsp.erbSupport": false
+  "rubyLsp.erbSupport": false,
+  "terminal.integrated.enableMultiLinePasteWarning": false,
 }

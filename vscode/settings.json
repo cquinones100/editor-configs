@@ -190,5 +190,8 @@
     "editor.formatOnSave": false
   },
   "editor.accessibilitySupport": "off",
-  "sync.ignoredSettings": ["*"]
+  "sync.ignoredSettings": ["*"],
+  "sorbet.enabled": true,
+  "sorbet.typedFalseCompletionNudges": false,
+  "rubyLsp.erbSupport": false
 }

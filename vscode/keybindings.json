@@ -106,7 +106,7 @@
   {
     "key": "ctrl+shift+n",
     "command": "extension.multiCommand.execute",
-    "args": { "command": "multiCommand.openCopilotChat" },
+    "args": { "command": "multiCommand.openCopilotChat" }
   },
   {
     "key": "ctrl+shift+n",
@@ -195,7 +195,7 @@
   },
   {
     "key": "ctrl+shift+p",
-    "command": "workbench.action.tasks.runTask",
+    "command": "workbench.action.tasks.runTask"
   },
   {
     "key": "ctrl+l",

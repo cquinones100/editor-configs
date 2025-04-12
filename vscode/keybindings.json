@@ -109,6 +109,11 @@
     "args": { "command": "multiCommand.openCopilotChat" },
   },
   {
+    "key": "ctrl+shift+n",
+    "command": "workbench.action.closeAuxiliaryBar",
+    "when": "view.workbench.panel.chat.view.copilot.visible"
+  },
+  {
     "key": "enter",
     "command": "list.select",
     "when": "explorerViewletVisible && filesExplorerFocus && !inputFocus"

@@ -195,4 +195,8 @@
   "sorbet.typedFalseCompletionNudges": false,
   "rubyLsp.erbSupport": false,
   "terminal.integrated.enableMultiLinePasteWarning": false,
+  "snowflake.connectionsConfigFile": "/Users/carlos.quinones/.snowflake/connections.toml",
+  "rubyLsp.featureFlags": {
+    "tapiocaAddon": false
+  }
 }

@@ -215,5 +215,8 @@
     "Average Word Length too Long": false,
     "Lines too Long": false,
     "Maximum Word Length Exceeded": false
-  }
+  },
+  "extensions.experimental.affinity": {
+    "asvetliakov.vscode-neovim": 1
+  },
 }

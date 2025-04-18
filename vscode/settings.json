@@ -110,6 +110,7 @@
   "search.exclude": {
     "**/node_modules": true,
   },
+  "vim.leader": "<space>",
   "vim.visualModeKeyBindings": [
     {
       "before": ["J"],
@@ -125,6 +126,10 @@
       "before": ["<S-y>"],
       "after": ["y", "y"]
     },
+    {
+      "before": ["<leader>", "g", "g"],
+      "commands": ["multiCommand.runLazyGit"]
+    }
   ],
   "vim.normalModeKeyBindingsNonRecursive": [
     {
@@ -141,6 +146,7 @@
     },
   ],
   "vim.useSystemClipboard": true,
+  "vim.surround": true,
   "window.commandCenter": false,
   "task.allowAutomaticTasks": "on",
   "grunt.autoDetect": "on",
@@ -193,6 +199,23 @@
         "workbench.action.increaseViewSize",
         "workbench.action.increaseViewSize",
         "workbench.action.increaseViewSize",
+      ]
+    },
+    {
+      "command": "multiCommand.runLazyGit",
+      "sequence": [
+        {
+          "command": "workbench.action.terminal.new",
+          "args": {
+            "location": "editor"
+          }
+        },
+        {
+          "command": "workbench.action.terminal.sendSequence",
+          "args": {
+            "text": "lazygit\n"
+          }
+        }
       ]
     }
   ],

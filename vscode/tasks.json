@@ -466,7 +466,7 @@
     }, {
       "label": "open file web",
       "type": "shell",
-      "command": "source ~/.zshrc && gh-file ${relativeFile}#L${lineNumber}",
+      "command": "source ~/.zshrc && gh browse ${relativeFile}:${lineNumber}",
       "group": {
         "kind": "build",
         "isDefault": true

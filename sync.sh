@@ -12,3 +12,6 @@ ln -sf ~/editor-configs/nvim/init.lua ~/.config/nvim/init.lua
 
 # git
 ln -sf ~/editor-configs/git/.gitconfig ~/.gitconfig
+
+# karabiner
+ln -s ~/editor-configs/karabiner/settings.json ~/.config/karabiner

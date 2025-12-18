@@ -163,7 +163,7 @@
   {
     "key": "ctrl+n",
     "command": "workbench.action.closePanel",
-    "when": "panelVisible"  
+    "when": "panelVisible"
   },
   {
     "key": "cmd+w",
@@ -222,24 +222,5 @@
     "key": "a",
     "command": "explorer.newFile",
     "when": "explorerViewletVisible && !inputFocus"
-{
-  "key": "ctrl+cmd+[",
-  "command": "editor.fold",
-  "when": "editorTextFocus && foldingEnabled"
-},
-{
-  "key": "alt+cmd+[",
-  "command": "-editor.fold",
-  "when": "editorTextFocus && foldingEnabled"
-},
-{
-  "key": "ctrl+cmd+]",
-  "command": "editor.unfold",
-  "when": "editorTextFocus && foldingEnabled"
-},
-{
-  "key": "alt+cmd+]",
-  "command": "-editor.unfold",
-  "when": "editorTextFocus && foldingEnabled"
-}
+  }
 ]

@@ -244,4 +244,6 @@
   },
   "git.blame.editorDecoration.enabled": true,
   "git.blame.statusBarItem.enabled": true,
+  "terminal.integrated.suggest.enabled": false,
+  "terminal.integrated.shellIntegration.enabled": false
 }

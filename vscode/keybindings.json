@@ -222,5 +222,9 @@
     "key": "a",
     "command": "explorer.newFile",
     "when": "explorerViewletVisible && !inputFocus"
+  },
+  {
+    "key": "cmd+shift+d",
+    "command": "workbench.view.debug"
   }
 ]

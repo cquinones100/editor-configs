@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/jesseduffield/lazygit/master/schema/config.json
 gui:
-   mainPanelSplitMode: 'vertical'
-   sidePanelWidth: 0.33
-   splitDiff: 'auto'
+  mainPanelSplitMode: 'vertical'
+  sidePanelWidth: 0.15
+  splitDiff: 'auto'
 git:
   paging:
     colorArg: always
-    pager: delta --dark --paging=never
+    pager: delta --dark --paging=never --wrap-max-lines=unlimited --side-by-side
 os:
   editPreset: 'vscode'

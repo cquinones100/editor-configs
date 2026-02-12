@@ -13,5 +13,9 @@ ln -sf ~/editor-configs/nvim/init.lua ~/.config/nvim/init.lua
 # git
 ln -sf ~/editor-configs/git/.gitconfig ~/.gitconfig
 
+# claude
+ln -sf ~/editor-configs/claude/CLAUDE.md ~/.claude/CLAUDE.md
+ln -sf ~/editor-configs/claude/settings.json ~/.claude/settings.json
+
 # karabiner
 ln -s ~/editor-configs/karabiner/settings.json ~/.config/karabiner

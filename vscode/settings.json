@@ -3,7 +3,7 @@
   "editor.minimap.enabled": false,
   "editor.hideCursorInOverviewRuler": true,
   "editor.rulers": [80, 120],
-  "editor.tabSize": 2 ,
+  "editor.tabSize": 2,
   "editor.tabCompletion": "on",
   "editor.inlineSuggest.enabled": true,
   "workbench.editor.enablePreview": false,
@@ -63,14 +63,17 @@
   "cSpell.userWords": [
     "autoincrement",
     "extrasmall",
+    "Insertable",
     "keymap",
     "klass",
+    "Kysely",
     "lotties",
     "rubocop",
     "shiftwidth",
     "softtabstop",
     "spacy",
-    "Turborepo"
+    "Turborepo",
+    "Updateable"
   ],
   "cSpell.diagnosticLevel": "Warning",
   "typescript.tsserver.experimental.enableProjectDiagnostics": true,
@@ -97,7 +100,7 @@
     "x86_64-apple-ios13.6-simulator"
   ],
   "github.copilot.enable": {
-    "*": true,
+    "*": false,
     "plaintext": true,
     "markdown": true,
     "scminput": false,
@@ -108,7 +111,7 @@
   },
   "http.experimental.systemCertificatesV2": true,
   "search.exclude": {
-    "**/node_modules": true,
+    "**/node_modules": true
   },
   "vim.leader": "<space>",
   "vim.visualModeKeyBindings": [
@@ -143,24 +146,20 @@
     {
       "before": ["g", "c"],
       "commands": ["editor.action.commentLine"]
-    },
+    }
   ],
   "vim.useSystemClipboard": true,
   "vim.surround": true,
   "window.commandCenter": false,
   "task.allowAutomaticTasks": "on",
   "grunt.autoDetect": "on",
-  "colorize.languages": [
-    "javascript",
-  ],
+  "colorize.languages": ["javascript"],
   "terminal.integrated.defaultProfile.osx": "zsh",
   "terminal.integrated.profiles.osx": {
     "zsh": {
       "path": "/bin/zsh",
-      "args": [
-        "-l"
-      ]
-    },
+      "args": ["-l"]
+    }
   },
   "multiCommand.commands": [
     {
@@ -172,15 +171,17 @@
         "workbench.action.increaseViewSize",
         "workbench.action.increaseViewSize",
         "workbench.action.increaseViewSize",
-        "workbench.action.increaseViewSize",
+        "workbench.action.increaseViewSize"
       ]
-    }, {
+    },
+    {
       "command": "multiCommand.stageChanges",
       "sequence": [
         "git.stageSelectedRanges",
         "workbench.action.closeActiveEditor"
       ]
-    }, {
+    },
+    {
       "command": "multiCommand.revertChanges",
       "sequence": [
         "git.revertSelectedRanges",
@@ -198,7 +199,7 @@
         "workbench.action.increaseViewSize",
         "workbench.action.increaseViewSize",
         "workbench.action.increaseViewSize",
-        "workbench.action.increaseViewSize",
+        "workbench.action.increaseViewSize"
       ]
     },
     {
@@ -245,5 +246,6 @@
   "git.blame.editorDecoration.enabled": true,
   "git.blame.statusBarItem.enabled": true,
   "terminal.integrated.suggest.enabled": false,
-  "terminal.integrated.shellIntegration.enabled": false
+  "terminal.integrated.shellIntegration.enabled": false,
+  "claudeCode.preferredLocation": "panel"
 }

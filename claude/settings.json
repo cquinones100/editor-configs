@@ -7,13 +7,21 @@
       "Bash(ls)",
       "Bash(ls *)",
       "Bash(mkdir)",
-      "Bash(mkdir *)"
+      "Bash(mkdir *)",
+      "Bash(git log *)",
+      "Bash(git diff *)"
     ],
     "deny": [
       "Read(.env)",
       "Read(.env.*)",
       "Read(**/.env)",
-      "Read(**/.env.*)"
+      "Read(**/.env.*)",
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git fetch *)",
+      "Bash(git fetch)",
+      "Bash(git pull *)",
+      "Bash(git pull)"
     ]
   }
 }

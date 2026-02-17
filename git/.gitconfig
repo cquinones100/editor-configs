@@ -1,8 +1,6 @@
 [user]
 	name = Carlos Quinones
 	email = cquinones100@gmail.com
-[blame]
-	ignoreRevsFile = .git-blame-ignore-revs
 [init]
 	templateDir = /Users/carlos.quinones/.git-templates
 [core]

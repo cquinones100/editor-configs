@@ -3,6 +3,7 @@ gui:
   mainPanelSplitMode: 'vertical'
   sidePanelWidth: 0.15
   splitDiff: 'auto'
+  commitHashLength: 0
 git:
   paging:
     colorArg: always

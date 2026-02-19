@@ -15,6 +15,7 @@
 - Don't implement API routes unless explicitly requested
 - Put server actions in dedicated files in a `_actions` directory colocated with the relevant route
 - Suggest adding Playwright and Jest if they aren't already in a project
+- Follow Next.js routing best practices: favor dynamic route segments (`/campaigns/[slug]`) over query parameters (`/campaigns?slug=...`) for resource identification. Reserve query params for optional filters, sorting, and pagination.
 
 # Testing
 
@@ -29,6 +30,7 @@
 ## Commits
 - Never include a Co-Authored-By line in commit messages
 - Keep the description clear and simple. Focus on the intent of the commit. Always consider the diff between the current branch and main or master. Don't use emojis, don't use bullet points.
+- Never attribute any git artifact (commits, PRs, branches, etc.) to Claude or AI. No "Generated with Claude Code" or similar lines.
 
 ## Branch Awareness
 
@@ -40,6 +42,7 @@ Before responding to any request, always check the current branch's recent chang
 
 ## Pull Request Descriptions
 - Keep the description clear and simple. Focus on the intent of the commit. Always consider the diff between the current branch and main or master. Don't use emojis, don't use bullet points. Only dig into technical implementation when there is some divergence from what is normal in the given repo.
+- Never include a "Test plan" section. No checklists.
 
 
 # General

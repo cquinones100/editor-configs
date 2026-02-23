@@ -17,5 +17,8 @@ ln -sf ~/editor-configs/git/.gitconfig ~/.gitconfig
 ln -sf ~/editor-configs/claude/CLAUDE.md ~/.claude/CLAUDE.md
 ln -sf ~/editor-configs/claude/settings.json ~/.claude/settings.json
 
+# iterm
+ln -sf ~/editor-configs/iterm/com.googlecode.iterm2.plist ~/Library/Preferences/com.googlecode.iterm2.plist
+
 # karabiner
 ln -s ~/editor-configs/karabiner/settings.json ~/.config/karabiner

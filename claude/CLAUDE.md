@@ -40,6 +40,9 @@ Before responding to any request, always check the current branch's recent chang
 2. Run `git diff HEAD~3 --stat` to see a summary of recent file changes
 3. Include relevant context from these changes in your understanding of the codebase state
 
+## Pushing
+- Always ask for confirmation before running `git push`. Never push without explicit approval.
+
 ## Pull Request Descriptions
 - Keep the description clear and simple. Focus on the intent of the commit. Always consider the diff between the current branch and main or master. Don't use emojis, don't use bullet points. Only dig into technical implementation when there is some divergence from what is normal in the given repo.
 - Never include a "Test plan" section. No checklists.

@@ -8,6 +8,7 @@
 - Prefer inlining over abstractions, but extract when the logic is complex enough
 - Prefer `async/await` over `.then`
 - In Node apps, always use `pnpm` or `npm` (whichever is configured for the current app) instead of `npx`
+- For one-off scripts, prefer Node over Python
 
 # Next.js
 
@@ -50,6 +51,8 @@ Before responding to any request, always check the current branch's recent chang
 
 # General
 
+- When moving into a worktree, always install dependencies before doing anything else
+- When creating a worktree in a git repo, add `.claude/worktrees/` to `.gitignore` if it isn't already there
 - When reading files, always read from disk, not from IDE memory (e.g., in VS Code, use the Read tool to read the file on disk rather than relying on what the IDE provides)
 - Challenge my requests if you think there's a better implementation — suggest the alternative and explain why
 - When working within a project, update the local CLAUDE.md with project requirements as they evolve. If there isn't one, create it. Update the README in the same way and keep both files in sync.

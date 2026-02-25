@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(find:*)"
+    ]
+  }
+}

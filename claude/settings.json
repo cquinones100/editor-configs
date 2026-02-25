@@ -9,7 +9,9 @@
       "Bash(mkdir)",
       "Bash(mkdir *)",
       "Bash(git log *)",
-      "Bash(git diff *)"
+      "Bash(git diff *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ],
     "deny": [
       "Read(.env)",

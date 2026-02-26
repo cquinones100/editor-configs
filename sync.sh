@@ -16,6 +16,7 @@ ln -sf ~/editor-configs/git/.gitconfig ~/.gitconfig
 # claude
 ln -sf ~/editor-configs/claude/CLAUDE.md ~/.claude/CLAUDE.md
 ln -sf ~/editor-configs/claude/settings.json ~/.claude/settings.json
+ln -sf ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
 mkdir -p ~/.claude/hooks
 for hook in ~/editor-configs/claude/hooks/*; do
   ln -sf "$hook" ~/.claude/hooks/

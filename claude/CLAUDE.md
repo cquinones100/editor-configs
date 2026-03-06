@@ -25,6 +25,7 @@
 - Always configure tests to use a dedicated TEST database to avoid destroying local data
 - Ask before running end-to-end tests
 - Prefer factories over direct insertion for test data setup
+- Don't extract helper functions in tests. Keep test logic inline so each test is self-contained and readable. Use factories for data setup.
 
 # Git
 

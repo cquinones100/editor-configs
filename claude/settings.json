@@ -19,6 +19,7 @@
       "Bash(gh pr view*)",
       "Bash(gh pr diff*)",
       "Bash(pnpm lint*)",
+      "Bash(pnpm typecheck*)",
       "Bash(ls -la*)",
       "Bash(find *)",
       "Bash(cd * && git *)",

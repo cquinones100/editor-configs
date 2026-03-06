@@ -11,7 +11,18 @@
       "Bash(git log *)",
       "Bash(git diff *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh run view *)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr diff*)",
+      "Bash(pnpm lint*)",
+      "Bash(ls -la*)",
+      "Bash(find *)",
+      "Bash(cd * && git *)",
+      "Bash(gh api repos/*)"
     ],
     "deny": [
       "Read(.env)",
@@ -24,10 +35,7 @@
       "Bash(git pull)"
     ]
   },
-  "statusLine": {
-    "type": "command",
-    "command": "bash ~/.claude/statusline-command.sh"
-  },
+  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {
@@ -36,6 +44,14 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/enforce-node.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-gh-api-readonly.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-no-npx.sh"
           }
         ]
       }
@@ -52,5 +68,8 @@
       }
     ]
   },
-  "model": "opus"
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  }
 }

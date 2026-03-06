@@ -100,7 +100,7 @@
     "x86_64-apple-ios13.6-simulator"
   ],
   "github.copilot.enable": {
-    "*": false,
+    "*": true,
     "plaintext": true,
     "markdown": true,
     "scminput": false,

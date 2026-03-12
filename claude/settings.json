@@ -39,7 +39,6 @@
       "Bash(git pull)"
     ]
   },
-  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {

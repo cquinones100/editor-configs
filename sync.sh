@@ -23,7 +23,8 @@ for hook in ~/editor-configs/claude/hooks/*; do
 done
 
 # iterm
-ln -sf ~/editor-configs/iterm/com.googlecode.iterm2.plist ~/Library/Preferences/com.googlecode.iterm2.plist
+mkdir -p ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch
+ln -sf ~/editor-configs/iterm/Scripts/AutoLaunch/session_title.py ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch/session_title.py
 
 # karabiner
 ln -s ~/editor-configs/karabiner/settings.json ~/.config/karabiner

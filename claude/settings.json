@@ -23,7 +23,10 @@
       "Bash(ls -la*)",
       "Bash(find *)",
       "Bash(cd * && git *)",
-      "Bash(gh api repos/*)"
+      "Bash(cd * && git * && git *)",
+      "Bash(gh api repos/*)",
+      "Bash(gh pr list*)",
+      "Bash(ls *)"
     ],
     "deny": [
       "Read(.env)",

@@ -5,9 +5,14 @@
 # statusline-command.sh, so tmux, iTerm tabs, and Claude statusline
 # all agree on the color for a given project/branch.
 #
-# Usage: accent-color.sh <path>
-# Output: r;g;b (e.g. "35;239;122")
+# Usage: accent-color.sh [--name] <path>
+# Output: hex color (e.g. "23ef59"), or with --name, the color key string
 
+name_only=false
+if [ "$1" = "--name" ]; then
+  name_only=true
+  shift
+fi
 cwd="${1:-.}"
 dirname=$(basename "$cwd")
 color_key="$dirname"
@@ -26,6 +31,11 @@ if [ -n "$branch" ]; then
       color_key="${dirname} | branch:${branch}"
     fi
   fi
+fi
+
+if $name_only; then
+  printf '%s' "$color_key"
+  exit 0
 fi
 
 hash=$(printf '%s' "$color_key" | shasum -a 256 | cut -c1-8)

@@ -16,5 +16,7 @@ tmux setw -g window-status-current-format "#[bg=colour238,fg=#${hex},bold] #I:#W
 
 tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' | while IFS=, read -r idx path; do
   whex=$("$script_dir/accent-color.sh" "$path")
+  name=$("$script_dir/accent-color.sh" --name "$path")
   tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#W "
+  tmux rename-window -t "${session}:${idx}" "$name"
 done

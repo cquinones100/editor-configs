@@ -58,4 +58,12 @@ esac
 (( r > 255 )) && r=255; (( g > 255 )) && g=255; (( b > 255 )) && b=255
 (( r < 0 )) && r=0; (( g < 0 )) && g=0; (( b < 0 )) && b=0
 
+# Ensure minimum perceived luminance for readability on dark backgrounds
+lum=$(( (299 * r + 587 * g + 114 * b) / 1000 ))
+if (( lum < 100 )); then
+  boost=$(( 100 - lum ))
+  r=$(( r + boost )); g=$(( g + boost )); b=$(( b + boost ))
+  (( r > 255 )) && r=255; (( g > 255 )) && g=255; (( b > 255 )) && b=255
+fi
+
 printf '%02x%02x%02x' "$r" "$g" "$b"

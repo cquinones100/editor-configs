@@ -399,74 +399,62 @@
 		<key>0x4a-0x60000-0x26</key>
 		<dict>
 			<key>Action</key>
-			<integer>28</integer>
-			<key>Apply Mode</key>
-			<integer>0</integer>
-			<key>Escaping</key>
-			<integer>2</integer>
+			<integer>10</integer>
 			<key>Text</key>
-			<string>8FD03AC7-A176-4BA0-AA34-ADF18EAC899D</string>
-			<key>Version</key>
-			<integer>2</integer>
+			<string>[74;6~</string>
 		</dict>
 		<key>0x4c-0x60000-0x25</key>
 		<dict>
 			<key>Action</key>
-			<integer>29</integer>
-			<key>Apply Mode</key>
-			<integer>0</integer>
-			<key>Escaping</key>
-			<integer>2</integer>
+			<integer>10</integer>
 			<key>Text</key>
-			<string>8FD03AC7-A176-4BA0-AA34-ADF18EAC899D</string>
-			<key>Version</key>
-			<integer>2</integer>
+			<string>[76;6~</string>
 		</dict>
 		<key>0x68-0x40000-0x4</key>
 		<dict>
 			<key>Action</key>
-			<integer>18</integer>
+			<integer>10</integer>
 			<key>Label</key>
 			<string></string>
 			<key>Text</key>
-			<string></string>
+			<string>[72;5~</string>
 			<key>Version</key>
 			<integer>1</integer>
 		</dict>
 		<key>0x6a-0x40000-0x26</key>
 		<dict>
 			<key>Action</key>
-			<integer>21</integer>
+			<integer>10</integer>
 			<key>Apply Mode</key>
 			<integer>0</integer>
 			<key>Escaping</key>
 			<integer>2</integer>
 			<key>Text</key>
-			<string></string>
+			<string>[74;5~</string>
 			<key>Version</key>
 			<integer>2</integer>
 		</dict>
 		<key>0x6b-0x40000-0x28</key>
 		<dict>
 			<key>Action</key>
-			<integer>20</integer>
+			<integer>10</integer>
 			<key>Apply Mode</key>
 			<integer>0</integer>
 			<key>Escaping</key>
 			<integer>2</integer>
 			<key>Text</key>
-			<string></string>
+			<string>[75;5~</string>
 			<key>Version</key>
 			<integer>2</integer>
 		</dict>
 		<key>0x6c-0x40000-0x25</key>
 		<dict>
 			<key>Action</key>
-			<integer>19</integer>
+			<integer>10</integer>
 			<key>Label</key>
 			<string></string>
 			<key>Text</key>
-			<string></string>
+			<string>[76;5~</string>
 			<key>Version</key>
 			<integer>1</integer>
 		</dict>
@@ -494,30 +482,30 @@
 		<key>0xf702-0x300000</key>
 		<dict>
 			<key>Action</key>
-			<integer>2</integer>
+			<integer>10</integer>
 			<key>Text</key>
-			<string></string>
+			<string>[1;9D</string>
 		</dict>
 		<key>0xf702-0x320000</key>
 		<dict>
 			<key>Action</key>
-			<integer>33</integer>
+			<integer>10</integer>
 			<key>Text</key>
-			<string></string>
+			<string>[1;10D</string>
 		</dict>
 		<key>0xf703-0x300000</key>
 		<dict>
 			<key>Action</key>
-			<integer>0</integer>
+			<integer>10</integer>
 			<key>Text</key>
-			<string></string>
+			<string>[1;9C</string>
 		</dict>
 		<key>0xf703-0x320000</key>
 		<dict>
 			<key>Action</key>
-			<integer>34</integer>
+			<integer>10</integer>
 			<key>Text</key>
-			<string></string>
+			<string>[1;10C</string>
 		</dict>
 		<key>0xf729-0x100000</key>
 		<dict>
@@ -566,6 +554,10 @@
 	<false/>
 	<key>HotkeyMigratedFromSingleToMulti</key>
 	<true/>
+	<key>NeverWarnAboutShortLivedSessions_8FD03AC7-A176-4BA0-AA34-ADF18EAC899D</key>
+	<true/>
+	<key>NeverWarnAboutShortLivedSessions_8FD03AC7-A176-4BA0-AA34-ADF18EAC899D_selection</key>
+	<integer>0</integer>
 	<key>New Bookmarks</key>
 	<array>
 		<dict>

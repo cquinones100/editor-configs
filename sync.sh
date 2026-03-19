@@ -41,7 +41,12 @@ sync_karabiner() {
   ln -s ~/editor-configs/karabiner/settings.json ~/.config/karabiner
 }
 
-configs=(lazygit vscode neovim git claude iterm karabiner)
+sync_tmux() {
+  mkdir -p ~/.config/tmux
+  ln -sf ~/editor-configs/tmux/tmux.conf ~/.config/tmux/tmux.conf
+}
+
+configs=(lazygit vscode neovim git claude iterm karabiner tmux)
 
 sync_all() {
   for config in "${configs[@]}"; do

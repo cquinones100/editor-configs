@@ -44,6 +44,8 @@ sync_karabiner() {
 sync_tmux() {
   mkdir -p ~/.config/tmux
   ln -sf ~/editor-configs/tmux/tmux.conf ~/.config/tmux/tmux.conf
+  ln -sf ~/editor-configs/tmux/accent-color.sh ~/.config/tmux/accent-color.sh
+  ln -sf ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
 }
 
 configs=(lazygit vscode neovim git claude iterm karabiner tmux)

@@ -16,6 +16,7 @@
       "Bash(git status *)",
       "Bash(gh pr checks *)",
       "Bash(gh run view *)",
+      "Bash(gh run list*)",
       "Bash(gh pr view*)",
       "Bash(gh pr diff*)",
       "Bash(pnpm lint*)",
@@ -55,6 +56,10 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/enforce-no-npx.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/enforce-no-git-pull.sh"
           }
         ]
       }

@@ -25,6 +25,7 @@
       "Bash(find *)",
       "Bash(cd * && git *)",
       "Bash(cd * && git * && git *)",
+      "Bash(git -C *)",
       "Bash(gh api repos/*)",
       "Bash(gh pr list*)",
       "Bash(ls *)"

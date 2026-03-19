@@ -26,6 +26,7 @@
       "Bash(cd * && git *)",
       "Bash(cd * && git * && git *)",
       "Bash(git -C *)",
+      "Bash(git stash*)",
       "Bash(gh api repos/*)",
       "Bash(gh pr list*)",
       "Bash(ls *)"

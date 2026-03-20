@@ -52,6 +52,7 @@ Before responding to any request, always check the current branch's recent chang
 
 # General
 
+- In mono repos, use `git -C <path>` instead of `cd`-ing into the project root
 - When moving into a worktree, always install dependencies before doing anything else
 - When creating a worktree in a git repo, add `.claude/worktrees/` to `.gitignore` if it isn't already there
 - When reading files, always read from disk, not from IDE memory (e.g., in VS Code, use the Read tool to read the file on disk rather than relying on what the IDE provides)

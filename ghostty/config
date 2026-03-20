@@ -3,7 +3,7 @@ cursor-style = block
 cursor-style-blink = false
 
 # Window
-macos-titlebar-style = hidden
+macos-titlebar-style = native
 confirm-close-surface = false
 
 # Input

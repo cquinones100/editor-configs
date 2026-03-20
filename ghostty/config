@@ -8,3 +8,6 @@ confirm-close-surface = false
 
 # Input
 macos-option-as-alt = true
+
+# Allow Cmd+Click to open links even inside tmux
+mouse-shift-capture = false

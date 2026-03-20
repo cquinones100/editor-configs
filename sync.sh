@@ -49,7 +49,12 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/workspace.sh ~/.config/tmux/workspace.sh
 }
 
-configs=(lazygit vscode neovim git claude iterm karabiner tmux)
+sync_ghostty() {
+  mkdir -p ~/.config/ghostty
+  ln -sf ~/editor-configs/ghostty/config ~/.config/ghostty/config
+}
+
+configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty)
 
 sync_all() {
   for config in "${configs[@]}"; do

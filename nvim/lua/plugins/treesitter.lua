@@ -10,10 +10,5 @@ return {
       "lua", "vim", "vimdoc",
       "markdown", "markdown_inline",
     },
-    highlight = { enable = true },
-    indent = { enable = true },
   },
-  config = function(_, opts)
-    require("nvim-treesitter.configs").setup(opts)
-  end,
 }

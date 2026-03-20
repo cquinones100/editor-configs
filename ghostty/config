@@ -1,0 +1,10 @@
+# Cursor
+cursor-style = block
+cursor-style-blink = false
+
+# Window
+macos-titlebar-style = hidden
+confirm-close-surface = false
+
+# Input
+macos-option-as-alt = true

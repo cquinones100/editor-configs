@@ -14,7 +14,8 @@ sync_vscode() {
 }
 
 sync_neovim() {
-  ln -sf ~/editor-configs/nvim/init.lua ~/.config/nvim/init.lua
+  rm -rf ~/.config/nvim
+  ln -sfn ~/editor-configs/nvim ~/.config/nvim
 }
 
 sync_git() {

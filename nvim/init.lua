@@ -26,9 +26,23 @@ vim.keymap.set("n", "<C-s>", vim.cmd.w)
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")
 vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv")
 
--- Keep cursor in the middle when jumping
-vim.keymap.set("n", "<C-d>", "<C-d>M")
-vim.keymap.set("n", "<C-u>", "<C-u>M")
+-- Keep cursor in the middle when jumping, go to boundary when at end
+vim.keymap.set("n", "<C-d>", function()
+  if vim.fn.line("w$") >= vim.fn.line("$") then
+    vim.api.nvim_win_set_cursor(0, { vim.fn.line("$"), 0 })
+  else
+    local keys = vim.api.nvim_replace_termcodes("<C-d>M", true, false, true)
+    vim.api.nvim_feedkeys(keys, "n", false)
+  end
+end)
+vim.keymap.set("n", "<C-u>", function()
+  if vim.fn.line("w0") <= 1 then
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  else
+    local keys = vim.api.nvim_replace_termcodes("<C-u>M", true, false, true)
+    vim.api.nvim_feedkeys(keys, "n", false)
+  end
+end)
 
 -- Replace currently hovered word
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])

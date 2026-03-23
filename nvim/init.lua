@@ -16,6 +16,12 @@ vim.opt.splitright = true
 vim.opt.splitbelow = true
 vim.opt.updatetime = 50
 
+-- Yank entire line with Shift+Y
+vim.keymap.set("n", "<S-y>", "yy")
+
+-- Save with Ctrl+S
+vim.keymap.set("n", "<C-s>", vim.cmd.w)
+
 -- Move highlighted text up or down
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")
 vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv")
@@ -32,9 +38,7 @@ vim.keymap.set("i", "<C-c>", "<Esc>")
 
 -- ── VSCode-specific ──────────────────────────────────
 if vim.g.vscode then
-  vim.keymap.set("n", "<S-y>", "yy")
   vim.keymap.set("n", "<S-c-c>", function() vim.fn.setreg("+", vim.fn.expand("%:p")) end)
-  vim.keymap.set("n", "<C-s>", vim.cmd.w)
   vim.keymap.set("n", "<C-a>", "ggVG")
   return
 end

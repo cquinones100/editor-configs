@@ -6,7 +6,7 @@ return {
       "typescript", "tsx", "javascript",
       "python", "ruby",
       "html", "css",
-      "json", "yaml", "toml",
+      "json", "yaml", "toml", "hcl", "terraform",
       "lua", "vim", "vimdoc",
       "markdown", "markdown_inline",
     },

@@ -48,6 +48,12 @@ vim.opt.undofile = true
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
 
+vim.filetype.add({
+  extension = {
+    tfvars = "terraform-vars",
+  },
+})
+
 -- ── Bootstrap lazy.nvim ──────────────────────────────
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not vim.uv.fs_stat(lazypath) then

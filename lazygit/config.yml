@@ -19,4 +19,4 @@ customCommands:
     context: 'global'
     output: terminal
 os:
-  editPreset: 'vscode'
+  editPreset: 'nvim'

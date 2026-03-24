@@ -85,6 +85,9 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup("plugins")
 
+-- ── LSP Hover ────────────────────────────────────────
+vim.o.winborder = "rounded"
+
 -- ── LSP Keymaps ──────────────────────────────────────
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(event)

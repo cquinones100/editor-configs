@@ -39,5 +39,10 @@ return {
       end,
       desc = "Open file on GitHub",
     },
+    {
+      "<leader>gb",
+      "<cmd>Gitsigns toggle_current_line_blame<CR>",
+      desc = "Toggle git blame",
+    },
   },
 }

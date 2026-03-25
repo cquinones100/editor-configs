@@ -13,6 +13,11 @@ keybinding:
     moveDownCommit: '<c-n>'
     moveUpCommit: '<c-p>'
 customCommands:
+  - key: 'V'
+    description: 'View PR for current branch'
+    command: 'gh pr view --web'
+    context: 'global'
+    output: terminal
   - key: '<c-d>'
     description: 'Diff branch changes against main (GitHub-style)'
     command: 'git diff main...HEAD | delta --dark --paging=always --tabs=2'

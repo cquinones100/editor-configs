@@ -47,6 +47,9 @@ end)
 -- Replace currently hovered word
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
 
+-- Copy relative path to clipboard
+vim.keymap.set("n", "<leader>cp", function() vim.fn.setreg("+", vim.fn.expand("%:.")) end)
+
 -- Escape with Ctrl+C in insert mode
 vim.keymap.set("i", "<C-c>", "<Esc>")
 

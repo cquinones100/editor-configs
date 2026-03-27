@@ -48,7 +48,8 @@ end)
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
 
 -- Copy relative path to clipboard
-vim.keymap.set("n", "<leader>cp", function() vim.fn.setreg("+", vim.fn.expand("%:.")) end)
+vim.keymap.set("n", "<leader>cp", function() vim.fn.setreg("+", vim.fn.expand("%:.")) end, { desc = "Copy relative file path" })
+vim.keymap.set("n", "<leader>cP", function() vim.fn.setreg("+", vim.fn.expand("%:p")) end, { desc = "Copy absolute file path" })
 
 -- Escape with Ctrl+C in insert mode
 vim.keymap.set("i", "<C-c>", "<Esc>")
@@ -66,6 +67,10 @@ vim.opt.signcolumn = "yes"
 vim.opt.cursorline = true
 vim.opt.wrap = false
 vim.opt.undofile = true
+vim.opt.autoread = true
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
+  command = "checktime",
+})
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
 
@@ -98,6 +103,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
       vim.keymap.set("n", keys, func, { buffer = event.buf })
     end
     map("gd", vim.lsp.buf.definition)
+    map("<C-]>", vim.lsp.buf.definition)
     map("gr", vim.lsp.buf.references)
     map("gi", vim.lsp.buf.implementation)
     map("K", vim.lsp.buf.hover)

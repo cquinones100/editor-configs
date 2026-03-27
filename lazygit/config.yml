@@ -13,7 +13,7 @@ keybinding:
     moveDownCommit: '<c-n>'
     moveUpCommit: '<c-p>'
 customCommands:
-  - key: 'V'
+  - key: '<c-o>'
     description: 'View PR for current branch'
     command: 'gh pr view --web'
     context: 'global'

@@ -5,5 +5,8 @@ return {
     options = {
       theme = "tokyonight",
     },
+    sections = {
+      lualine_c = { { "filename", path = 1 } },
+    },
   },
 }

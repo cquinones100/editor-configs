@@ -14,8 +14,24 @@ return {
     })
     telescope.load_extension("fzf")
 
+    local actions = require("telescope.actions")
+    local action_state = require("telescope.actions.state")
+
     local builtin = require("telescope.builtin")
-    vim.keymap.set("n", "<C-p>", builtin.find_files)
+    vim.keymap.set("n", "<C-p>", function()
+      builtin.find_files({
+        hidden = true,
+        attach_mappings = function(_, map)
+          map("i", "<C-y>", function(prompt_bufnr)
+            local entry = action_state.get_selected_entry()
+            actions.close(prompt_bufnr)
+            vim.fn.setreg("+", entry[1])
+            vim.notify("Copied: " .. entry[1])
+          end)
+          return true
+        end,
+      })
+    end)
     vim.keymap.set("n", "<C-S-f>", builtin.live_grep)
     vim.keymap.set("n", "<C-S-p>", builtin.keymaps)
     vim.keymap.set("n", "<leader>fb", builtin.buffers)

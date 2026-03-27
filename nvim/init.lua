@@ -107,6 +107,14 @@ vim.api.nvim_create_autocmd("LspAttach", {
     map("gr", vim.lsp.buf.references)
     map("gi", vim.lsp.buf.implementation)
     map("K", vim.lsp.buf.hover)
+    map("gh", function()
+      local diagnostics = vim.diagnostic.get(0, { lnum = vim.api.nvim_win_get_cursor(0)[1] - 1 })
+      if #diagnostics > 0 then
+        vim.diagnostic.open_float()
+      else
+        vim.lsp.buf.hover()
+      end
+    end)
     map("<leader>rn", vim.lsp.buf.rename)
     map("<leader>ca", vim.lsp.buf.code_action)
     map("[d", vim.diagnostic.goto_prev)

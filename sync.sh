@@ -55,7 +55,11 @@ sync_ghostty() {
   ln -sf ~/editor-configs/ghostty/config ~/.config/ghostty/config
 }
 
-configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty)
+sync_pgcli() {
+  ln -sf ~/editor-configs/pgcli/config ~/.pgclirc
+}
+
+configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli)
 
 sync_all() {
   for config in "${configs[@]}"; do

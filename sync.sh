@@ -39,7 +39,8 @@ sync_iterm() {
 }
 
 sync_karabiner() {
-  ln -s ~/editor-configs/karabiner/settings.json ~/.config/karabiner
+  mkdir -p ~/.config/karabiner
+  ln -sf ~/editor-configs/karabiner/karabiner.json ~/.config/karabiner/karabiner.json
 }
 
 sync_tmux() {

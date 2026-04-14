@@ -117,7 +117,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
     end)
     map("<leader>rn", vim.lsp.buf.rename)
     map("<leader>ca", vim.lsp.buf.code_action)
-    map("[d", vim.diagnostic.goto_prev)
-    map("]d", vim.diagnostic.goto_next)
+    map("<C-S-k>", vim.diagnostic.goto_prev)
+    map("<C-S-j>", vim.diagnostic.goto_next)
   end,
 })

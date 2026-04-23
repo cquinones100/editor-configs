@@ -5,7 +5,7 @@
 	templateDir = /Users/carlos.quinones/.git-templates
 [core]
 	excludesfile = /Users/carlos.quinones/.gitignore
-	editor = code --wait
+	editor = nvim
 	pager = delta
 [interactive]
 	diffFilter = delta --color-only

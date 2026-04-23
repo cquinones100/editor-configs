@@ -54,9 +54,6 @@ vim.keymap.set("n", "<leader>cP", function() vim.fn.setreg("+", vim.fn.expand("%
 -- Escape with Ctrl+C in insert mode
 vim.keymap.set("i", "<C-c>", "<Esc>")
 
--- Comment current line with gc (visual gc already comments the selection)
-vim.keymap.set("n", "gc", "gcc", { remap = true })
-
 -- ── VSCode-specific ──────────────────────────────────
 if vim.g.vscode then
   vim.keymap.set("n", "<S-c-c>", function() vim.fn.setreg("+", vim.fn.expand("%:p")) end)

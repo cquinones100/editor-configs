@@ -5,9 +5,9 @@ gui:
   splitDiff: 'auto'
   commitHashLength: 0
 git:
-  pagers:
-    - colorArg: always
-      pager: delta --dark --paging=never --wrap-max-lines=unlimited --side-by-side --tabs=2
+  paging:
+    colorArg: always
+    pager: delta --dark --paging=never --wrap-max-lines=unlimited --side-by-side --tabs=2
 keybinding:
   commits:
     moveDownCommit: '<c-n>'

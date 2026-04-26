@@ -2,15 +2,31 @@
 
 set -e
 
+case "$(uname -s)" in
+  Darwin) OS=macos ;;
+  Linux)  OS=linux ;;
+  *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+
+if [[ "$OS" == "macos" ]]; then
+  LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
+  VSCODE_DIR="$HOME/Library/Application Support/Code/User"
+else
+  LAZYGIT_DIR="$HOME/.config/lazygit"
+  VSCODE_DIR="$HOME/.config/Code/User"
+fi
+
 sync_lazygit() {
-  ln -sf ~/editor-configs/lazygit/config.yml ~/Library/Application\ Support/lazygit/config.yml
+  mkdir -p "$LAZYGIT_DIR"
+  ln -sf ~/editor-configs/lazygit/config.yml "$LAZYGIT_DIR/config.yml"
 }
 
 sync_vscode() {
-  ln -sf ~/editor-configs/vscode/settings.json ~/Library/Application\ Support/Code/User/settings.json
-  ln -sf ~/editor-configs/vscode/tasks.json ~/Library/Application\ Support/Code/User/tasks.json
-  ln -sf ~/editor-configs/vscode/keybindings.json ~/Library/Application\ Support/Code/User/keybindings.json
-  ln -sf ~/editor-configs/vscode/snippets ~/Library/Application\ Support/Code/User/snippets
+  mkdir -p "$VSCODE_DIR"
+  ln -sf ~/editor-configs/vscode/settings.json "$VSCODE_DIR/settings.json"
+  ln -sf ~/editor-configs/vscode/tasks.json "$VSCODE_DIR/tasks.json"
+  ln -sf ~/editor-configs/vscode/keybindings.json "$VSCODE_DIR/keybindings.json"
+  ln -sfn ~/editor-configs/vscode/snippets "$VSCODE_DIR/snippets"
 }
 
 sync_neovim() {
@@ -60,7 +76,11 @@ sync_pgcli() {
   ln -sf ~/editor-configs/pgcli/config ~/.pgclirc
 }
 
-configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli)
+if [[ "$OS" == "macos" ]]; then
+  configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli)
+else
+  configs=(lazygit vscode neovim git claude tmux ghostty pgcli)
+fi
 
 sync_all() {
   for config in "${configs[@]}"; do

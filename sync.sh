@@ -39,6 +39,7 @@ sync_git() {
 }
 
 sync_claude() {
+  mkdir -p ~/.claude
   ln -sf ~/editor-configs/claude/CLAUDE.md ~/.claude/CLAUDE.md
   ln -sf ~/editor-configs/claude/settings.json ~/.claude/settings.json
   ln -sf ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
@@ -82,23 +83,41 @@ else
   configs=(lazygit vscode neovim git claude tmux ghostty pgcli)
 fi
 
+failed=()
+
+run_sync() {
+  local name=$1
+  echo "Syncing $name..."
+  if ! "sync_$name"; then
+    echo "  failed to sync $name; continuing" >&2
+    failed+=("$name")
+  fi
+}
+
+report() {
+  if (( ${#failed[@]} > 0 )); then
+    echo ""
+    echo "Failed: ${failed[*]}" >&2
+    exit 1
+  fi
+}
+
 sync_all() {
   for config in "${configs[@]}"; do
-    echo "Syncing $config..."
-    "sync_$config"
+    run_sync "$config"
   done
 }
 
 if [[ $# -gt 0 ]]; then
   for arg in "$@"; do
     if printf '%s\n' "${configs[@]}" | grep -qx "$arg"; then
-      echo "Syncing $arg..."
-      "sync_$arg"
+      run_sync "$arg"
     else
       echo "Unknown config: $arg (available: ${configs[*]})" >&2
       exit 1
     fi
   done
+  report
   exit 0
 fi
 
@@ -112,16 +131,18 @@ read -rp "> " selection
 
 if [[ "$selection" == "a" ]]; then
   sync_all
+  report
   exit 0
 fi
 
 for num in $selection; do
   idx=$((num - 1))
   if [[ $idx -ge 0 && $idx -lt ${#configs[@]} ]]; then
-    echo "Syncing ${configs[$idx]}..."
-    "sync_${configs[$idx]}"
+    run_sync "${configs[$idx]}"
   else
     echo "Invalid selection: $num" >&2
     exit 1
   fi
 done
+
+report

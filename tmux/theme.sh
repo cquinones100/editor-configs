@@ -11,9 +11,11 @@
 script_dir="$(dirname "$0")"
 state_file="$script_dir/.theme-mode"
 
-# Ghostty themes — override via env if you want different ones
+# Ghostty themes — override via env if you want different ones.
+# GitHub Light Default has noticeably darker bright_black than Tomorrow,
+# so TUI dim/placeholder text stays readable on white.
 GHOSTTY_THEME_DARK="${GHOSTTY_THEME_DARK:-Tomorrow Night}"
-GHOSTTY_THEME_LIGHT="${GHOSTTY_THEME_LIGHT:-Tomorrow}"
+GHOSTTY_THEME_LIGHT="${GHOSTTY_THEME_LIGHT:-GitHub Light High Contrast}"
 
 mode="${1:-toggle}"
 
@@ -29,8 +31,8 @@ case "$mode" in
     GHOSTTY_THEME="$GHOSTTY_THEME_DARK"
     ;;
   light)
-    BG_DARK=colour254; BG_MED=colour250; BG_DIM=colour253
-    FG=colour236; FG_DIM=colour240; FG_BRIGHT=colour232
+    BG_DARK=colour253; BG_MED=colour248; BG_DIM=colour254
+    FG=colour234; FG_DIM=colour238; FG_BRIGHT=colour232
     GHOSTTY_THEME="$GHOSTTY_THEME_LIGHT"
     ;;
   *)

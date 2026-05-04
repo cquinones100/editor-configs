@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+set -e
+
+usage() {
+  cat >&2 <<EOF
+Usage: wt-cleanup <worktree-subpath>
+
+Lists git worktrees under <repo-root>/<worktree-subpath> and prompts for
+which ones to remove via an fzf multi-select.
+
+Example:
+  wt-cleanup .claude/worktrees
+
+Keys in the picker:
+  Tab        toggle selection
+  Enter      confirm and remove selected
+  Esc / C-c  cancel
+EOF
+  exit 1
+}
+
+[[ $# -eq 1 ]] || usage
+
+case "$1" in
+  -h|--help) usage ;;
+esac
+
+subpath="${1#./}"
+subpath="${subpath%/}"
+
+if ! command -v fzf >/dev/null 2>&1; then
+  echo "wt-cleanup: fzf is required but not installed" >&2
+  exit 1
+fi
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "wt-cleanup: not inside a git repository" >&2
+  exit 1
+}
+
+target_prefix="$repo_root/$subpath/"
+
+entries=$(git -C "$repo_root" worktree list --porcelain | awk -v prefix="$target_prefix" '
+  /^worktree / {
+    path = substr($0, 10)
+    branch = ""
+    next
+  }
+  /^branch / {
+    branch = substr($0, 8)
+    sub(/^refs\/heads\//, "", branch)
+  }
+  /^detached/ {
+    branch = "(detached)"
+  }
+  /^$/ {
+    if (index(path, prefix) == 1) {
+      printf "%s\t%s\n", path, branch
+    }
+    path = ""; branch = ""
+  }
+  END {
+    if (path != "" && index(path, prefix) == 1) {
+      printf "%s\t%s\n", path, branch
+    }
+  }
+')
+
+if [[ -z "$entries" ]]; then
+  echo "wt-cleanup: no worktrees found under $target_prefix"
+  exit 0
+fi
+
+display=$(printf '%s\n' "$entries" | awk -v root="$repo_root/" -F'\t' '
+  {
+    rel = $1
+    sub("^" root, "", rel)
+    printf "%-60s  %s\n", rel, $2
+  }
+')
+
+selected=$(printf '%s\n' "$display" | fzf \
+  --multi \
+  --prompt="worktrees to remove > " \
+  --header="Tab: toggle  Enter: confirm  Esc: cancel" \
+  --height=40% \
+  --reverse) || {
+  echo "wt-cleanup: cancelled"
+  exit 0
+}
+
+[[ -z "$selected" ]] && { echo "wt-cleanup: nothing selected"; exit 0; }
+
+failed=0
+while IFS= read -r line; do
+  rel=$(printf '%s' "$line" | awk '{print $1}')
+  full="$repo_root/$rel"
+  echo "Removing $rel..."
+  if ! git -C "$repo_root" worktree remove "$full"; then
+    echo "  failed (use 'git worktree remove --force $full' if intentional)" >&2
+    failed=1
+  fi
+done <<< "$selected"
+
+exit "$failed"

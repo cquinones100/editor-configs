@@ -20,3 +20,6 @@ keybind = super+q=unbind
 
 # Allow Cmd+Click to open links even inside tmux
 mouse-shift-capture = false
+
+# Theme override — written by tmux/theme.sh; optional so missing file is fine
+config-file = ?~/.config/ghostty/theme-mode.conf

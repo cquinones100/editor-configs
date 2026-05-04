@@ -9,10 +9,16 @@ session="$2"
 
 script_dir="$(dirname "$0")"
 
+mode=$(cat "$script_dir/.theme-mode" 2>/dev/null || echo dark)
+case "$mode" in
+  light) BG_DARK=colour254; BG_MED=colour250; FG_BRIGHT=colour232; FG_DIM=colour240 ;;
+  *)     BG_DARK=colour235; BG_MED=colour238; FG_BRIGHT=colour255; FG_DIM=colour244 ;;
+esac
+
 hex=$("$script_dir/accent-color.sh" "$pane_path")
 tmux set -g pane-active-border-style "fg=#${hex}"
-tmux set -g status-left "#[bg=#${hex},fg=colour255,bold]  #S #[bg=colour235] "
-tmux setw -g window-status-current-format "#[bg=colour238,fg=#${hex},bold] #I:#W "
+tmux set -g status-left "#[bg=#${hex},fg=$FG_BRIGHT,bold]  #S #[bg=$BG_DARK] "
+tmux setw -g window-status-current-format "#[bg=$BG_MED,fg=#${hex},bold] #I:#W "
 
 tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' | while IFS=, read -r idx path; do
   whex=$("$script_dir/accent-color.sh" "$path")

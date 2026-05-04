@@ -102,6 +102,15 @@ report() {
     exit 1
   fi
 }
+configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli)
+sync_bin() {
+  mkdir -p ~/.local/bin
+  for script in ~/editor-configs/bin/*; do
+    ln -sf "$script" ~/.local/bin/"$(basename "$script")"
+  done
+}
+
+configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli bin)
 
 sync_all() {
   for config in "${configs[@]}"; do

@@ -44,7 +44,8 @@
       "Bash(git fetch)",
       "Bash(git pull *)",
       "Bash(git pull)"
-    ]
+    ],
+    "defaultMode": "auto"
   },
   "hooks": {
     "PreToolUse": [
@@ -86,5 +87,10 @@
     "type": "command",
     "command": "bash ~/.claude/statusline-command.sh"
   },
-  "editorMode": "vim"
+  "enabledPlugins": {
+    "aikido@claude-plugins-official": true
+  },
+  "skipAutoPermissionPrompt": true,
+  "editorMode": "vim",
+  "agentPushNotifEnabled": true
 }

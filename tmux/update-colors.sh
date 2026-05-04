@@ -11,7 +11,7 @@ script_dir="$(dirname "$0")"
 
 mode=$(cat "$script_dir/.theme-mode" 2>/dev/null || echo dark)
 case "$mode" in
-  light) BG_DARK=colour254; BG_MED=colour250; FG_BRIGHT=colour232; FG_DIM=colour240 ;;
+  light) BG_DARK=colour253; BG_MED=colour248; FG_BRIGHT=colour232; FG_DIM=colour238 ;;
   *)     BG_DARK=colour235; BG_MED=colour238; FG_BRIGHT=colour255; FG_DIM=colour244 ;;
 esac
 

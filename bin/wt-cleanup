@@ -6,8 +6,14 @@ usage() {
   cat >&2 <<EOF
 Usage: wt-cleanup <worktree-subpath>
 
-Lists git worktrees under <repo-root>/<worktree-subpath> and prompts for
-which ones to remove via an fzf multi-select.
+Lists worktrees under <repo-root>/<worktree-subpath> and prompts for which
+ones to remove via an fzf multi-select. Includes both git-tracked worktrees
+and untracked directories so disk state and git state can be reconciled.
+
+Status column:
+  tracked   git-tracked worktree present on disk
+  orphan    git-tracked worktree whose directory is gone (will be pruned)
+  untracked directory on disk that git does not know about (will be rm -rf'd)
 
 Example:
   wt-cleanup .claude/worktrees
@@ -39,9 +45,10 @@ repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
   exit 1
 }
 
-target_prefix="$repo_root/$subpath/"
+target_dir="$repo_root/$subpath"
+target_prefix="$target_dir/"
 
-entries=$(git -C "$repo_root" worktree list --porcelain | awk -v prefix="$target_prefix" '
+tracked=$(git -C "$repo_root" worktree list --porcelain | awk -v prefix="$target_prefix" '
   /^worktree / {
     path = substr($0, 10)
     branch = ""
@@ -67,16 +74,62 @@ entries=$(git -C "$repo_root" worktree list --porcelain | awk -v prefix="$target
   }
 ')
 
+tracked_paths=()
+tracked_branches=()
+if [[ -n "$tracked" ]]; then
+  while IFS=$'\t' read -r path branch; do
+    [[ -z "$path" ]] && continue
+    tracked_paths+=("$path")
+    tracked_branches+=("$branch")
+  done <<< "$tracked"
+fi
+
+disk_paths=()
+if [[ -d "$target_dir" ]]; then
+  while IFS= read -r -d '' entry; do
+    disk_paths+=("$entry")
+  done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+fi
+
+contains() {
+  local needle=$1; shift
+  local item
+  for item in "$@"; do
+    [[ "$item" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+entries=""
+i=0
+while (( i < ${#tracked_paths[@]} )); do
+  path="${tracked_paths[$i]}"
+  branch="${tracked_branches[$i]}"
+  if [[ -d "$path" ]]; then
+    status="tracked"
+  else
+    status="orphan"
+  fi
+  entries+="${status}"$'\t'"${path}"$'\t'"${branch}"$'\n'
+  i=$((i + 1))
+done
+
+for path in "${disk_paths[@]}"; do
+  if ! contains "$path" "${tracked_paths[@]}"; then
+    entries+="untracked"$'\t'"${path}"$'\t'"-"$'\n'
+  fi
+done
+
 if [[ -z "$entries" ]]; then
-  echo "wt-cleanup: no worktrees found under $target_prefix"
+  echo "wt-cleanup: no worktrees or directories found under $target_prefix"
   exit 0
 fi
 
-display=$(printf '%s\n' "$entries" | awk -v root="$repo_root/" -F'\t' '
-  {
-    rel = $1
+display=$(printf '%s' "$entries" | awk -v root="$repo_root/" -F'\t' '
+  NF >= 3 {
+    rel = $2
     sub("^" root, "", rel)
-    printf "%-60s  %s\n", rel, $2
+    printf "%-9s  %-60s  %s\n", $1, rel, $3
   }
 ')
 
@@ -93,14 +146,39 @@ selected=$(printf '%s\n' "$display" | fzf \
 [[ -z "$selected" ]] && { echo "wt-cleanup: nothing selected"; exit 0; }
 
 failed=0
+pruned=0
 while IFS= read -r line; do
-  rel=$(printf '%s' "$line" | awk '{print $1}')
+  status=$(printf '%s' "$line" | awk '{print $1}')
+  rel=$(printf '%s' "$line" | awk '{print $2}')
   full="$repo_root/$rel"
-  echo "Removing $rel..."
-  if ! git -C "$repo_root" worktree remove "$full"; then
-    echo "  failed (use 'git worktree remove --force $full' if intentional)" >&2
-    failed=1
-  fi
+  case "$status" in
+    tracked)
+      echo "Removing tracked worktree $rel..."
+      if ! git -C "$repo_root" worktree remove "$full"; then
+        echo "  failed (use 'git worktree remove --force $full' if intentional)" >&2
+        failed=1
+      fi
+      ;;
+    orphan)
+      echo "Pruning orphan worktree $rel..."
+      pruned=1
+      ;;
+    untracked)
+      echo "Removing untracked directory $rel..."
+      if ! rm -rf "$full"; then
+        echo "  failed to rm -rf $full" >&2
+        failed=1
+      fi
+      ;;
+    *)
+      echo "  unknown status '$status' for $rel — skipping" >&2
+      failed=1
+      ;;
+  esac
 done <<< "$selected"
+
+if (( pruned )); then
+  git -C "$repo_root" worktree prune
+fi
 
 exit "$failed"

@@ -67,6 +67,7 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
   ln -sf ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh
   ln -sf ~/editor-configs/tmux/workspace.sh ~/.config/tmux/workspace.sh
+  ln -sf ~/editor-configs/tmux/toggle-shell-pane.sh ~/.config/tmux/toggle-shell-pane.sh
 }
 
 sync_ghostty() {

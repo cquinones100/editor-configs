@@ -51,8 +51,8 @@ vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><
 vim.keymap.set("n", "<leader>cp", function() vim.fn.setreg("+", vim.fn.expand("%:.")) end, { desc = "Copy relative file path" })
 vim.keymap.set("n", "<leader>cP", function() vim.fn.setreg("+", vim.fn.expand("%:p")) end, { desc = "Copy absolute file path" })
 
--- Escape with Ctrl+C in insert mode
-vim.keymap.set("i", "<C-c>", "<Esc>")
+-- Disable Ctrl+C to retrain the Escape habit
+vim.keymap.set({ "i", "n", "v", "x", "s" }, "<C-c>", "<Nop>")
 
 -- ── VSCode-specific ──────────────────────────────────
 if vim.g.vscode then

@@ -68,6 +68,9 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh
   ln -sf ~/editor-configs/tmux/workspace.sh ~/.config/tmux/workspace.sh
   ln -sf ~/editor-configs/tmux/toggle-shell-pane.sh ~/.config/tmux/toggle-shell-pane.sh
+  ln -sf ~/editor-configs/tmux/launch.sh ~/.config/tmux/launch.sh
+  ln -sf ~/editor-configs/tmux/list-commands.sh ~/.config/tmux/list-commands.sh
+  ln -sf ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
 }
 
 sync_ghostty() {

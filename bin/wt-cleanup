@@ -125,16 +125,22 @@ if [[ -z "$entries" ]]; then
   exit 0
 fi
 
+# Each line: <formatted-display>\t<status>\t<full-path>\t<branch>
+# fzf shows only the formatted display; we parse the trailing tab-delimited
+# metadata so paths with spaces survive intact.
 display=$(printf '%s' "$entries" | awk -v root="$repo_root/" -F'\t' '
   NF >= 3 {
     rel = $2
-    sub("^" root, "", rel)
-    printf "%-9s  %-60s  %s\n", $1, rel, $3
+    if (substr(rel, 1, length(root)) == root) rel = substr(rel, length(root) + 1)
+    printf "%-9s  %-60s  %s\t%s\t%s\t%s\n", $1, rel, $3, $1, $2, $3
   }
 ')
 
 selected=$(printf '%s\n' "$display" | fzf \
   --multi \
+  --delimiter=$'\t' \
+  --with-nth=1 \
+  --nth=1 \
   --prompt="worktrees to remove > " \
   --header="Tab: toggle  Enter: confirm  Esc: cancel" \
   --height=40% \
@@ -147,10 +153,18 @@ selected=$(printf '%s\n' "$display" | fzf \
 
 failed=0
 pruned=0
-while IFS= read -r line; do
-  status=$(printf '%s' "$line" | awk '{print $1}')
-  rel=$(printf '%s' "$line" | awk '{print $2}')
-  full="$repo_root/$rel"
+while IFS=$'\t' read -r _display status full branch; do
+  [[ -z "$status" ]] && continue
+  rel="${full#"$repo_root/"}"
+  # Refuse anything that does not resolve under the requested target dir.
+  case "$full" in
+    "$target_dir"/*) ;;
+    *)
+      echo "wt-cleanup: refusing to operate outside $target_dir: $full" >&2
+      failed=1
+      continue
+      ;;
+  esac
   case "$status" in
     tracked)
       echo "Removing tracked worktree $rel..."

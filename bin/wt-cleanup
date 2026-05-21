@@ -1,10 +1,9 @@
-#!/usr/bin/env bash
+#!/usr/bin/env node
+const { execFileSync, spawnSync } = require('node:child_process');
+const { readdirSync, realpathSync, rmSync, statSync } = require('node:fs');
+const { join, relative } = require('node:path');
 
-set -e
-
-usage() {
-  cat >&2 <<EOF
-Usage: wt-cleanup <worktree-subpath>
+const USAGE = `Usage: wt-cleanup <worktree-subpath>
 
 Lists worktrees under <repo-root>/<worktree-subpath> and prompts for which
 ones to remove via an fzf multi-select. Includes both git-tracked worktrees
@@ -13,7 +12,7 @@ and untracked directories so disk state and git state can be reconciled.
 Status column:
   tracked   git-tracked worktree present on disk
   orphan    git-tracked worktree whose directory is gone (will be pruned)
-  untracked directory on disk that git does not know about (will be rm -rf'd)
+  untracked directory on disk that git does not know about (will be removed)
 
 Example:
   wt-cleanup .claude/worktrees
@@ -22,177 +21,222 @@ Keys in the picker:
   Tab        toggle selection
   Enter      confirm and remove selected
   Esc / C-c  cancel
-EOF
-  exit 1
-}
+`;
 
-[[ $# -eq 1 ]] || usage
-
-case "$1" in
-  -h|--help) usage ;;
-esac
-
-subpath="${1#./}"
-subpath="${subpath%/}"
-
-if ! command -v fzf >/dev/null 2>&1; then
-  echo "wt-cleanup: fzf is required but not installed" >&2
-  exit 1
-fi
-
-repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-  echo "wt-cleanup: not inside a git repository" >&2
-  exit 1
-}
-
-target_dir="$repo_root/$subpath"
-target_prefix="$target_dir/"
-
-tracked=$(git -C "$repo_root" worktree list --porcelain | awk -v prefix="$target_prefix" '
-  /^worktree / {
-    path = substr($0, 10)
-    branch = ""
-    next
+function main() {
+  const args = process.argv.slice(2);
+  if (args.length !== 1 || ['-h', '--help'].includes(args[0])) {
+    process.stderr.write(USAGE);
+    return args.length === 1 ? 0 : 1;
   }
-  /^branch / {
-    branch = substr($0, 8)
-    sub(/^refs\/heads\//, "", branch)
+  const subpath = validateSubpath(args[0]);
+
+  try {
+    execFileSync('fzf', ['--version'], { stdio: 'ignore' });
+  } catch {
+    die('fzf is required but not installed');
   }
-  /^detached/ {
-    branch = "(detached)"
+
+  let repoRoot;
+  try {
+    repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  } catch {
+    die('not inside a git repository');
   }
-  /^$/ {
-    if (index(path, prefix) == 1) {
-      printf "%s\t%s\n", path, branch
+
+  const targetDir = join(repoRoot, subpath);
+  assertTargetWithinRepo(repoRoot, targetDir);
+  const targetPrefix = `${targetDir}/`;
+
+  const porcelain = execFileSync(
+    'git',
+    ['-C', repoRoot, 'worktree', 'list', '--porcelain'],
+    { encoding: 'utf8' },
+  );
+  const tracked = parseWorktrees(porcelain).filter((w) => w.path.startsWith(targetPrefix));
+
+  let diskDirs = [];
+  try {
+    diskDirs = readdirSync(targetDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => join(targetDir, d.name));
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+
+  const trackedPaths = new Set(tracked.map((w) => w.path));
+  const entries = [
+    ...tracked.map((w) => ({
+      status: isDirectory(w.path) ? 'tracked' : 'orphan',
+      path: w.path,
+      branch: w.branch,
+    })),
+    ...diskDirs
+    .filter((p) => !trackedPaths.has(p))
+    .map((p) => ({ status: 'untracked', path: p, branch: '-' })),
+  ];
+
+  if (entries.length === 0) {
+    process.stdout.write(`wt-cleanup: no worktrees or directories found under ${targetPrefix}\n`);
+    return 0;
+  }
+
+  const selected = selectViaFzf(entries, repoRoot);
+  if (selected.length === 0) {
+    process.stdout.write('wt-cleanup: cancelled\n');
+    return 0;
+  }
+
+  let failed = 0;
+  let pruneNeeded = false;
+
+  selected.forEach(({ status, path: full }) => {
+    if (!full.startsWith(targetPrefix)) {
+      process.stderr.write(`wt-cleanup: refusing to operate outside ${targetDir}: ${full}\n`);
+      failed = 1;
+      return;
     }
-    path = ""; branch = ""
-  }
-  END {
-    if (path != "" && index(path, prefix) == 1) {
-      printf "%s\t%s\n", path, branch
+    const rel = relative(repoRoot, full);
+    switch (status) {
+      case 'tracked': {
+        process.stdout.write(`Removing tracked worktree ${rel}...\n`);
+        const { status: code } = spawnSync(
+          'git',
+          ['-C', repoRoot, 'worktree', 'remove', full],
+          { stdio: 'inherit' },
+        );
+        if (code !== 0) {
+          process.stderr.write(`  failed (use 'git worktree remove --force ${full}' if intentional)\n`);
+          failed = 1;
+        }
+        break;
+      }
+      case 'orphan': {
+        process.stdout.write(`Pruning orphan worktree ${rel}...\n`);
+        pruneNeeded = true;
+        break;
+      }
+      case 'untracked': {
+        process.stdout.write(`Removing untracked directory ${rel}...\n`);
+        try {
+          rmSync(full, { recursive: true, force: true });
+        } catch (err) {
+          process.stderr.write(`  failed to remove ${full}: ${err.message}\n`);
+          failed = 1;
+        }
+        break;
+      }
+      default: {
+        process.stderr.write(`  unknown status '${status}' for ${rel} — skipping\n`);
+        failed = 1;
+      }
     }
+  });
+
+  if (pruneNeeded) {
+    spawnSync('git', ['-C', repoRoot, 'worktree', 'prune'], { stdio: 'inherit' });
   }
-')
 
-tracked_paths=()
-tracked_branches=()
-if [[ -n "$tracked" ]]; then
-  while IFS=$'\t' read -r path branch; do
-    [[ -z "$path" ]] && continue
-    tracked_paths+=("$path")
-    tracked_branches+=("$branch")
-  done <<< "$tracked"
-fi
-
-disk_paths=()
-if [[ -d "$target_dir" ]]; then
-  while IFS= read -r -d '' entry; do
-    disk_paths+=("$entry")
-  done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -type d -print0)
-fi
-
-contains() {
-  local needle=$1; shift
-  local item
-  for item in "$@"; do
-    [[ "$item" == "$needle" ]] && return 0
-  done
-  return 1
+  return failed;
 }
 
-entries=""
-i=0
-while (( i < ${#tracked_paths[@]} )); do
-  path="${tracked_paths[$i]}"
-  branch="${tracked_branches[$i]}"
-  if [[ -d "$path" ]]; then
-    status="tracked"
-  else
-    status="orphan"
-  fi
-  entries+="${status}"$'\t'"${path}"$'\t'"${branch}"$'\n'
-  i=$((i + 1))
-done
-
-for path in "${disk_paths[@]}"; do
-  if ! contains "$path" "${tracked_paths[@]}"; then
-    entries+="untracked"$'\t'"${path}"$'\t'"-"$'\n'
-  fi
-done
-
-if [[ -z "$entries" ]]; then
-  echo "wt-cleanup: no worktrees or directories found under $target_prefix"
-  exit 0
-fi
-
-# Each line: <formatted-display>\t<status>\t<full-path>\t<branch>
-# fzf shows only the formatted display; we parse the trailing tab-delimited
-# metadata so paths with spaces survive intact.
-display=$(printf '%s' "$entries" | awk -v root="$repo_root/" -F'\t' '
-  NF >= 3 {
-    rel = $2
-    if (substr(rel, 1, length(root)) == root) rel = substr(rel, length(root) + 1)
-    printf "%-9s  %-60s  %s\t%s\t%s\t%s\n", $1, rel, $3, $1, $2, $3
-  }
-')
-
-selected=$(printf '%s\n' "$display" | fzf \
-  --multi \
-  --delimiter=$'\t' \
-  --with-nth=1 \
-  --nth=1 \
-  --prompt="worktrees to remove > " \
-  --header="Tab: toggle  Enter: confirm  Esc: cancel" \
-  --height=40% \
-  --reverse) || {
-  echo "wt-cleanup: cancelled"
-  exit 0
+try {
+  process.exit(main());
+} catch (err) {
+  process.stderr.write(`wt-cleanup: ${err.message ?? err}\n`);
+  process.exit(1);
 }
 
-[[ -z "$selected" ]] && { echo "wt-cleanup: nothing selected"; exit 0; }
+function die(message) {
+  process.stderr.write(`wt-cleanup: ${message}\n`);
+  process.exit(1);
+}
 
-failed=0
-pruned=0
-while IFS=$'\t' read -r _display status full branch; do
-  [[ -z "$status" ]] && continue
-  rel="${full#"$repo_root/"}"
-  # Refuse anything that does not resolve under the requested target dir.
-  case "$full" in
-    "$target_dir"/*) ;;
-    *)
-      echo "wt-cleanup: refusing to operate outside $target_dir: $full" >&2
-      failed=1
-      continue
-      ;;
-  esac
-  case "$status" in
-    tracked)
-      echo "Removing tracked worktree $rel..."
-      if ! git -C "$repo_root" worktree remove "$full"; then
-        echo "  failed (use 'git worktree remove --force $full' if intentional)" >&2
-        failed=1
-      fi
-      ;;
-    orphan)
-      echo "Pruning orphan worktree $rel..."
-      pruned=1
-      ;;
-    untracked)
-      echo "Removing untracked directory $rel..."
-      if ! rm -rf "$full"; then
-        echo "  failed to rm -rf $full" >&2
-        failed=1
-      fi
-      ;;
-    *)
-      echo "  unknown status '$status' for $rel — skipping" >&2
-      failed=1
-      ;;
-  esac
-done <<< "$selected"
+function isDirectory(path) {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
-if (( pruned )); then
-  git -C "$repo_root" worktree prune
-fi
+function validateSubpath(raw) {
+  const subpath = raw.replace(/^\.\//, '').replace(/\/$/, '');
+  const segments = subpath.split('/');
+  if (!subpath || subpath === '.' || subpath.startsWith('/') || segments.includes('..')) {
+    die(`invalid subpath: ${raw}`);
+  }
+  return subpath;
+}
 
-exit "$failed"
+function assertTargetWithinRepo(repoRoot, targetDir) {
+  let realRepoRoot;
+  let realTargetDir;
+  try {
+    realRepoRoot = realpathSync(repoRoot);
+    realTargetDir = realpathSync(targetDir);
+  } catch (err) {
+    if (err.code === 'ENOENT') return;
+    die(`cannot resolve ${targetDir}: ${err.message}`);
+  }
+  if (realTargetDir === realRepoRoot || !realTargetDir.startsWith(`${realRepoRoot}/`)) {
+    die(`target ${targetDir} must be a strict subdirectory of ${repoRoot}`);
+  }
+}
+
+function parseWorktrees(porcelain) {
+  return porcelain
+    .split(/\n\n+/)
+    .map((record) => {
+      const worktree = { path: '', branch: '' };
+      record.split('\n').forEach((line) => {
+        if (line.startsWith('worktree ')) {
+          worktree.path = line.slice('worktree '.length);
+        } else if (line.startsWith('branch ')) {
+          worktree.branch = line.slice('branch '.length).replace(/^refs\/heads\//, '');
+        } else if (line === 'detached') {
+          worktree.branch = '(detached)';
+        }
+      });
+      return worktree;
+    })
+    .filter((w) => w.path);
+}
+
+function selectViaFzf(entries, repoRoot) {
+  const lines = entries.map((entry) => {
+    const rel = relative(repoRoot, entry.path);
+    const display = `${entry.status.padEnd(9)}  ${rel.padEnd(60)}  ${entry.branch}`;
+    return [display, entry.status, entry.path, entry.branch].join('\t');
+  });
+
+  const result = spawnSync(
+    'fzf',
+    [
+      '--multi',
+      '--delimiter=\t',
+      '--with-nth=1',
+      '--nth=1',
+      '--prompt=worktrees to remove > ',
+      '--header=Tab: toggle  Enter: confirm  Esc: cancel',
+      '--height=40%',
+      '--reverse',
+    ],
+    {
+      input: lines.join('\n'),
+      stdio: ['pipe', 'pipe', 'inherit'],
+      encoding: 'utf8',
+    },
+  );
+
+  if (result.status !== 0) return [];
+
+  return result.stdout
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const [, status, path, branch] = line.split('\t');
+      return { status, path, branch };
+    });
+}
+

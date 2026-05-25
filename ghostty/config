@@ -13,6 +13,9 @@ confirm-close-surface = false
 # Input
 macos-option-as-alt = true
 
+# Auto-attach to tmux on launch
+command = /opt/homebrew/bin/tmux new-session -A -s main
+
 # Disable close keybindings
 keybind = super+w=unbind
 keybind = super+shift+w=unbind

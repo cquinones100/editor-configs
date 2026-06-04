@@ -13,8 +13,10 @@ confirm-close-surface = false
 # Input
 macos-option-as-alt = true
 
-# Auto-attach to tmux on launch
-command = /opt/homebrew/bin/tmux new-session -A -s main
+# Auto-attach to tmux on launch. Wrapped in a login shell so the tmux
+# server inherits the full PATH — otherwise run-shell hooks and popup
+# scripts can't find tmux/brew binaries.
+command = /bin/zsh -l -c '/opt/homebrew/bin/tmux new-session -A -s main'
 
 # Disable close keybindings
 keybind = super+w=unbind

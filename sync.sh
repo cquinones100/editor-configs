@@ -71,6 +71,7 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/launch.sh ~/.config/tmux/launch.sh
   ln -sf ~/editor-configs/tmux/list-commands.sh ~/.config/tmux/list-commands.sh
   ln -sf ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
+  ln -sf ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
 }
 
 sync_ghostty() {
@@ -109,8 +110,33 @@ report() {
 configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli)
 sync_bin() {
   mkdir -p ~/.local/bin
+  # Executables only, so docs alongside the scripts don't get linked in.
   for script in ~/editor-configs/bin/*; do
+    [[ -f "$script" && -x "$script" ]] || continue
     ln -sf "$script" ~/.local/bin/"$(basename "$script")"
+  done
+}
+
+# Resolved from this script's own location rather than assuming ~/editor-configs,
+# so a single bin script can be installed from a clone anywhere.
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Symlinks one script out of bin/, so `./sync.sh worktree-from-ticket` installs
+# just that one instead of everything in bin/.
+sync_bin_script() {
+  local name=$1
+  if [[ ! -f "$REPO_DIR/bin/$name" ]]; then
+    echo "No such script: bin/$name" >&2
+    return 1
+  fi
+  mkdir -p ~/.local/bin
+  ln -sf "$REPO_DIR/bin/$name" ~/.local/bin/"$name"
+}
+
+bin_scripts() {
+  local script
+  for script in "$REPO_DIR"/bin/*; do
+    [[ -f "$script" && -x "$script" ]] && basename "$script"
   done
 }
 
@@ -126,8 +152,16 @@ if [[ $# -gt 0 ]]; then
   for arg in "$@"; do
     if printf '%s\n' "${configs[@]}" | grep -qx "$arg"; then
       run_sync "$arg"
+    elif [[ -f "$REPO_DIR/bin/$arg" ]]; then
+      echo "Syncing bin/$arg..."
+      if ! sync_bin_script "$arg"; then
+        echo "  failed to sync bin/$arg; continuing" >&2
+        failed+=("$arg")
+      fi
     else
-      echo "Unknown config: $arg (available: ${configs[*]})" >&2
+      echo "Unknown config: $arg" >&2
+      echo "  configs: ${configs[*]}" >&2
+      echo "  bin scripts: $(bin_scripts | tr '\n' ' ')" >&2
       exit 1
     fi
   done

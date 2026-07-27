@@ -1,0 +1,281 @@
+#!/usr/bin/env node
+
+// worktree-from-ticket [path] <linear-ticket-id-or-url>
+//
+// Creates a git worktree on a new branch named after a Linear ticket and opens
+// claude in it. <path> defaults to .claude/worktrees, resolved against the main
+// repo root so this works from inside an existing worktree.
+//
+// Needs a Linear personal API key (https://linear.app/settings/api), from
+// either LINEAR_API_KEY or ~/.config/worktree-from-ticket/config.json.
+//
+//   worktree-from-ticket ABC-123          creates the worktree, opens claude
+//   worktree-from-ticket init zsh         prints the `wt` shell function
+//
+// The bare command cannot change your shell's directory — no child process can.
+// Eval the `init` output to get a `wt` wrapper that also cd's you in.
+
+const { execFileSync, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const LINEAR_API = "https://api.linear.app/graphql";
+const DEFAULT_WORKTREE_DIR = ".claude/worktrees";
+const SELF = fs.realpathSync(process.argv[1]);
+
+const CONFIG_PATH = path.join(
+  process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
+  "worktree-from-ticket",
+  "config.json",
+);
+
+const usage = () => {
+  console.error(
+    "Usage: worktree-from-ticket [path] <linear-ticket-id-or-url>\n" +
+      "       worktree-from-ticket init <zsh|bash>\n\n" +
+      "Examples:\n" +
+      "  worktree-from-ticket ABC-123\n" +
+      "  worktree-from-ticket .worktrees ABC-123\n" +
+      `\nPath defaults to ${DEFAULT_WORKTREE_DIR} under the repo root.`,
+  );
+  process.exit(1);
+};
+
+const fail = (message) => {
+  console.error(`Error: ${message}`);
+  process.exit(1);
+};
+
+// Emitted for `eval "$(worktree-from-ticket init zsh)"`. The function is named
+// `wt` rather than `worktree-from-ticket` so it can't shadow this script and
+// recurse into itself.
+//
+// It runs the script with --no-claude, cd's, and launches claude itself. Doing
+// the cd first means the shell sits in the worktree for the whole session, so
+// new tmux panes and splits inherit it; if claude ran inside the script the cd
+// could only happen after it exited.
+//
+// The path comes back via --cd-file rather than stdout because $( ) would make
+// stdout a pipe, and anything interactive downstream would see a non-TTY.
+//
+// `rc`, not `status`: `status` is a read-only special variable in zsh.
+const shellFunction = () => `wt() {
+  local cdfile rc dir prompt
+  cdfile=$(mktemp) || return 1
+  ${SELF} --no-claude --cd-file "$cdfile" "$@"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    rm -f "$cdfile"
+    return $rc
+  fi
+  dir=$(sed -n 1p "$cdfile")
+  prompt=$(sed -n 2p "$cdfile")
+  rm -f "$cdfile"
+  if [ ! -d "$dir" ]; then
+    echo "wt: expected a worktree directory, got: $dir" >&2
+    return 1
+  fi
+  cd "$dir" || return 1
+  claude "$prompt"
+}`;
+
+const parseIdentifier = (input) => {
+  const fromUrl = input.match(/\/issue\/([A-Za-z][A-Za-z0-9]*-\d+)/);
+  const raw = fromUrl ? fromUrl[1] : input;
+  const match = raw.match(/^([A-Za-z][A-Za-z0-9]*)-(\d+)$/);
+  if (!match) {
+    fail(`could not parse a Linear ticket identifier from "${input}"`);
+  }
+  return { key: match[1].toUpperCase(), number: Number(match[2]) };
+};
+
+const looksLikeTicket = (input) =>
+  /\/issue\/[A-Za-z][A-Za-z0-9]*-\d+/.test(input) ||
+  /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(input);
+
+const slugify = (text) =>
+  text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+const readApiKey = () => {
+  if (process.env.LINEAR_API_KEY) return process.env.LINEAR_API_KEY;
+
+  const fromConfig = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")).linearApiKey;
+    } catch {
+      return undefined;
+    }
+  })();
+  if (fromConfig) return fromConfig;
+
+  fail(
+    "no Linear API key found. Create a personal key at\n" +
+      "  https://linear.app/settings/api\n" +
+      "then either export it:\n" +
+      '  export LINEAR_API_KEY="lin_api_..."\n' +
+      `or save it to ${CONFIG_PATH}:\n` +
+      `  mkdir -p ${path.dirname(CONFIG_PATH)}\n` +
+      `  printf '{"linearApiKey":"lin_api_..."}' > ${CONFIG_PATH}\n` +
+      `  chmod 600 ${CONFIG_PATH}`,
+  );
+};
+
+// Two helpers because execFileSync returns null when stdout isn't piped, so a
+// single trim()-ing wrapper would throw on the inherit-stdio calls.
+const gitOutput = (args) =>
+  execFileSync("git", args, { encoding: "utf8" }).trim();
+
+const gitRun = (args, options = {}) =>
+  execFileSync("git", args, { stdio: "ignore", ...options });
+
+// --git-common-dir rather than --show-toplevel: inside an existing worktree the
+// latter returns that worktree, and new worktrees belong beside the main repo.
+const repoRoot = () => {
+  try {
+    return path.resolve(gitOutput(["rev-parse", "--git-common-dir"]), "..");
+  } catch {
+    fail("not inside a git repository");
+  }
+};
+
+const fetchIssue = async ({ key, number }) => {
+  const query = `
+    query IssueByIdentifier($number: Float!, $key: String!) {
+      issues(filter: { number: { eq: $number }, team: { key: { eq: $key } } }) {
+        nodes { identifier title branchName }
+      }
+    }`;
+
+  const response = await fetch(LINEAR_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: readApiKey(),
+    },
+    body: JSON.stringify({ query, variables: { number, key } }),
+  });
+
+  if (!response.ok) {
+    fail(`Linear API request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const payload = await response.json();
+  if (payload.errors) {
+    fail(`Linear API error: ${payload.errors.map((e) => e.message).join("; ")}`);
+  }
+
+  const issue = payload.data?.issues?.nodes?.[0];
+  if (!issue) {
+    fail(`no Linear issue found for ${key}-${number}`);
+  }
+  return issue;
+};
+
+// Idempotent so rerunning on the same ticket reopens the worktree instead of
+// erroring: reuse the directory if it exists, and the branch if it exists.
+const ensureWorktree = (worktreePath, branch) => {
+  if (fs.existsSync(worktreePath)) {
+    console.error("Worktree already exists, reusing it.");
+    return;
+  }
+
+  const branchExists = (() => {
+    try {
+      gitRun(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  const args = branchExists
+    ? ["worktree", "add", worktreePath, branch]
+    : ["worktree", "add", "-b", branch, worktreePath];
+
+  try {
+    // git's stdout to fd 2 so it can't pollute anything a caller parses.
+    gitRun(args, { stdio: ["inherit", 2, "inherit"] });
+  } catch {
+    fail("git worktree creation failed (see output above)");
+  }
+};
+
+const main = async () => {
+  const argv = process.argv.slice(2);
+
+  if (argv[0] === "init") {
+    const shell = argv[1];
+    if (!["zsh", "bash"].includes(shell)) {
+      fail("init requires a shell: worktree-from-ticket init <zsh|bash>");
+    }
+    console.log(shellFunction());
+    return;
+  }
+
+  if (argv.includes("--help") || argv.includes("-h")) usage();
+
+  const cdFileIndex = argv.indexOf("--cd-file");
+  const cdFile = cdFileIndex === -1 ? undefined : argv[cdFileIndex + 1];
+  if (cdFileIndex !== -1 && !cdFile) fail("--cd-file requires a path");
+
+  const noClaude = argv.includes("--no-claude");
+
+  // A Set of consumed indexes, so an absent --cd-file (index -1) can't swallow
+  // argv[0] the way an `index !== cdFileIndex + 1` comparison would.
+  const consumed = new Set(
+    cdFileIndex === -1 ? [] : [cdFileIndex, cdFileIndex + 1],
+  );
+  const positional = argv.filter(
+    (arg, index) => !consumed.has(index) && arg !== "--no-claude",
+  );
+
+  // One positional is the ticket; two means an explicit path came first.
+  const [targetPath, ticket] =
+    positional.length === 1
+      ? [DEFAULT_WORKTREE_DIR, positional[0]]
+      : [positional[0], positional[1]];
+  if (!ticket || !looksLikeTicket(ticket)) usage();
+
+  const issue = await fetchIssue(parseIdentifier(ticket));
+  const branch =
+    issue.branchName ?? `${issue.identifier.toLowerCase()}-${slugify(issue.title)}`;
+  const worktreePath = path.resolve(repoRoot(), targetPath, branch);
+
+  console.error(`Ticket:   ${issue.identifier} — ${issue.title}`);
+  console.error(`Branch:   ${branch}`);
+  console.error(`Worktree: ${worktreePath}`);
+
+  ensureWorktree(worktreePath, branch);
+
+  const prompt = `work on ticket ${issue.identifier}`;
+
+  // Read by the `wt` shell function: line 1 the worktree path, line 2 the
+  // prompt. The prompt lives here so the function and the standalone path can't
+  // drift apart.
+  if (cdFile) fs.writeFileSync(cdFile, `${worktreePath}\n${prompt}\n`);
+
+  // `wt` launches claude itself, after cd'ing.
+  if (noClaude) return;
+
+  const claude = spawnSync("claude", [prompt], {
+    cwd: worktreePath,
+    stdio: "inherit",
+  });
+
+  if (claude.error?.code === "ENOENT") {
+    console.error(
+      `\nclaude not found on PATH. The worktree is ready at:\n  ${worktreePath}`,
+    );
+    return;
+  }
+  if (claude.status) process.exit(claude.status);
+};
+
+main().catch((err) => fail(err.message));

@@ -32,7 +32,13 @@ return {
         end,
       })
     end)
-    vim.keymap.set("n", "<C-S-f>", builtin.live_grep)
+    vim.keymap.set("n", "<C-S-f>", function()
+      builtin.live_grep({
+        additional_args = function()
+          return { "--hidden", "--glob", "!.git/" }
+        end,
+      })
+    end)
     vim.keymap.set("n", "<C-S-p>", builtin.keymaps)
     vim.keymap.set("n", "<leader>fb", builtin.buffers)
     vim.keymap.set("n", "<leader>fh", builtin.help_tags)

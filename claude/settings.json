@@ -47,6 +47,7 @@
     ],
     "defaultMode": "auto"
   },
+  "model": "opus[1m]",
   "hooks": {
     "PreToolUse": [
       {
@@ -90,7 +91,8 @@
   "enabledPlugins": {
     "aikido@claude-plugins-official": true
   },
-  "skipAutoPermissionPrompt": true,
+  "tui": "fullscreen",
   "editorMode": "vim",
-  "agentPushNotifEnabled": true
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true
 }

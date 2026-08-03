@@ -44,6 +44,7 @@ sync_claude() {
   ln -sf ~/editor-configs/claude/settings.json ~/.claude/settings.json
   ln -sf ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
   ln -sfn ~/editor-configs/claude/commands ~/.claude/commands
+  ln -sfn ~/editor-configs/claude/skills ~/.claude/skills
   mkdir -p ~/.claude/hooks
   for hook in ~/editor-configs/claude/hooks/*; do
     ln -sf "$hook" ~/.claude/hooks/

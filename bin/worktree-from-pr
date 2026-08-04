@@ -1,0 +1,382 @@
+#!/usr/bin/env node
+
+// worktree-from-pr [path] <pr-number-or-url>
+//
+// Creates a git worktree on the head branch of a GitHub pull request and opens
+// claude in it. <path> defaults to .claude/worktrees, resolved against the main
+// repo root so this works from inside an existing worktree.
+//
+// Only PRs whose branch lives on this repo's remote — fork PRs are `gh pr
+// checkout` territory and are rejected up front.
+//
+// Needs the gh CLI, authenticated (https://cli.github.com), to turn a PR into
+// a branch name. Everything after that is plain git.
+//
+//   worktree-from-pr 123                         creates the worktree, opens claude
+//   worktree-from-pr https://github.com/o/r/pull/123
+//   worktree-from-pr init zsh                    prints the `wtpr` shell function
+//
+// The bare command cannot change your shell's directory — no child process can.
+// Eval the `init` output to get a `wtpr` wrapper that also cd's you in.
+
+const { execFileSync, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const DEFAULT_WORKTREE_DIR = ".claude/worktrees";
+const SELF = fs.realpathSync(process.argv[1]);
+
+const usage = () => {
+  console.error(
+    "Usage: worktree-from-pr [path] <pr-number-or-url>\n" +
+      "       worktree-from-pr init <zsh|bash>\n\n" +
+      "Examples:\n" +
+      "  worktree-from-pr 123\n" +
+      "  worktree-from-pr https://github.com/owner/repo/pull/123\n" +
+      "  worktree-from-pr .worktrees 123\n" +
+      `\nPath defaults to ${DEFAULT_WORKTREE_DIR} under the repo root.`,
+  );
+  process.exit(1);
+};
+
+const fail = (message) => {
+  console.error(`Error: ${message}`);
+  process.exit(1);
+};
+
+// Emitted for `eval "$(worktree-from-pr init zsh)"`. The function is named
+// `wtpr` rather than `worktree-from-pr` so it can't shadow this script and
+// recurse into itself.
+//
+// It runs the script with --no-claude, cd's, and launches claude itself. Doing
+// the cd first means the shell sits in the worktree for the whole session, so
+// new tmux panes and splits inherit it; if claude ran inside the script the cd
+// could only happen after it exited.
+//
+// The path comes back via --cd-file rather than stdout because $( ) would make
+// stdout a pipe, and anything interactive downstream would see a non-TTY.
+//
+// `rc`, not `status`: `status` is a read-only special variable in zsh.
+const shellFunction = () => `wtpr() {
+  local cdfile rc dir
+  cdfile=$(mktemp) || return 1
+  ${SELF} --no-claude --cd-file "$cdfile" "$@"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    rm -f "$cdfile"
+    return $rc
+  fi
+  dir=$(sed -n 1p "$cdfile")
+  rm -f "$cdfile"
+  if [ ! -d "$dir" ]; then
+    echo "wtpr: expected a worktree directory, got: $dir" >&2
+    return 1
+  fi
+  cd "$dir" || return 1
+  claude
+}`;
+
+// gh accepts a number or a URL, so the URL is passed through untouched — that
+// way a PR in some other repo resolves to that repo rather than the local one.
+const parsePr = (input) => {
+  const fromUrl = input.match(/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/);
+  if (fromUrl) return { ref: input, number: Number(fromUrl[1]) };
+
+  const bare = input.match(/^#?(\d+)$/);
+  if (bare) return { ref: bare[1], number: Number(bare[1]) };
+
+  fail(`could not parse a pull request number or URL from "${input}"`);
+};
+
+const looksLikePr = (input) =>
+  /github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(input) || /^#?\d+$/.test(input);
+
+const slugify = (text) =>
+  text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+// Two helpers because execFileSync returns null when stdout isn't piped, so a
+// single trim()-ing wrapper would throw on the inherit-stdio calls.
+const gitOutput = (args, options = {}) =>
+  execFileSync("git", args, { encoding: "utf8", ...options }).trim();
+
+const gitRun = (args, options = {}) =>
+  execFileSync("git", args, { stdio: "ignore", ...options });
+
+// --git-common-dir rather than --show-toplevel: inside an existing worktree the
+// latter returns that worktree, and new worktrees belong beside the main repo.
+const repoRoot = () => {
+  try {
+    return path.resolve(gitOutput(["rev-parse", "--git-common-dir"]), "..");
+  } catch {
+    fail("not inside a git repository");
+  }
+};
+
+const fetchPullRequest = (ref, cwd) => {
+  const fields = [
+    "number",
+    "title",
+    "author",
+    "headRefName",
+    "isCrossRepository",
+    "state",
+    "url",
+  ];
+
+  try {
+    return JSON.parse(
+      execFileSync("gh", ["pr", "view", ref, "--json", fields.join(",")], {
+        cwd,
+        encoding: "utf8",
+        stdio: ["inherit", "pipe", "inherit"],
+      }),
+    );
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      fail("gh not found on PATH. Install it from https://cli.github.com");
+    }
+    fail(`could not read pull request ${ref} (see output above)`);
+  }
+};
+
+// Flat and PR-numbered rather than mirroring the branch name: head branches
+// often contain slashes, which would nest worktrees inside shared parent
+// directories and confuse anything listing them (wt-cleanup included).
+const worktreeNameFor = (pr) => `pr-${pr.number}-${slugify(pr.headRefName)}`;
+
+const worktreeHoldingBranch = (branch, cwd) => {
+  const porcelain = execFileSync("git", ["worktree", "list", "--porcelain"], {
+    cwd,
+    encoding: "utf8",
+  });
+
+  // Records are blank-line separated; `worktree <path>` opens each one and
+  // `branch refs/heads/<name>` appears in it only when a branch is checked out.
+  const found = porcelain
+    .split("\n\n")
+    .map((record) => record.split("\n"))
+    .find((lines) => lines.includes(`branch refs/heads/${branch}`));
+
+  return found?.find((line) => line.startsWith("worktree "))?.slice(9);
+};
+
+const defaultRemote = (cwd) => {
+  const remotes = gitOutput(["remote"], { cwd }).split("\n").filter(Boolean);
+  if (!remotes.length) fail("repository has no remotes");
+  return remotes.includes("origin") ? "origin" : remotes[0];
+};
+
+const branchExists = (branch, cwd) => {
+  try {
+    gitRun(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// A --single-branch clone (which --depth implies) fetches only the branch it
+// was cloned with, so refs/remotes/<remote>/<branch> stays unmapped: push and
+// pull still work off branch.<name>.merge, but @{upstream} and ahead/behind do
+// not resolve. set-branches --add widens the refspec for just this branch.
+const ensureRefspecCovers = (branch, remote, root) => {
+  const refspecs = (() => {
+    try {
+      return gitOutput(["config", "--get-all", `remote.${remote}.fetch`], {
+        cwd: root,
+      }).split("\n");
+    } catch {
+      return [];
+    }
+  })();
+
+  const covered = refspecs.some(
+    (spec) =>
+      spec.endsWith(`:refs/remotes/${remote}/*`) ||
+      spec.endsWith(`:refs/remotes/${remote}/${branch}`),
+  );
+  if (covered) return;
+
+  try {
+    gitRun(["remote", "set-branches", "--add", remote, branch], { cwd: root });
+  } catch {
+    // Not fatal — the worktree is still correct, only ahead/behind suffers.
+  }
+};
+
+// An explicit refspec rather than a bare `git fetch <remote> <branch>` so the
+// remote-tracking ref is always written, whatever the remote's configured
+// refspec happens to be.
+const fetchBranch = (branch, remote, root) => {
+  try {
+    // git's stdout to fd 2 so it can't pollute anything a caller parses.
+    gitRun(
+      [
+        "fetch",
+        remote,
+        `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
+      ],
+      { cwd: root, stdio: ["inherit", 2, "inherit"] },
+    );
+  } catch {
+    fail(`could not fetch ${branch} from ${remote} (see output above)`);
+  }
+};
+
+// Written by hand rather than via `worktree add --track`: --track insists the
+// start point be covered by the remote's fetch refspec, which a single-branch
+// or partial clone's refspec is not, and it fails outright when it isn't.
+const setUpstream = (branch, remote, root) => {
+  gitRun(["config", `branch.${branch}.remote`, remote], { cwd: root });
+  gitRun(["config", `branch.${branch}.merge`, `refs/heads/${branch}`], {
+    cwd: root,
+  });
+};
+
+const createWorktree = (worktreePath, branch, remote, root) => {
+  ensureRefspecCovers(branch, remote, root);
+  fetchBranch(branch, remote, root);
+
+  // A branch that already exists locally keeps its own commits; -b would refuse
+  // to reuse it. Anything it is missing from the remote is picked up below.
+  const existingBranch = branchExists(branch, root);
+  const args = existingBranch
+    ? ["worktree", "add", worktreePath, branch]
+    : ["worktree", "add", "-b", branch, worktreePath, `${remote}/${branch}`];
+
+  try {
+    gitRun(args, { cwd: root, stdio: ["inherit", 2, "inherit"] });
+  } catch {
+    fail("git worktree creation failed (see output above)");
+  }
+
+  if (!existingBranch) {
+    setUpstream(branch, remote, root);
+    return;
+  }
+
+  // Catches up a local branch left behind by an earlier run. --ff-only so a
+  // branch carrying your own unpushed commits is reported, never rewritten.
+  try {
+    gitRun(["merge", "--ff-only", `${remote}/${branch}`], { cwd: worktreePath });
+  } catch {
+    console.error(
+      `Note: ${branch} has diverged from ${remote}/${branch} and was left as-is.`,
+    );
+  }
+};
+
+const main = async () => {
+  const argv = process.argv.slice(2);
+
+  if (argv[0] === "init") {
+    const shell = argv[1];
+    if (!["zsh", "bash"].includes(shell)) {
+      fail("init requires a shell: worktree-from-pr init <zsh|bash>");
+    }
+    console.log(shellFunction());
+    return;
+  }
+
+  if (argv.includes("--help") || argv.includes("-h")) usage();
+
+  const cdFileIndex = argv.indexOf("--cd-file");
+  const cdFile = cdFileIndex === -1 ? undefined : argv[cdFileIndex + 1];
+  if (cdFileIndex !== -1 && !cdFile) fail("--cd-file requires a path");
+
+  const noClaude = argv.includes("--no-claude");
+
+  // A Set of consumed indexes, so an absent --cd-file (index -1) can't swallow
+  // argv[0] the way an `index !== cdFileIndex + 1` comparison would.
+  const consumed = new Set(
+    cdFileIndex === -1 ? [] : [cdFileIndex, cdFileIndex + 1],
+  );
+  const positional = argv.filter(
+    (arg, index) => !consumed.has(index) && arg !== "--no-claude",
+  );
+
+  // One positional is the PR; two means an explicit path came first.
+  const [targetPath, prInput] =
+    positional.length === 1
+      ? [DEFAULT_WORKTREE_DIR, positional[0]]
+      : [positional[0], positional[1]];
+  if (!prInput || !looksLikePr(prInput)) usage();
+
+  const root = repoRoot();
+  const { ref } = parsePr(prInput);
+  const pr = fetchPullRequest(ref, root);
+
+  // Fork branches do not live on this repo's remote, so there is nothing to
+  // make a worktree from. Saying so beats a confusing fetch failure.
+  if (pr.isCrossRepository) {
+    fail(
+      `PR #${pr.number} comes from a fork, and its branch is not on this repo's remote.\n` +
+        "Use `gh pr checkout` for fork PRs.",
+    );
+  }
+
+  const branch = pr.headRefName;
+  const worktreePath = path.resolve(root, targetPath, worktreeNameFor(pr));
+
+  console.error(`PR:       #${pr.number} — ${pr.title}`);
+  console.error(`Author:   ${pr.author?.login ?? "unknown"}`);
+  console.error(`Branch:   ${branch}`);
+  if (pr.state !== "OPEN") console.error(`State:    ${pr.state}`);
+
+  // Reusing rather than erroring keeps a rerun on the same PR cheap. The branch
+  // check comes second because an existing worktree at our own path is already
+  // holding the branch, and reporting it as "somewhere else" would be a lie.
+  const existing = fs.existsSync(worktreePath)
+    ? (console.error("Worktree already exists, reusing it."), worktreePath)
+    : worktreeHoldingBranch(branch, root);
+
+  // The main clone is not somewhere to send anyone: git allows a branch in one
+  // worktree at a time, so there is no worktree to make, and cd'ing to the main
+  // clone is a no-op for anyone already sitting in it — which reads as the tool
+  // silently doing nothing.
+  if (existing === root) {
+    fail(
+      `${branch} is already checked out in your main clone:\n` +
+        `  ${root}\n` +
+        "Git allows a branch in only one worktree at a time. Either work there,\n" +
+        "or switch that checkout away and rerun:\n" +
+        `  git -C ${root} switch <some-other-branch>`,
+    );
+  }
+
+  if (existing && existing !== worktreePath) {
+    console.error(`Branch is already checked out elsewhere, using that.`);
+  }
+
+  const finalPath = existing ?? worktreePath;
+  console.error(`Worktree: ${finalPath}`);
+
+  if (!existing) createWorktree(worktreePath, branch, defaultRemote(root), root);
+
+  // Read by the `wtpr` shell function.
+  if (cdFile) fs.writeFileSync(cdFile, `${finalPath}\n`);
+
+  // `wtpr` launches claude itself, after cd'ing.
+  if (noClaude) return;
+
+  const claude = spawnSync("claude", [], {
+    cwd: finalPath,
+    stdio: "inherit",
+  });
+
+  if (claude.error?.code === "ENOENT") {
+    console.error(
+      `\nclaude not found on PATH. The worktree is ready at:\n  ${finalPath}`,
+    );
+    return;
+  }
+  if (claude.status) process.exit(claude.status);
+};
+
+main().catch((err) => fail(err.message));

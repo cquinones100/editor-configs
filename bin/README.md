@@ -80,3 +80,63 @@ stays one stable line that never needs re-editing when the tool changes.
   place of the identifier.
 - `wt-cleanup` is the companion for removing finished worktrees. Install it the
   same way (`./sync.sh wt-cleanup`) if you want it.
+
+## worktree-from-pr
+
+The same idea for a GitHub pull request instead of a Linear ticket. Takes a PR
+number or URL, creates a worktree on that PR's head branch, moves your shell
+into it, and opens claude.
+
+```
+wtpr 123
+wtpr https://github.com/owner/repo/pull/123
+```
+
+That creates `.claude/worktrees/pr-123-the-head-branch` off the repo root. The
+directory is named after the PR rather than the branch because head branches
+often contain slashes, which would nest worktrees inside shared parent
+directories.
+
+Unlike `wt`, claude opens with no prompt — you say what you want when you get
+there.
+
+Only PRs whose branch lives on the repo's own remote. Fork PRs are rejected with
+a pointer to `gh pr checkout`, which is the tool that knows how to wire up a
+contributor's fork.
+
+### Setup
+
+1. **Install the script.**
+
+   ```sh
+   ./sync.sh worktree-from-pr
+   ```
+
+2. **Install and authenticate gh.** <https://cli.github.com>, then `gh auth
+   login`. There is no API key to configure. `gh` is only used to turn a PR into
+   a branch name; the fetch and the worktree are plain git.
+
+3. **Add one line to your shell config** (optional):
+
+   ```sh
+   eval "$(worktree-from-pr init zsh)"
+   ```
+
+   This defines the `wtpr` function. Same reasoning as step 3 above: only a
+   shell function can move your shell into the worktree.
+
+### Notes
+
+- The branch is set up to track its remote counterpart, so `git push` and `git
+  pull` work with no arguments.
+- Rerunning on the same PR is safe: it reuses the worktree, and if the branch is
+  already checked out in some other worktree it points you there instead of
+  failing. A local branch left over from an earlier run gets fast-forwarded to
+  the PR head; if it has diverged, it is left alone with a warning rather than
+  losing your commits.
+- If the PR's branch is checked out in your main clone, the run stops and says
+  so. Git allows a branch in one worktree at a time, so there is nothing to
+  create — switch the main clone to another branch and rerun.
+- Closed and merged PRs work too — the state is printed when it isn't open.
+- Works on shallow and `--single-branch` clones: the PR's branch is added to the
+  remote's fetch refspec when the existing one doesn't cover it.

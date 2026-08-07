@@ -31,6 +31,9 @@
       "Bash(cd * && git * && git *)",
       "Bash(git -C *)",
       "Bash(git stash*)",
+      "Bash(git -c core.editor=true rebase --continue)",
+      "Bash(git -c core.editor=true merge --continue)",
+      "Bash(git -c core.editor=true cherry-pick --continue)",
       "Bash(gh api repos/*)",
       "Bash(gh pr list*)",
       "Bash(ls *)"

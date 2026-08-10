@@ -140,3 +140,54 @@ contributor's fork.
 - Closed and merged PRs work too — the state is printed when it isn't open.
 - Works on shallow and `--single-branch` clones: the PR's branch is added to the
   remote's fetch refspec when the existing one doesn't cover it.
+
+## worktree-resume
+
+The way back in. Takes the same ticket or PR the other two take, finds the
+worktree they already made for it, moves your shell there, and hands off to
+`claude-here` to resume the session that was running in it. What you run after a
+restart, when the worktrees survived but the terminal didn't.
+
+```
+wtr ABC-123
+wtr 123
+wtr https://github.com/owner/repo/pull/123
+```
+
+Nothing is created and nothing is fetched. The worktree is found by matching the
+identifier against `git worktree list` — `wt` and `wtpr` bake it into the branch
+name and the directory name, so it is already recorded on disk. That means no
+Linear key, no `gh`, and no network: recovery works on a plane.
+
+### Setup
+
+1. **Install the script.**
+
+   ```sh
+   ./sync.sh worktree-resume
+   ```
+
+2. **Install `claude-here`** and make sure it is on your `PATH`. That is the
+   piece that knows how to find and resume a directory's claude session; this
+   script only gets you standing in the right directory.
+
+3. **Add one line to your shell config** (optional):
+
+   ```sh
+   eval "$(worktree-resume init zsh)"
+   ```
+
+   This defines the `wtr` function. Same reasoning as the other two: only a
+   shell function can move your shell into the worktree.
+
+### Notes
+
+- Run it from anywhere in the repo, including from inside another worktree.
+- If both a `wt` worktree and a `wtpr` worktree carry the same ticket — you
+  opened the ticket, then opened its PR — you get a short numbered list, most
+  recently touched first, and Enter takes that one.
+- Matching is bounded on both sides, so `ABC-12` never lands you in `ABC-123`.
+- A worktree git still tracks but whose directory is gone is reported as such
+  rather than as "not found", since rerunning `wt` or `wtpr` is the fix.
+- Resuming is `claude-here`'s job, so its own session picker appears when the
+  worktree has more than one session.

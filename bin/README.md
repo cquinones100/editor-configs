@@ -191,3 +191,71 @@ Linear key, no `gh`, and no network: recovery works on a plane.
   rather than as "not found", since rerunning `wt` or `wtpr` is the fix.
 - Resuming is `claude-here`'s job, so its own session picker appears when the
   worktree has more than one session.
+
+## worktree-done
+
+Reads every worktree in the repo, asks Linear what state each one's ticket is
+in, and offers up the ones that are finished — completed, merged, deployed,
+canceled, whatever your workflow calls them — in an fzf multi-select that
+removes what you pick. The answer to "which of these forty directories can I
+delete", and the deleting.
+
+```
+worktree-done           pick finished worktrees to remove
+worktree-done --list    print them instead, removing nothing
+worktree-done --all     print every worktree grouped by ticket state
+worktree-done --paths   print only the finished worktrees' paths, for pipes
+```
+
+Keys in the picker are `wt-cleanup`'s, plus one: Tab toggles, `C-a` takes
+everything, Enter removes what is selected, Esc cancels. Taking the whole list
+at once asks for a `y` first — every other selection was made row by row and
+speaks for itself.
+
+`C-a` selects what the current query matches rather than the entire list, so
+typing `abc-6` and hitting it takes those and not all forty. It
+costs fzf's default `C-a` (beginning-of-line) inside the query, which is a short
+field here.
+
+`wt-cleanup` is still the tool for the worktrees this one will not touch — the
+ones with no ticket, or whose ticket is still open.
+
+### Setup
+
+1. **Install the script.**
+
+   ```sh
+   ./sync.sh worktree-done
+   ```
+
+2. **Install fzf.** `brew install fzf`. Without it the command prints the list
+   and says so, rather than removing nothing in silence.
+
+3. **Add your Linear API key**, if you have not already. It reads the same
+   `LINEAR_API_KEY` or `~/.config/worktree-from-ticket/config.json` that
+   `worktree-from-ticket` reads, so if `wt` works this does too.
+
+No shell function, so nothing to add to your shell config.
+
+### Notes
+
+- Finished means Linear's own `completed` or `canceled` state type, so a custom
+  state like "Deployed to Production" or "Duplicate" counts without any
+  configuration. The state's real name is what gets printed.
+- The ticket is read from the branch first and the directory name second. Those
+  usually agree, but when they don't the branch is the truth — a worktree named
+  for one ticket sitting on another ticket's branch is worth seeing.
+- A leading `pr-<number>-` is stripped before the identifier is matched, so a
+  `wtpr` worktree is never read as ticket number `<number>` on a team called PR.
+- Worktrees whose name yields no ticket are counted, not skipped, and `--all`
+  lists them. They are usually PR worktrees for branches that never had one.
+- One request per hundred tickets rather than one per worktree, so a repo with
+  forty of them answers in a single round trip.
+- The main clone is left out. Git will not remove it and its branch is normally
+  the trunk, so it is never a cleanup candidate.
+- Removal is `git worktree remove` with no `--force`, so a worktree holding
+  uncommitted changes or untracked files refuses to go. The refusal is reported
+  with the `--force` command to run if that is what you meant, and the rest of
+  the selection still goes.
+- Only the checkout is removed. The branch survives, so nothing you committed is
+  lost even if the ticket turns out not to have been finished after all.

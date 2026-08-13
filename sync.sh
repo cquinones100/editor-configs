@@ -43,6 +43,7 @@ sync_claude() {
   ln -sf ~/editor-configs/claude/CLAUDE.md ~/.claude/CLAUDE.md
   ln -sf ~/editor-configs/claude/settings.json ~/.claude/settings.json
   ln -sf ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
+  ln -sf ~/editor-configs/claude/otel-headers.sh ~/.claude/otel-headers.sh
   ln -sfn ~/editor-configs/claude/commands ~/.claude/commands
   ln -sfn ~/editor-configs/claude/skills ~/.claude/skills
   mkdir -p ~/.claude/hooks

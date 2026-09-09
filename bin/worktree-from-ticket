@@ -178,6 +178,18 @@ const fetchIssue = async ({ key, number }) => {
   return issue;
 };
 
+// Claude Code reads .claude/settings.local.json from the worktree root, not the
+// main clone, and git never copies it because it is gitignored. Symlinking the
+// main clone's file keeps one source of truth for personal permissions and the
+// auto mode environment profile. Skipped when the worktree already has its own.
+const linkLocalSettings = (root, worktreePath) => {
+  const source = path.join(root, ".claude", "settings.local.json");
+  const target = path.join(worktreePath, ".claude", "settings.local.json");
+  if (!fs.existsSync(source) || fs.existsSync(target)) return;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.symlinkSync(source, target);
+};
+
 // Idempotent so rerunning on the same ticket reopens the worktree instead of
 // erroring: reuse the directory if it exists, and the branch if it exists.
 const ensureWorktree = (worktreePath, branch) => {
@@ -246,13 +258,15 @@ const main = async () => {
   const issue = await fetchIssue(parseIdentifier(ticket));
   const branch =
     issue.branchName ?? `${issue.identifier.toLowerCase()}-${slugify(issue.title)}`;
-  const worktreePath = path.resolve(repoRoot(), targetPath, branch);
+  const root = repoRoot();
+  const worktreePath = path.resolve(root, targetPath, branch);
 
   console.error(`Ticket:   ${issue.identifier} — ${issue.title}`);
   console.error(`Branch:   ${branch}`);
   console.error(`Worktree: ${worktreePath}`);
 
   ensureWorktree(worktreePath, branch);
+  linkLocalSettings(root, worktreePath);
 
   const prompt = `work on ticket ${issue.identifier}`;
 

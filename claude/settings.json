@@ -1,4 +1,13 @@
 {
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL": "http/protobuf",
+    "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://otlp.us3.datadoghq.com/v1/logs",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": "http/protobuf",
+    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://otlp.us3.datadoghq.com/v1/metrics"
+  },
   "permissions": {
     "allow": [
       "Edit",
@@ -14,6 +23,8 @@
       "Bash(git commit *)",
       "Bash(git status)",
       "Bash(git status *)",
+      "Bash(git fetch)",
+      "Bash(git fetch *)",
       "Bash(gh pr checks *)",
       "Bash(gh run view *)",
       "Bash(gh run list*)",
@@ -50,17 +61,7 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "opus[1m]",
-  "env": {
-    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-    "OTEL_LOGS_EXPORTER": "otlp",
-    "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL": "http/protobuf",
-    "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://otlp.us3.datadoghq.com/v1/logs",
-    "OTEL_METRICS_EXPORTER": "otlp",
-    "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": "http/protobuf",
-    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://otlp.us3.datadoghq.com/v1/metrics"
-  },
-  "otelHeadersHelper": "bash ~/.claude/otel-headers.sh",
+  "model": "claude-fable-5-1[1m]",
   "hooks": {
     "PreToolUse": [
       {
@@ -104,6 +105,7 @@
   "enabledPlugins": {
     "aikido@claude-plugins-official": true
   },
+  "otelHeadersHelper": "bash ~/.claude/otel-headers.sh",
   "tui": "fullscreen",
   "editorMode": "vim",
   "agentPushNotifEnabled": true,

@@ -73,6 +73,10 @@ stays one stable line that never needs re-editing when the tool changes.
 ### Notes
 
 - Add `.claude/worktrees/` to the target repo's `.gitignore`.
+- The main clone's `.claude/settings.local.json` is symlinked into the new
+  worktree when one exists, so personal permissions and the auto mode
+  environment profile apply there too. A worktree that already has its own file
+  is left alone.
 - Rerunning on the same ticket is safe: it reuses an existing worktree, and
   reuses the branch if the worktree directory was removed.
 - Pass a different parent directory as a first argument:
@@ -129,6 +133,10 @@ contributor's fork.
 
 - The branch is set up to track its remote counterpart, so `git push` and `git
   pull` work with no arguments.
+- The main clone's `.claude/settings.local.json` is symlinked into the new
+  worktree when one exists, so personal permissions and the auto mode
+  environment profile apply there too. A worktree that already has its own file
+  is left alone.
 - Rerunning on the same PR is safe: it reuses the worktree, and if the branch is
   already checked out in some other worktree it points you there instead of
   failing. A local branch left over from an earlier run gets fast-forwarded to

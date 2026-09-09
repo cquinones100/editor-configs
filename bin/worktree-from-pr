@@ -239,6 +239,18 @@ const setUpstream = (branch, remote, root) => {
   });
 };
 
+// Claude Code reads .claude/settings.local.json from the worktree root, not the
+// main clone, and git never copies it because it is gitignored. Symlinking the
+// main clone's file keeps one source of truth for personal permissions and the
+// auto mode environment profile. Skipped when the worktree already has its own.
+const linkLocalSettings = (root, worktreePath) => {
+  const source = path.join(root, ".claude", "settings.local.json");
+  const target = path.join(worktreePath, ".claude", "settings.local.json");
+  if (!fs.existsSync(source) || fs.existsSync(target)) return;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.symlinkSync(source, target);
+};
+
 const createWorktree = (worktreePath, branch, remote, root) => {
   ensureRefspecCovers(branch, remote, root);
   fetchBranch(branch, remote, root);
@@ -358,6 +370,7 @@ const main = async () => {
   console.error(`Worktree: ${finalPath}`);
 
   if (!existing) createWorktree(worktreePath, branch, defaultRemote(root), root);
+  linkLocalSettings(root, finalPath);
 
   // Read by the `wtpr` shell function.
   if (cdFile) fs.writeFileSync(cdFile, `${finalPath}\n`);

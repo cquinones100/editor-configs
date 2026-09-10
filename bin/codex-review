@@ -210,7 +210,10 @@ const resolveBase = (name, head, pr, explicit) => {
   if (explicit && exists(name)) return { ref: name, mergeBase: git("merge-base", name, head) };
   const remote = `origin/${name}`;
   if (pr && !exists(remote)) {
-    fail(`the PR targets ${name} but ${remote} is not in this clone, so the PR's contents cannot be worked out.\n  Run: git fetch origin ${name}`);
+    // The explicit destination refspec creates origin/<base> even in a
+    // single-branch clone whose fetch refspec does not cover it; a bare
+    // `git fetch origin <base>` there only updates FETCH_HEAD.
+    fail(`the PR targets ${name} but ${remote} is not in this clone, so the PR's contents cannot be worked out.\n  Run: git fetch origin +refs/heads/${name}:refs/remotes/origin/${name}`);
   }
   const candidates = pr ? [remote] : [remote, name].filter(exists);
   if (candidates.length === 0) fail(`base branch ${name} does not exist locally or on origin`);
@@ -331,7 +334,9 @@ const main = () => {
   const result = spawnSync("codex", codexArgs, {
     input: prompt,
     encoding: "utf8",
-    stdio: ["pipe", verbose ? "inherit" : "ignore", verbose ? "inherit" : "pipe"],
+    // In verbose mode both of Codex's streams go to our stderr (fd 2), never our
+    // stdout, so `codex-review | jq` stays a single JSON object either way.
+    stdio: ["pipe", verbose ? 2 : "ignore", verbose ? 2 : "pipe"],
     maxBuffer: 64 * 1024 * 1024,
   });
 

@@ -278,7 +278,7 @@ empty. It is also fine to run by hand for a second opinion.
 
 ```
 codex-review                       review the branch against its PR's base
-codex-review --base develop        diff against a different base
+codex-review --base upstream/main  diff against a different base, used as given when the ref exists
 codex-review --notes disputes.md   give the reviewer context, e.g. findings you rejected last time
 codex-review --include-low         report low-severity findings too
 codex-review --dry-run             print the prompt and the codex command, run nothing
@@ -320,7 +320,12 @@ file and line, a title, and the concrete failure it found.
   defines the PR's contents: an unpushed commit on your local `main` that the
   branch also carries is part of the PR and gets reviewed. Without a PR, the
   local or remote copy with the newer merge base is used, so only the branch's
-  own commits are in scope whichever side is behind.
+  own commits are in scope whichever side is behind. A PR whose remote base has
+  not been fetched, or that comes from a different repository than it targets,
+  stops the run with the command or `--base` to use instead of guessing.
+- `gh pr view` failing for any reason other than "no pull requests found" stops
+  the run too. An expired login must not turn into a review against the wrong
+  base with the prompt claiming there is no PR.
 - The commit under review is pinned before Codex starts. If `HEAD` moves or the
   tree becomes dirty while it is reading, the result is discarded rather than
   labeled with a commit it does not describe.

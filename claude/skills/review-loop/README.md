@@ -27,11 +27,17 @@ next session, and `/review-loop` invokes it.
 
 ## What Codex is allowed to do
 
-The script runs Codex with the read-only sandbox, no approval path out of it,
-your Codex configuration ignored so no MCP servers or plugins load, and only
-core environment variables visible to the commands it runs. Contributor-written
-text such as the PR description is fenced in the prompt as data, not
-instructions. No per-repository trust step is needed.
+The script runs Codex with the read-only sandbox and no network for the
+commands it runs, no approval path out of it, your Codex configuration and
+approval rules ignored so no MCP servers or plugins load, `AGENTS.md` not
+loaded as instructions, and only core environment variables visible to
+commands. Contributor-written text such as the PR description is fenced in the
+prompt as data, not instructions. No per-repository trust step is needed.
+
+The sandbox does not confine reads to the repository; Codex cannot currently do
+that without also making the repository writable. Findings that mention paths
+outside the repository are flagged in the JSON's `warnings` array, and the
+skill tells the runner to read those before acting.
 
 ## Using it
 

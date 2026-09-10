@@ -7,7 +7,7 @@ description: Run the branch through repeated adversarial Codex reviews, fixing w
 
 Have Codex review the current branch, fix the findings you agree with, commit, and review again. Stop after two consecutive clean rounds, or when the round cap is hit. Push once at the end, after asking.
 
-The reviewer is `codex-review`, installed from `editor-configs` with `./sync.sh codex-review`. It runs Codex read-only against committed history and prints one JSON object with `summary`, `findings`, and the commit it reviewed. If the command is missing, say so and stop; do not substitute your own review for Codex's.
+The reviewer is the `codex-review` command. It runs Codex read-only against committed history and prints one JSON object with `summary`, `findings`, and the commit it reviewed. If it is not on `PATH`, say so and stop; do not substitute your own review for Codex's.
 
 Arguments: `all` means also act on low-severity findings from the first round on. Anything else is ignored.
 

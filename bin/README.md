@@ -316,8 +316,10 @@ file and line, a title, and the concrete failure it found.
   given. An adversarial reviewer asked for everything never runs out of nits;
   the loop needs a floor to converge.
 - The base is the PR's base branch, or origin's default branch when there is
-  no PR. With a PR the remote copy of the base is used, because that is what
-  defines the PR's contents: an unpushed commit on your local `main` that the
+  no PR. With a PR, the base is read from the remote whose URL points at the
+  PR's repository, which is not always `origin` in a clone with several
+  remotes. That remote's copy of the base is used because it defines the PR's
+  contents: an unpushed commit on your local `main` that the
   branch also carries is part of the PR and gets reviewed. Without a PR, the
   local or remote copy with the newer merge base is used, so only the branch's
   own commits are in scope whichever side is behind. A PR whose remote base has

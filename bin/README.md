@@ -267,3 +267,56 @@ No shell function, so nothing to add to your shell config.
   the selection still goes.
 - Only the checkout is removed. The branch survives, so nothing you committed is
   lost even if the ticket turns out not to have been finished after all.
+
+## codex-review
+
+Runs Codex as an adversarial, read-only reviewer of the current branch and
+prints its findings as JSON. It is the reviewer half of the `review-loop`
+Claude skill in `claude/skills/review-loop`, which calls it, fixes what it
+agrees with, commits, and calls it again until the findings list comes back
+empty. It is also fine to run by hand for a second opinion.
+
+```
+codex-review                       review the branch against its PR's base
+codex-review --base develop        diff against a different base
+codex-review --notes disputes.md   give the reviewer context, e.g. findings you rejected last time
+codex-review --include-low         report low-severity findings too
+codex-review --dry-run             print the prompt and the codex command, run nothing
+codex-review -- -m gpt-5.5         anything after -- goes to codex exec
+```
+
+The prompt is the one that used to be typed into a Codex pane by hand: assess
+the code against what the commits assert, look for regressions and security
+concerns, run no checks, be adversarial. The PR title and body are fetched with
+`gh` and pasted in, so Codex never needs GitHub access. Codex runs with the
+`read-only` sandbox and an ephemeral session, and is told to answer in a fixed
+JSON shape: a `summary` plus `findings`, each with a severity, a category, a
+file and line, a title, and the concrete failure it found.
+
+### Setup
+
+1. **Install the script.**
+
+   ```sh
+   ./sync.sh codex-review
+   ```
+
+2. **Log in to Codex** (`codex login`) if `codex` does not already work
+   interactively. `codex exec` uses the same login.
+
+3. **Trust the repo in Codex.** The first interactive `codex` run in a repo
+   asks; `codex exec` will not, so do it once by hand.
+
+### Notes
+
+- Only committed changes are reviewed, and the command refuses to run on a
+  dirty tree. Each round of the loop is then a review of exactly the commits
+  the next round is compared against.
+- Low-severity findings are dropped by the prompt unless `--include-low` is
+  given. An adversarial reviewer asked for everything never runs out of nits;
+  the loop needs a floor to converge.
+- The base is the PR's base branch, or origin's default branch when there is
+  no PR. The remote ref is preferred so a stale local `main` does not make the
+  diff look bigger than the PR.
+- Codex's progress output is discarded so stdout is just the JSON. Set
+  `CODEX_REVIEW_VERBOSE=1` to watch it on stderr.

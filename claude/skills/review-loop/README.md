@@ -5,25 +5,36 @@ finds, commits, and reviews again until two consecutive rounds come back clean.
 `SKILL.md` is the skill itself; this file is what you need to run it somewhere
 else.
 
-## What it depends on
+## Install
 
-- **`codex-review`** on your `PATH`. It is a single Node script that runs Codex
-  non-interactively as a read-only reviewer and prints the findings as JSON.
-  The source is
-  [`bin/codex-review`](https://github.com/cquinones100/editor-configs/blob/main/bin/codex-review)
-  in this repository. Download it, make it executable, and put it on your
-  `PATH`, for example in `~/.local/bin`.
-- **Node** 18 or newer, for the script.
-- **`codex`**, the OpenAI Codex CLI, logged in (`codex login`). `codex exec`
-  uses the same login as the interactive tool.
-- **`gh`**, the GitHub CLI, logged in. The script uses it to fetch the PR title,
-  body, and base branch so Codex never needs GitHub access of its own.
+The skill is a Markdown file that tells Claude Code what to do. The work is
+done by `codex-review`, a single Node script, so both have to be in place.
 
-## Install the skill
+1. **Have the tools it runs.** Node 18 or newer. The OpenAI Codex CLI,
+   logged in with `codex login`; `codex exec` uses the same login as the
+   interactive tool. The GitHub CLI, logged in; the script uses it to fetch the
+   PR title, body, and base branch so Codex never needs GitHub access of its
+   own.
 
-Copy this directory to `~/.claude/skills/review-loop/` so that
-`~/.claude/skills/review-loop/SKILL.md` exists. Claude Code picks it up on the
-next session, and `/review-loop` invokes it.
+2. **Put `codex-review` on your `PATH`.** The source is
+   [`bin/codex-review`](https://github.com/cquinones100/editor-configs/blob/main/bin/codex-review)
+   in this repository. For example:
+
+   ```sh
+   mkdir -p ~/.local/bin
+   curl -fsSL https://raw.githubusercontent.com/cquinones100/editor-configs/main/bin/codex-review -o ~/.local/bin/codex-review
+   chmod +x ~/.local/bin/codex-review
+   codex-review --help
+   ```
+
+   `~/.local/bin` has to be on your `PATH`; the last line fails if it is not.
+   If the skill cannot find the command it stops and says so rather than
+   reviewing on its own.
+
+3. **Install the skill.** Copy this directory to
+   `~/.claude/skills/review-loop/` so that
+   `~/.claude/skills/review-loop/SKILL.md` exists. Claude Code picks it up on
+   the next session, and `/review-loop` invokes it.
 
 ## What Codex is allowed to do
 

@@ -282,16 +282,34 @@ codex-review --base upstream/main  diff against a different base, used as given 
 codex-review --notes notes.md      disputed findings and accepted known gaps, each with a reason
 codex-review --include-low         report low-severity findings too
 codex-review --dry-run             print the prompt and the codex command, run nothing
-codex-review -- -m gpt-5.5         anything after -- goes to codex exec
+codex-review --model gpt-5.5       pick the Codex model; no other Codex option passes through
 ```
 
 The prompt is the one that used to be typed into a Codex pane by hand: assess
 the code against what the commits assert, look for regressions and security
 concerns, run no checks, be adversarial. The PR title and body are fetched with
-`gh` and pasted in, so Codex never needs GitHub access. Codex runs with the
-`read-only` sandbox and an ephemeral session, and is told to answer in a fixed
-JSON shape: a `summary` plus `findings`, each with a severity, a category, a
-file and line, a title, and the concrete failure it found.
+`gh` and pasted in, so Codex never needs GitHub access. Codex is told to answer
+in a fixed JSON shape: a `summary` plus `findings`, each with a severity, a
+category, a file and line, a title, and the concrete failure it found.
+
+Codex runs locked down, because a reviewer needs to read code and nothing else:
+
+- The `read-only` sandbox for anything the model runs, with
+  `approval_policy=never` so a command that needs more access fails instead of
+  asking for it.
+- Your `~/.codex/config.toml` is not loaded, so MCP servers, plugins and other
+  integrations set up for interactive use do not come along. Login does.
+- Commands Codex runs see only core environment variables such as `PATH` and
+  `HOME`, not the tokens in the calling shell's environment.
+- Commit messages and the PR title and body are placed in the prompt inside
+  fenced blocks Codex is told to treat as data, never as instructions, and to
+  report as a finding if they try to steer the review. The person running the
+  review still verifies every finding against the code before acting on it.
+- The only Codex option that passes through is `--model`. Arbitrary
+  passthrough would let whoever builds the command line, another agent
+  included, undo the sandbox.
+- The temp directory holding the schema and Codex's answer is removed on every
+  exit path, so a failed run does not leave code excerpts behind.
 
 ### Setup
 
@@ -302,10 +320,8 @@ file and line, a title, and the concrete failure it found.
    ```
 
 2. **Log in to Codex** (`codex login`) if `codex` does not already work
-   interactively. `codex exec` uses the same login.
-
-3. **Trust the repo in Codex.** The first interactive `codex` run in a repo
-   asks; `codex exec` will not, so do it once by hand.
+   interactively. `codex exec` uses the same login. Nothing else in your Codex
+   configuration is read, so no per-repository trust step is needed.
 
 ### Notes
 

@@ -316,7 +316,13 @@ file and line, a title, and the concrete failure it found.
   given. An adversarial reviewer asked for everything never runs out of nits;
   the loop needs a floor to converge.
 - The base is the PR's base branch, or origin's default branch when there is
-  no PR. The remote ref is preferred so a stale local `main` does not make the
-  diff look bigger than the PR.
+  no PR. With a PR the remote copy of the base is used, because that is what
+  defines the PR's contents: an unpushed commit on your local `main` that the
+  branch also carries is part of the PR and gets reviewed. Without a PR, the
+  local or remote copy with the newer merge base is used, so only the branch's
+  own commits are in scope whichever side is behind.
+- The commit under review is pinned before Codex starts. If `HEAD` moves or the
+  tree becomes dirty while it is reading, the result is discarded rather than
+  labeled with a commit it does not describe.
 - Codex's progress output is discarded so stdout is just the JSON. Set
   `CODEX_REVIEW_VERBOSE=1` to watch it on stderr.

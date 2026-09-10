@@ -25,11 +25,13 @@ Copy this directory to `~/.claude/skills/review-loop/` so that
 `~/.claude/skills/review-loop/SKILL.md` exists. Claude Code picks it up on the
 next session, and `/review-loop` invokes it.
 
-## Before the first run in a repository
+## What Codex is allowed to do
 
-Open `codex` interactively in the repository once and accept the trust prompt.
-`codex exec` will not ask, and refuses to run in a repository Codex does not
-trust.
+The script runs Codex with the read-only sandbox, no approval path out of it,
+your Codex configuration ignored so no MCP servers or plugins load, and only
+core environment variables visible to the commands it runs. Contributor-written
+text such as the PR description is fenced in the prompt as data, not
+instructions. No per-repository trust step is needed.
 
 ## Using it
 

@@ -270,7 +270,7 @@ No shell function, so nothing to add to your shell config.
 
 ## codex-review
 
-Runs Codex as an adversarial, read-only reviewer of the current branch and
+Runs Codex as a skeptical, read-only static reviewer of the current branch and
 prints its findings as JSON. It is the reviewer half of the `review-loop`
 Claude skill in `claude/skills/review-loop`, which calls it, fixes what it
 agrees with, commits, and calls it again until the findings list comes back
@@ -287,7 +287,11 @@ codex-review --model gpt-5.5       pick the Codex model; no other Codex option p
 
 The prompt is the one that used to be typed into a Codex pane by hand: assess
 the code against what the commits assert, look for regressions and security
-concerns, run no checks, be adversarial. The PR title and body are fetched with
+concerns, run no checks, treat every claim as unproven until the code shows it.
+It is a static review with the burden of proof on the code, not a red team: Codex
+cannot execute, build, or probe anything, so a suspicion it cannot make concrete
+from the code is left out of the findings and noted in the summary as something
+a hands-on test would need to check. The PR title and body are fetched with
 `gh` and pasted in, so Codex never needs GitHub access. Codex is told to answer
 in a fixed JSON shape: a `summary` plus `findings`, each with a severity, a
 category, a file and line, a title, and the concrete failure it found.
@@ -360,7 +364,7 @@ checkout and the Codex login.
   acknowledged in chat but not written down is a finding hidden from the
   reviewer.
 - Low-severity findings are dropped by the prompt unless `--include-low` is
-  given. An adversarial reviewer asked for everything never runs out of nits;
+  given. A skeptical reviewer asked for everything never runs out of nits;
   the loop needs a floor to converge.
 - The base is the PR's base branch, or origin's default branch when there is
   no PR. With a PR, the base is read from the remote whose URL points at the

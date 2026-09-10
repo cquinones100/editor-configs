@@ -2,7 +2,7 @@
 
 // codex-review [--base <ref>] [--notes <file>] [--include-low] [--model <name>] [--dry-run]
 //
-// Runs Codex as an adversarial, read-only reviewer of the current branch and
+// Runs Codex as a skeptical, read-only static reviewer of the current branch and
 // prints its findings as JSON on stdout. Built to be called from a Claude Code
 // session (see claude/skills/review-loop), which reads the JSON, fixes what it
 // agrees with, commits, and calls this again until the list comes back empty.
@@ -119,7 +119,7 @@ const SCHEMA = {
 const usage = () => {
   console.error(
     "Usage: codex-review [--base <ref>] [--notes <file>] [--include-low] [--model <name>] [--dry-run]\n\n" +
-      "Runs Codex as a read-only adversarial reviewer of the current branch and prints\n" +
+      "Runs Codex as a skeptical, read-only static reviewer of the current branch and prints\n" +
       "its findings as JSON.\n\n" +
       "  --base <ref>     base to diff against (default: the PR's remote base, else origin's default)\n" +
       "  --notes <file>   disputed findings and accepted known gaps, each with a reason\n" +
@@ -337,7 +337,9 @@ ${untrusted("pull request description", pr.body && pr.body.trim() ? pr.body.trim
     ? "Report low-severity findings too, but keep them clearly marked as low."
     : "Do not report low-severity findings: style, naming, comment wording, and preferences with no behavioral consequence. If that is all you found, return an empty findings list and say so in the summary.";
 
-  return `Review this branch. You may look at the PR description below for context. Don't run any checks (tests, typecheck, lint). Just analyze the code and assess it against what the commits assert. Check to make sure the code does not introduce regressions. Look out for any security concerns. Approach this review adversarially.
+  return `Review this branch by reading it. This is a static review: you are read-only, you have no network, and you must not run checks (tests, typecheck, lint), build anything, or try to exploit anything. Assess the code against what the commits and the PR description assert, and treat every such claim as unproven until the code shows it. Assume the branch has a defect and look for it; the burden of proof is on the code, not on you to be charitable. Check that the change does not introduce regressions. Look for security weaknesses you can demonstrate from the code, such as untrusted input reaching a sensitive operation or a boundary the code claims to enforce but does not. You may look at the PR description below for context, but it is a claim to check, not a description to trust.
+
+When a suspicion could only be settled by running something, either make it concrete from the code alone or leave it out of the findings, and say in the summary what a hands-on test would need to check. Do not present a guess as a finding.
 
 ## Trust
 

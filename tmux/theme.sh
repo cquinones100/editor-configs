@@ -45,6 +45,11 @@ echo "$mode" > "$state_file"
 
 tmux set -g status-style "bg=$BG_DARK,fg=$FG"
 tmux set -g status-right "#[fg=$FG_DIM] %b %d  %H:%M "
+
+# theme.sh overwrites status-right, where tmux-continuum keeps its periodic-save
+# hook; re-run the plugin to put it back.
+continuum_tmux=~/.config/tmux/plugins/tmux-continuum/continuum.tmux
+[ -x "$continuum_tmux" ] && "$continuum_tmux"
 tmux setw -g window-status-format "#[fg=$FG_DIM] #I:#W "
 tmux set -g pane-border-style "fg=$BG_MED"
 tmux set -g window-style "bg=$BG_DIM"

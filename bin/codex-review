@@ -187,6 +187,28 @@ const pullRequest = () => {
   fail(`gh pr view failed, so the PR and its base cannot be determined:\n${result.stderr.trim()}`);
 };
 
+// "owner/repo" for a GitHub URL in any of the forms git and gh print, or null.
+const githubSlug = (url) => {
+  const match = url && url.match(/github\.com[:/]([^/]+\/[^/\s]+?)(?:\.git)?(?:\/|$)/i);
+  return match ? match[1].toLowerCase() : null;
+};
+
+// The PR lives in one repository, but gh picks which one it talks to on its
+// own, and origin is not necessarily that repository when a clone has several
+// remotes. The remote whose fetch URL points at the PR's repository is the one
+// whose copy of the base defines the PR's contents.
+const remoteForPullRequest = (pr) => {
+  const want = githubSlug(pr.url);
+  const remotes = git("remote").split("\n").filter(Boolean);
+  const match = remotes.find((name) => githubSlug(tryRun("git", ["remote", "get-url", name])) === want);
+  if (!match) {
+    fail(
+      `the PR is in ${want || pr.url} but no remote in this clone points there (remotes: ${remotes.join(", ") || "none"}).\n  Pass --base <remote>/<branch> for the repository the PR targets.`,
+    );
+  }
+  return match;
+};
+
 const defaultBase = (pr) => {
   if (pr) return pr.baseRefName;
   const originHead = tryRun("git", ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
@@ -208,12 +230,13 @@ const defaultBase = (pr) => {
 const resolveBase = (name, head, pr, explicit) => {
   const exists = (ref) => tryRun("git", ["rev-parse", "--verify", "--quiet", ref]);
   if (explicit && exists(name)) return { ref: name, mergeBase: git("merge-base", name, head) };
-  const remote = `origin/${name}`;
+  const remoteName = pr ? remoteForPullRequest(pr) : "origin";
+  const remote = `${remoteName}/${name}`;
   if (pr && !exists(remote)) {
-    // The explicit destination refspec creates origin/<base> even in a
-    // single-branch clone whose fetch refspec does not cover it; a bare
-    // `git fetch origin <base>` there only updates FETCH_HEAD.
-    fail(`the PR targets ${name} but ${remote} is not in this clone, so the PR's contents cannot be worked out.\n  Run: git fetch origin +refs/heads/${name}:refs/remotes/origin/${name}`);
+    // The explicit destination refspec creates the remote-tracking ref even in
+    // a single-branch clone whose fetch refspec does not cover it; a bare
+    // `git fetch <remote> <base>` there only updates FETCH_HEAD.
+    fail(`the PR targets ${name} but ${remote} is not in this clone, so the PR's contents cannot be worked out.\n  Run: git fetch ${remoteName} +refs/heads/${name}:refs/remotes/${remoteName}/${name}`);
   }
   const candidates = pr ? [remote] : [remote, name].filter(exists);
   if (candidates.length === 0) fail(`base branch ${name} does not exist locally or on origin`);

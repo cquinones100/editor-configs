@@ -268,7 +268,7 @@ const main = async () => {
   ensureWorktree(worktreePath, branch);
   linkLocalSettings(root, worktreePath);
 
-  const prompt = `work on ticket ${issue.identifier}`;
+  const prompt = `work on ticket ${issue.identifier}. Push and create a PR when done.`;
 
   // Read by the `wt` shell function: line 1 the worktree path, line 2 the
   // prompt. The prompt lives here so the function and the standalone path can't

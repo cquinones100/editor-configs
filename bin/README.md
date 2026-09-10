@@ -279,7 +279,7 @@ empty. It is also fine to run by hand for a second opinion.
 ```
 codex-review                       review the branch against its PR's base
 codex-review --base upstream/main  diff against a different base, used as given when the ref exists
-codex-review --notes disputes.md   give the reviewer context, e.g. findings you rejected last time
+codex-review --notes notes.md      disputed findings and accepted known gaps, each with a reason
 codex-review --include-low         report low-severity findings too
 codex-review --dry-run             print the prompt and the codex command, run nothing
 codex-review -- -m gpt-5.5         anything after -- goes to codex exec
@@ -312,6 +312,12 @@ file and line, a title, and the concrete failure it found.
 - Only committed changes are reviewed, and the command refuses to run on a
   dirty tree. Each round of the loop is then a review of exactly the commits
   the next round is compared against.
+- The notes file is how the author talks back. A disputed finding is not
+  raised again unless the reasoning is wrong; a known gap the author has
+  accepted is not reported unless its impact is larger than the note admits.
+  Anything the notes leave out is fair game, which is the point: a limitation
+  acknowledged in chat but not written down is a finding hidden from the
+  reviewer.
 - Low-severity findings are dropped by the prompt unless `--include-low` is
   given. An adversarial reviewer asked for everything never runs out of nits;
   the loop needs a floor to converge.

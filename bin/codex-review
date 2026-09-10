@@ -1,0 +1,338 @@
+#!/usr/bin/env node
+
+// codex-review [--base <branch>] [--notes <file>] [--include-low] [--dry-run] [-- <codex exec args>]
+//
+// Runs Codex as an adversarial, read-only reviewer of the current branch and
+// prints its findings as JSON on stdout. Built to be called from a Claude Code
+// session (see claude/skills/review-loop), which reads the JSON, fixes what it
+// agrees with, commits, and calls this again until the list comes back empty.
+// It works just as well by hand when you want a second opinion in a terminal.
+//
+// The review prompt is the one that used to be typed into a Codex pane: assess
+// the code against what the commits assert, look for regressions and security
+// concerns, run no checks. The PR description is fetched with `gh` and pasted
+// into the prompt so Codex never needs GitHub access of its own.
+//
+//   --base <branch>   base to diff against; defaults to the PR's base, then
+//                     origin's default branch
+//   --notes <file>    extra context appended to the prompt, typically findings
+//                     from a previous round that the author disputes
+//   --include-low     ask Codex to report low-severity findings too; by default
+//                     the prompt tells it to drop them so the loop converges
+//   --dry-run         print the prompt and the codex command, run nothing
+//   -- <args>         passed through to `codex exec`, e.g. `-- -m gpt-5.5`
+//
+// Only committed changes are reviewed, so the working tree has to be clean.
+// That is a feature: it guarantees each round reviews exactly what the next
+// round will be compared against.
+//
+// Progress from Codex is discarded; only the JSON reaches stdout, so the
+// caller can pipe it straight into jq or a file. Set CODEX_REVIEW_VERBOSE=1 to
+// see Codex's event stream on stderr.
+
+const { execFileSync, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const MAX_FINDINGS_HINT = 12;
+
+const SCHEMA = {
+  type: "object",
+  properties: {
+    summary: {
+      type: "string",
+      description:
+        "Two or three sentences on the overall state of the branch and whether it is ready to merge.",
+    },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          severity: {
+            type: "string",
+            enum: ["critical", "high", "medium", "low"],
+          },
+          category: {
+            type: "string",
+            enum: [
+              "regression",
+              "security",
+              "correctness",
+              "commit-claim",
+              "other",
+            ],
+            description:
+              "commit-claim means the code does not do what a commit message or the PR description says it does.",
+          },
+          file: {
+            type: "string",
+            description: "Repo-relative path, or an empty string when the finding is not tied to a file.",
+          },
+          line: {
+            type: "integer",
+            description: "1-indexed line in the file, or 0 when not applicable.",
+          },
+          title: { type: "string", description: "One line, under 80 characters." },
+          detail: {
+            type: "string",
+            description:
+              "What is wrong, how it fails concretely, and what a fix would need to do. Cite the code you read.",
+          },
+        },
+        required: ["severity", "category", "file", "line", "title", "detail"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["summary", "findings"],
+  additionalProperties: false,
+};
+
+const usage = () => {
+  console.error(
+    "Usage: codex-review [--base <branch>] [--notes <file>] [--include-low] [--dry-run] [-- <codex exec args>]\n\n" +
+      "Runs Codex as a read-only adversarial reviewer of the current branch and prints\n" +
+      "its findings as JSON.\n\n" +
+      "  --base <branch>  base to diff against (default: the PR's base, else origin's default)\n" +
+      "  --notes <file>   extra context for the reviewer, e.g. disputed findings from last round\n" +
+      "  --include-low    report low-severity findings too\n" +
+      "  --dry-run        print the prompt and command without running Codex\n" +
+      "  -- <args>        passed through to codex exec",
+  );
+  process.exit(1);
+};
+
+const parseArgs = (argv) => {
+  const opts = { base: null, notes: null, includeLow: false, dryRun: false, codexArgs: [] };
+  const passthroughAt = argv.indexOf("--");
+  const own = passthroughAt === -1 ? argv : argv.slice(0, passthroughAt);
+  opts.codexArgs = passthroughAt === -1 ? [] : argv.slice(passthroughAt + 1);
+  const takeValue = (flag, i) => {
+    if (i + 1 >= own.length) {
+      console.error(`${flag} needs a value`);
+      usage();
+    }
+    return own[i + 1];
+  };
+  own.forEach((arg, i) => {
+    if (own[i - 1] === "--base" || own[i - 1] === "--notes") return;
+    if (arg === "--base") opts.base = takeValue(arg, i);
+    else if (arg === "--notes") opts.notes = takeValue(arg, i);
+    else if (arg === "--include-low") opts.includeLow = true;
+    else if (arg === "--dry-run") opts.dryRun = true;
+    else if (arg === "-h" || arg === "--help") usage();
+    else {
+      console.error(`Unknown option: ${arg}`);
+      usage();
+    }
+  });
+  return opts;
+};
+
+const git = (...args) =>
+  execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+
+const tryRun = (cmd, args) => {
+  const result = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return result.status === 0 ? result.stdout.trim() : null;
+};
+
+const fail = (message) => {
+  console.error(`codex-review: ${message}`);
+  process.exit(1);
+};
+
+const repoRoot = () => {
+  const root = tryRun("git", ["rev-parse", "--show-toplevel"]);
+  if (!root) fail("not inside a git repository");
+  return root;
+};
+
+const currentBranch = () => {
+  const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+  if (branch === "HEAD") fail("HEAD is detached; check out the branch you want reviewed");
+  return branch;
+};
+
+const ensureClean = () => {
+  const status = git("status", "--porcelain");
+  if (status) {
+    fail(
+      "the working tree has uncommitted changes. Codex reviews committed history, so commit\n" +
+        "  (or stash) first; otherwise the review would not see the code you are about to ship.\n" +
+        status
+          .split("\n")
+          .map((line) => `  ${line}`)
+          .join("\n"),
+    );
+  }
+};
+
+// The PR carries both the description and the branch it targets. Without one we
+// still review, we just say so in the prompt and fall back to origin's default.
+const pullRequest = () => {
+  const raw = tryRun("gh", ["pr", "view", "--json", "number,title,body,url,baseRefName"]);
+  return raw ? JSON.parse(raw) : null;
+};
+
+const defaultBase = (pr) => {
+  if (pr) return pr.baseRefName;
+  const originHead = tryRun("git", ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
+  if (originHead) return originHead.replace(/^origin\//, "");
+  const candidate = ["main", "master"].find((name) => tryRun("git", ["rev-parse", "--verify", "--quiet", name]));
+  if (!candidate) fail("could not work out a base branch; pass --base");
+  return candidate;
+};
+
+// Local and remote copies of the base can be out of step in either direction: a
+// stale local main makes the diff look bigger than the PR, and an unpushed local
+// main makes origin's copy do the same. Use whichever gives the newer merge base,
+// which is the one that leaves only this branch's own commits under review.
+const resolveBase = (name) => {
+  const candidates = [`origin/${name}`, name].filter((ref) =>
+    tryRun("git", ["rev-parse", "--verify", "--quiet", ref]),
+  );
+  if (candidates.length === 0) fail(`base branch ${name} does not exist locally or on origin`);
+  const withMergeBase = candidates.map((ref) => ({ ref, mergeBase: git("merge-base", ref, "HEAD") }));
+  return withMergeBase.reduce((best, candidate) => {
+    const isNewer =
+      candidate.mergeBase !== best.mergeBase &&
+      spawnSync("git", ["merge-base", "--is-ancestor", best.mergeBase, candidate.mergeBase]).status === 0;
+    return isNewer ? candidate : best;
+  });
+};
+
+const buildPrompt = ({ branch, base, mergeBase, pr, commits, notes, includeLow }) => {
+  const prSection = pr
+    ? `## Pull request
+
+${pr.url}
+
+Title: ${pr.title}
+
+${pr.body && pr.body.trim() ? pr.body.trim() : "(The PR has no description.)"}`
+    : "## Pull request\n\nThere is no pull request for this branch yet, so the commits are the only statement of intent.";
+
+  const notesSection = notes ? `## Notes from the author\n\n${notes.trim()}` : "";
+
+  const lowSeverityRule = includeLow
+    ? "Report low-severity findings too, but keep them clearly marked as low."
+    : "Do not report low-severity findings: style, naming, comment wording, and preferences with no behavioral consequence. If that is all you found, return an empty findings list and say so in the summary.";
+
+  return `Review this branch. You may look at the PR description below for context. Don't run any checks (tests, typecheck, lint). Just analyze the code and assess it against what the commits assert. Check to make sure the code does not introduce regressions. Look out for any security concerns. Approach this review adversarially.
+
+## Scope
+
+Branch: ${branch}
+Base: ${base} (merge base ${mergeBase})
+
+The change under review is exactly \`git diff ${mergeBase}..HEAD\`, and the commits that make it up are \`git log ${mergeBase}..HEAD\`. Read the surrounding code as much as you need to judge the change, but only report problems the branch introduces or fails to address while claiming to. Pre-existing issues in untouched code are out of scope unless the change makes them worse.
+
+## Commits
+
+${commits}
+
+${prSection}
+
+${notesSection ? `${notesSection}\n\n` : ""}## How to report
+
+Every finding must be something you verified by reading the code, with a concrete failure: what input or state leads to what wrong outcome. Do not pad the list. A finding you cannot make concrete is not a finding. Prefer fewer, well-argued findings over many speculative ones; more than ${MAX_FINDINGS_HINT} is a sign you are listing rather than judging.
+
+Severity: critical is data loss, an exploitable security hole, or a crash on a common path. High is a regression or a claim in a commit or the PR that the code does not honor. Medium is a real bug on an uncommon path or a security weakness that needs unusual conditions. Low is everything else.
+
+${lowSeverityRule}
+
+If the author's notes dispute a finding from an earlier round, do not raise it again unless the author's reasoning is wrong, and if so, say specifically why.
+
+Respond only with the JSON the schema asks for.`;
+};
+
+const main = () => {
+  const opts = parseArgs(process.argv.slice(2));
+  const root = repoRoot();
+  process.chdir(root);
+  const branch = currentBranch();
+  if (!opts.dryRun) ensureClean();
+
+  const pr = pullRequest();
+  const baseName = opts.base || defaultBase(pr);
+  const { ref: base, mergeBase } = resolveBase(baseName);
+  if (mergeBase === git("rev-parse", "HEAD")) {
+    fail(`${branch} has no commits beyond ${base}; nothing to review`);
+  }
+
+  const commits = git("log", "--reverse", "--format=- %h %s%n%w(0,2,2)%b", `${mergeBase}..HEAD`)
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .join("\n");
+
+  const notes = opts.notes ? fs.readFileSync(opts.notes, "utf8") : null;
+
+  const prompt = buildPrompt({ branch, base, mergeBase, pr, commits, notes, includeLow: opts.includeLow });
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-review-"));
+  const schemaPath = path.join(tmpDir, "schema.json");
+  const outputPath = path.join(tmpDir, "review.json");
+  fs.writeFileSync(schemaPath, JSON.stringify(SCHEMA, null, 2));
+
+  const codexArgs = [
+    "exec",
+    "--sandbox",
+    "read-only",
+    "--cd",
+    root,
+    "--ephemeral",
+    "--color",
+    "never",
+    "--output-schema",
+    schemaPath,
+    "--output-last-message",
+    outputPath,
+    ...opts.codexArgs,
+    "-",
+  ];
+
+  if (opts.dryRun) {
+    console.log(`# codex ${codexArgs.join(" ")}\n`);
+    console.log(prompt);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return;
+  }
+
+  const verbose = process.env.CODEX_REVIEW_VERBOSE === "1";
+  const result = spawnSync("codex", codexArgs, {
+    input: prompt,
+    encoding: "utf8",
+    stdio: ["pipe", verbose ? "inherit" : "ignore", verbose ? "inherit" : "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
+  });
+
+  if (result.error) fail(`could not run codex: ${result.error.message}`);
+  if (result.status !== 0) {
+    fail(`codex exited with status ${result.status}${result.stderr ? `\n${result.stderr}` : ""}`);
+  }
+
+  if (!fs.existsSync(outputPath)) fail("codex finished but wrote no final message");
+  const raw = fs.readFileSync(outputPath, "utf8").trim();
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+
+  let review;
+  try {
+    review = JSON.parse(raw);
+  } catch {
+    fail(`codex did not return valid JSON:\n${raw}`);
+  }
+  if (!Array.isArray(review.findings)) fail(`codex returned JSON without a findings array:\n${raw}`);
+
+  const order = { critical: 0, high: 1, medium: 2, low: 3 };
+  review.findings.sort((a, b) => order[a.severity] - order[b.severity]);
+  review.branch = branch;
+  review.base = base;
+  review.reviewedCommit = git("rev-parse", "HEAD");
+
+  console.log(JSON.stringify(review, null, 2));
+};
+
+main();

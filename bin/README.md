@@ -292,13 +292,21 @@ concerns, run no checks, be adversarial. The PR title and body are fetched with
 in a fixed JSON shape: a `summary` plus `findings`, each with a severity, a
 category, a file and line, a title, and the concrete failure it found.
 
-Codex runs locked down, because a reviewer needs to read code and nothing else:
+Codex runs with the least access it can currently be given, because a reviewer
+needs to read code and nothing else:
 
-- The `read-only` sandbox for anything the model runs, with
-  `approval_policy=never` so a command that needs more access fails instead of
-  asking for it.
+- The `read-only` sandbox for anything the model runs, which also blocks
+  network access for those commands, with `approval_policy=never` so a command
+  that needs more access fails instead of asking for it. Approval rules from
+  `.rules` files, which let matching commands run outside the sandbox, are
+  ignored.
 - Your `~/.codex/config.toml` is not loaded, so MCP servers, plugins and other
   integrations set up for interactive use do not come along. Login does.
+- `AGENTS.md` and its fallbacks are not loaded as instructions. On a branch
+  under review that file belongs to the contributor; the prompt tells Codex to
+  read any agent instruction file the branch touches as code that tries to
+  steer automated tools. Verified: with loading on, a hostile `AGENTS.md` in a
+  probe repository reached the model as an instruction; with it off, it did not.
 - Commands Codex runs see only core environment variables such as `PATH` and
   `HOME`, not the tokens in the calling shell's environment.
 - Commit messages and the PR title and body are placed in the prompt inside
@@ -310,6 +318,23 @@ Codex runs locked down, because a reviewer needs to read code and nothing else:
   included, undo the sandbox.
 - The temp directory holding the schema and Codex's answer is removed on every
   exit path, so a failed run does not leave code excerpts behind.
+
+What that does not cover: the read-only sandbox lets commands read any file
+your user can read, not only the repository. Codex's custom permission profiles
+can confine reads to the workspace, but in the current release any custom
+profile also makes the workspace writable, even one that extends `:read-only`
+(verified with `codex exec`: `touch` succeeded while `~/.zshrc` was denied).
+For a reviewer that is the worse trade, since a write into `.git/hooks` or an
+ignored directory survives the clean-tree check. Wrapping Codex in an outer
+macOS seatbelt does not work either: the kernel refuses to apply Codex's inner
+sandbox under any outer profile that contains a deny rule. So a prompt injection
+that gets Codex to read a file outside the repository can put its contents in
+the review output. That output is the JSON this script prints, and commands
+have no network, so it cannot go anywhere else. Findings that name or mention a
+path outside the repository are listed in a `warnings` array in the JSON and
+printed to stderr, so the caller reads those before acting on them. Full
+isolation means running the reviewer in a container that holds only the
+checkout and the Codex login.
 
 ### Setup
 

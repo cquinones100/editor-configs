@@ -326,8 +326,11 @@ file and line, a title, and the concrete failure it found.
 - `gh pr view` failing for any reason other than "no pull requests found" stops
   the run too. An expired login must not turn into a review against the wrong
   base with the prompt claiming there is no PR.
-- The commit under review is pinned before Codex starts. If `HEAD` moves or the
-  tree becomes dirty while it is reading, the result is discarded rather than
-  labeled with a commit it does not describe.
+- The commit under review is pinned before Codex starts, and the prompt scopes
+  the diff by SHA rather than `HEAD`. If `HEAD` or the working tree differs
+  when Codex finishes from when it started, the result is discarded rather than
+  labeled with a commit it does not describe. This is a check at both ends, not
+  a snapshot: a branch switch that is switched back before Codex finishes goes
+  unnoticed, so leave the checkout alone while a review runs.
 - Codex's progress output is discarded so stdout is just the JSON. Set
   `CODEX_REVIEW_VERBOSE=1` to watch it on stderr.

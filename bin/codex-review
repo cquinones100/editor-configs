@@ -17,8 +17,9 @@
 //                     remote copy, since that defines what the PR contains),
 //                     then origin's default branch. A ref that exists as given,
 //                     such as upstream/main, is used exactly as given.
-//   --notes <file>    extra context appended to the prompt, typically findings
-//                     from a previous round that the author disputes
+//   --notes <file>    extra context appended to the prompt: findings from a
+//                     previous round the author disputes, and known gaps the
+//                     author has accepted, each with a reason
 //   --include-low     ask Codex to report low-severity findings too; by default
 //                     the prompt tells it to drop them so the loop converges
 //   --dry-run         print the prompt and the codex command, run nothing
@@ -98,7 +99,7 @@ const usage = () => {
       "Runs Codex as a read-only adversarial reviewer of the current branch and prints\n" +
       "its findings as JSON.\n\n" +
       "  --base <ref>     base to diff against (default: the PR's remote base, else origin's default)\n" +
-      "  --notes <file>   extra context for the reviewer, e.g. disputed findings from last round\n" +
+      "  --notes <file>   disputed findings and accepted known gaps, each with a reason\n" +
       "  --include-low    report low-severity findings too\n" +
       "  --dry-run        print the prompt and command without running Codex\n" +
       "  -- <args>        passed through to codex exec",
@@ -289,7 +290,7 @@ Severity: critical is data loss, an exploitable security hole, or a crash on a c
 
 ${lowSeverityRule}
 
-If the author's notes dispute a finding from an earlier round, do not raise it again unless the author's reasoning is wrong, and if so, say specifically why.
+The author's notes may list disputed findings from earlier rounds and known gaps the author has chosen to accept for this PR. Do not raise a disputed finding again unless the author's reasoning is wrong, and do not report a known gap unless its impact is larger than the note admits or the stated reason does not hold. In either case say specifically why. A gap the notes do not mention is fair game.
 
 Respond only with the JSON the schema asks for.`;
 };

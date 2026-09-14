@@ -30,9 +30,7 @@
 # Git
 
 ## Commits
-- Never include a Co-Authored-By line in commit messages
 - Keep the description clear and simple. Focus on the intent of the commit. Always consider the diff between the current branch and main or master. Don't use emojis, don't use bullet points.
-- Never attribute any git artifact (commits, PRs, branches, etc.) to Claude or AI. No "Generated with Claude Code" or similar lines.
 
 ## Branch Awareness
 

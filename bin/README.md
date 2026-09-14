@@ -87,6 +87,48 @@ stays one stable line that never needs re-editing when the tool changes.
   place of the identifier.
 - `wt-cleanup` is the companion for removing finished worktrees. Install it the
   same way (`./sync.sh wt-cleanup`) if you want it.
+- `wt-batch` opens several tickets at once, one tmux window each.
+
+## wt-batch
+
+Runs `wt` for several tickets at once, each in its own tmux window. Tickets are
+separated by commas, spaces, or both, and a full Linear issue URL works in
+place of an identifier.
+
+```
+wt-batch ABC-123 ABC-124
+wt-batch "ABC-123, ABC-124"
+wt-batch ABC-123, https://linear.app/your-workspace/issue/ABC-124/some-title
+```
+
+The windows are inserted right after the current one, in the order given, each
+named after its ticket. Focus stays where it is, so the tabs fill in behind you
+while you keep working. Repeated tickets open once, and every ticket is checked
+before any window opens, so a typo in one leaves none of them half-started.
+
+### Setup
+
+1. **Install the script.**
+
+   ```sh
+   ./sync.sh wt-batch
+   ```
+
+2. **Have `wt` working**, meaning `worktree-from-ticket` installed with its
+   Linear key and the `eval "$(worktree-from-ticket init zsh)"` line in your
+   shell config. `wt-batch` does no Linear work of its own; it only opens the
+   windows and types `wt <ticket>` into each.
+
+### Notes
+
+- Must be run from inside tmux. The new windows start in the directory the
+  command was run from, so run it from the repo the tickets belong to.
+- `wt` is typed into each window's interactive shell rather than run as the
+  window's command, for the reason `wt` is a shell function in the first place:
+  the shell has to be what cd's, so it stays in the worktree after claude exits
+  and panes split from it open there too. It also means the `wt` that runs is
+  whatever your shell config defines, so the shell has to be zsh or bash with
+  that line in place.
 
 ## worktree-from-pr
 

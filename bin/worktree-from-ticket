@@ -268,7 +268,13 @@ const main = async () => {
   ensureWorktree(worktreePath, branch);
   linkLocalSettings(root, worktreePath);
 
-  const prompt = `work on ticket ${issue.identifier}. Push and create a PR when done.`;
+  // One line: the `wt` shell function reads it back as line 2 of the cd-file.
+  const prompt =
+    `Work on ticket ${issue.identifier}. ` +
+    "Before changing anything, read the ticket and compare it against the current state of the codebase: " +
+    "is it still relevant, is it still necessary, is the approach it outlines sound, and how could it be improved? " +
+    "If the ticket should change, present the proposed changes to me and wait for my answer before starting. " +
+    "Then work on the ticket. Push and create a PR when done.";
 
   // Read by the `wt` shell function: line 1 the worktree path, line 2 the
   // prompt. The prompt lives here so the function and the standalone path can't

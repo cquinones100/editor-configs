@@ -9,7 +9,8 @@ Creates a git worktree on a branch named after a Linear ticket, then opens
 claude in it with a prompt to first check the ticket against the current
 codebase (is it still relevant and necessary, is the approach sound, how could
 it be improved) and propose ticket changes before starting, then work on it,
-then push and create a PR when done.
+then push and create a PR when done without running tests, lint, or any other
+checks.
 
 ```
 wt ABC-123

@@ -274,7 +274,8 @@ const main = async () => {
     "Before changing anything, read the ticket and compare it against the current state of the codebase: " +
     "is it still relevant, is it still necessary, is the approach it outlines sound, and how could it be improved? " +
     "If the ticket should change, present the proposed changes to me and wait for my answer before starting. " +
-    "Then work on the ticket. Push and create a PR when done.";
+    "Then work on the ticket. Don't run any tests, lint, or other checks when done. " +
+    "Push and create a PR when done.";
 
   // Read by the `wt` shell function: line 1 the worktree path, line 2 the
   // prompt. The prompt lives here so the function and the standalone path can't

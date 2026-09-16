@@ -275,6 +275,7 @@ const main = async () => {
     "is it still relevant, is it still necessary, is the approach it outlines sound, and how could it be improved? " +
     "If the ticket should change, present the proposed changes to me and wait for my answer before starting. " +
     "Then work on the ticket. Don't run any tests, lint, or other checks when done. " +
+    "When the work is done, run the /review-loop skill. " +
     "Push and create a PR when done.";
 
   // Read by the `wt` shell function: line 1 the worktree path, line 2 the

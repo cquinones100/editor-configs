@@ -1,0 +1,408 @@
+#!/usr/bin/env node
+
+// wt-jump [<ticket-or-pr-or-branch>]
+//
+// Selects the tmux window whose worktree matches a Linear ticket, a GitHub pull
+// request, or part of a branch name. The way back to a window you already have
+// open, when cycling through them with M-[ and M-] stops scaling.
+//
+//   wt-jump ABC-123      the ticket's window
+//   wt-jump 123          the PR's window
+//   wt-jump theme-slot   any window whose branch or name contains that
+//   wt-jump              fzf picker over every window, no argument needed
+//   wt-jump --list       print the windows instead of jumping
+//
+// Windows are matched on what is already on disk — the worktree directory and
+// the branch checked out in it — rather than on the window name, which the
+// pane-focus-in hook rewrites and which says nothing about pull requests.
+//
+// A bare number is looked for as a `pr-<n>` worktree first, which is what
+// `wtpr` creates and costs nothing. Only when that finds nothing is gh asked
+// what branch the PR is on, so a ticket worktree that later opened a PR is
+// still reachable by its number.
+
+const { execFileSync, spawnSync } = require("node:child_process");
+const path = require("node:path");
+const readline = require("node:readline");
+
+const usage = () => {
+  console.error(
+    "Usage: wt-jump [<ticket-or-pr-or-branch>]\n\n" +
+      "Examples:\n" +
+      "  wt-jump ABC-123\n" +
+      "  wt-jump 123\n" +
+      "  wt-jump theme-slot\n" +
+      "  wt-jump            picker over every window\n" +
+      "  wt-jump --list     print the windows, jump to none of them",
+  );
+  process.exit(1);
+};
+
+const fail = (message) => {
+  console.error(`Error: ${message}`);
+  process.exit(1);
+};
+
+// LC_ALL is forced because tmux replaces control characters in format output
+// with underscores unless the locale is a UTF-8 one — which would quietly turn
+// the tab delimiter below into a character branch names are full of. That also
+// makes the tab safe as a delimiter: tmux will never let one through as data.
+const tmux = (args) =>
+  execFileSync("tmux", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+    env: { ...process.env, LC_ALL: "C.UTF-8" },
+  }).trim();
+
+// Tabs as the field separator: a window name can hold spaces and pipes — the
+// focus hook writes "repo | worktree:branch" into it — but never a tab.
+const PANE_FIELDS = [
+  "window_id",
+  "pane_id",
+  "session_name",
+  "window_index",
+  "window_name",
+  "pane_active",
+  "pane_current_path",
+];
+
+const listPanes = () =>
+  tmux(["list-panes", "-a", "-F", PANE_FIELDS.map((f) => `#{${f}}`).join("\t")])
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [windowId, paneId, session, index, windowName, active, panePath] =
+        line.split("\t");
+      return {
+        windowId,
+        paneId,
+        session,
+        index: Number(index),
+        windowName,
+        active: active === "1",
+        panePath,
+      };
+    });
+
+// Every pane is a candidate, not just the active one: a window is often a
+// worktree pane beside claude, and whichever pane carries the match is also the
+// pane worth landing on.
+const gitValue = (args, cwd) => {
+  try {
+    return execFileSync("git", ["-C", cwd, "--no-optional-locks", ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+};
+
+// One git call per distinct path rather than per pane, since panes in a window
+// usually share a directory.
+const memoize = (fn) => {
+  const cache = new Map();
+  return (key) => {
+    if (!cache.has(key)) cache.set(key, fn(key));
+    return cache.get(key);
+  };
+};
+
+const branchAt = memoize((dir) => {
+  const branch = gitValue(["rev-parse", "--abbrev-ref", "HEAD"], dir);
+  return branch && branch !== "HEAD" ? branch : undefined;
+});
+
+const repoRootAt = memoize((dir) => {
+  const common = gitValue(["rev-parse", "--git-common-dir"], dir);
+  return common ? path.resolve(dir, common, "..") : undefined;
+});
+
+const looksLikePr = (input) =>
+  /github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(input) || /^#?\d+$/.test(input);
+
+const looksLikeTicket = (input) =>
+  /\/issue\/[A-Za-z][A-Za-z0-9]*-\d+/.test(input) ||
+  /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(input);
+
+// Bounded on both sides so ABC-12 does not match abc-123. The same rule
+// worktree-resume matches worktrees with, for the same reason: the identifier
+// is a token inside a longer name, not the whole of it.
+const mentions = (text, token) =>
+  !!text &&
+  new RegExp(`(?:^|[^a-z0-9])${token}(?:[^a-z0-9]|$)`).test(text.toLowerCase());
+
+const contains = (text, needle) =>
+  !!text && text.toLowerCase().includes(needle.toLowerCase());
+
+const viewPr = (number, root) => {
+  try {
+    const pr = JSON.parse(
+      execFileSync(
+        "gh",
+        ["pr", "view", String(number), "--json", "headRefName,state,title"],
+        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      ),
+    );
+    return { ...pr, root };
+  } catch {
+    return null;
+  }
+};
+
+// `??` short-circuits, so the second repository is only asked when the first
+// does not know the PR. Most of the time there is one repository in play.
+const resolvePr = (number, roots) =>
+  roots.reduce((found, root) => found ?? viewPr(number, root), null);
+
+// The PR number is read back off what is already on screen or on disk — the
+// `#<n>` window-names.sh puts at the front of the tab, or a `pr-<n>` directory
+// — so the picker stays instant. A window with no number here is a window
+// whose tab has none either, which is the honest thing to show.
+const prNumberFor = (pane, dir) =>
+  pane.windowName.match(/^#(\d+) /)?.[1] ?? dir.match(/^pr-(\d+)-/)?.[1];
+
+const describe = (pane) => {
+  const root = repoRootAt(pane.panePath);
+  const dir = path.basename(pane.panePath);
+  return {
+    ...pane,
+    branch: branchAt(pane.panePath),
+    dir,
+    repo: root ? path.basename(root) : dir,
+    pr: prNumberFor(pane, dir),
+  };
+};
+
+// Panes collapse to one row per window, preferring a pane that matched over the
+// window's active pane, so selecting a row lands on the pane that earned it.
+const byWindow = (panes) =>
+  [...panes.reduce((windows, pane) => {
+    const existing = windows.get(pane.windowId);
+    if (!existing || (!existing.matched && pane.matched)) {
+      windows.set(pane.windowId, pane);
+    }
+    return windows;
+  }, new Map()).values()].sort(
+    (a, b) => a.session.localeCompare(b.session) || a.index - b.index,
+  );
+
+const matchesFor = (target, panes) => {
+  const described = panes.map(describe);
+
+  if (looksLikeTicket(target)) {
+    const token = (
+      target.match(/\/issue\/([A-Za-z][A-Za-z0-9]*-\d+)/)?.[1] ?? target
+    ).toLowerCase();
+    const matched = described.filter(
+      (pane) => mentions(pane.dir, token) || mentions(pane.branch, token),
+    );
+    return { matched, label: token.toUpperCase(), create: `wt ${token.toUpperCase()}` };
+  }
+
+  if (looksLikePr(target)) {
+    const number =
+      target.match(/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/)?.[1] ??
+      target.replace(/^#/, "");
+    const label = `PR #${number}`;
+
+    // Free and offline: what `wtpr` bakes into the directory name, and what
+    // window-names.sh puts at the front of the tab once it knows the number.
+    const local = described.filter(
+      (pane) =>
+        mentions(pane.dir, `pr-${number}`) ||
+        mentions(pane.branch, `pr-${number}`) ||
+        pane.windowName.startsWith(`#${number} `),
+    );
+    if (local.length) return { matched: local, label, create: `wtpr ${number}` };
+
+    // Otherwise the PR was opened from a ticket worktree, whose name carries
+    // the ticket and not the number, so gh has to say what branch it is on.
+    const roots = [
+      ...new Set(described.map((pane) => repoRootAt(pane.panePath)).filter(Boolean)),
+    ];
+    const pr = resolvePr(number, roots);
+
+    // A PR gh cannot find at all and a PR whose branch simply is not open are
+    // different problems, and only the second one is fixed by opening it.
+    if (!pr) {
+      fail(
+        `gh could not find ${label} in any repository you have open:\n` +
+          roots.map((root) => `  ${root}`).join("\n"),
+      );
+    }
+    return {
+      matched: described.filter((pane) => pane.branch === pr.headRefName),
+      label: `${label} (${pr.headRefName})`,
+      create: `wtpr ${number}`,
+    };
+  }
+
+  return {
+    matched: described.filter(
+      (pane) =>
+        contains(pane.branch, target) ||
+        contains(pane.dir, target) ||
+        contains(pane.windowName, target),
+    ),
+    label: target,
+    create: `wt ${target}`,
+  };
+};
+
+// The repository as well as the branch, because a row reading just "main" is
+// the same row for every repository you have open.
+const rowFor = (pane, currentWindow) => ({
+  pane,
+  where: `${pane.session}:${pane.index}`,
+  repo: pane.repo,
+  pr: pane.pr ? `#${pane.pr}` : "",
+  what:
+    (pane.branch ?? pane.dir) +
+    (pane.windowId === currentWindow ? "  (here)" : ""),
+});
+
+// fzf searches whatever it is shown, so a PR number in the row is a PR number
+// you can type into the picker. The column disappears when no window has one,
+// rather than leaving every row with a gap in it.
+const render = (rows) => {
+  const pad = (key) => Math.max(...rows.map((row) => row[key].length));
+  const [whereWidth, repoWidth, prWidth] = [pad("where"), pad("repo"), pad("pr")];
+  return rows.map((row) =>
+    [
+      row.where.padEnd(whereWidth),
+      row.repo.padEnd(repoWidth),
+      ...(prWidth ? [row.pr.padEnd(prWidth)] : []),
+      row.what,
+    ].join("  "),
+  );
+};
+
+// fzf rather than a numbered prompt for the no-argument case: the whole point
+// of that mode is scanning a dozen windows, which is what fzf is for. The
+// ambiguous-argument case below stays a plain prompt, since it is two or three
+// rows and often arrives in a shell with no popup around it.
+const pickWithFzf = (rows) => {
+  const lines = render(rows);
+  const input = rows.map((row, i) => `${i}\t${lines[i]}`).join("\n");
+
+  const picked = spawnSync(
+    "fzf",
+    [
+      "--delimiter=\t",
+      "--with-nth=2..",
+      "--prompt=window> ",
+      "--layout=reverse",
+      "--border=rounded",
+      "--height=100%",
+    ],
+    { input, encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] },
+  );
+
+  if (picked.error?.code === "ENOENT") {
+    fail(
+      "fzf not found on PATH, and the picker needs it. Install it with\n" +
+        "  brew install fzf\n" +
+        "or pass a ticket, PR number, or branch fragment to jump directly.",
+    );
+  }
+  const choice = picked.stdout.trim();
+  if (!choice) return null;
+  return rows[Number(choice.split("\t")[0])].pane;
+};
+
+const chooseFromPrompt = async (rows) => {
+  const lines = render(rows);
+  console.error(`${rows.length} windows match — pick one:`);
+  lines.forEach((line, index) => console.error(`  ${index + 1}. ${line}`));
+
+  const prompt = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+
+  try {
+    prompt.setPrompt("Select window [1]: ");
+    prompt.prompt();
+    for await (const answer of prompt) {
+      const trimmed = answer.trim();
+      if (trimmed === "") return rows[0].pane;
+      const index = Number(trimmed);
+      if (Number.isInteger(index) && index >= 1 && index <= rows.length) {
+        return rows[index - 1].pane;
+      }
+      console.error(`enter a number between 1 and ${rows.length}`);
+      prompt.prompt();
+    }
+    return rows[0].pane;
+  } finally {
+    prompt.close();
+  }
+};
+
+// select-window before switch-client: the window is made current in its own
+// session first, so switching to that session lands on it rather than on
+// whatever was last focused there.
+const jumpTo = (pane, currentSession) => {
+  tmux(["select-window", "-t", pane.windowId]);
+  tmux(["select-pane", "-t", pane.paneId]);
+  if (pane.session !== currentSession) {
+    tmux(["switch-client", "-t", pane.session]);
+  }
+};
+
+const main = async () => {
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) usage();
+
+  const listOnly = argv.includes("--list");
+  const positional = argv.filter((arg) => arg !== "--list");
+  if (positional.length > 1) usage();
+
+  if (!process.env.TMUX && !listOnly) fail("not inside a tmux session");
+
+  const panes = listPanes();
+  if (!panes.length) fail("no tmux windows found");
+
+  // Asked about this process own pane rather than the client current one: a
+  // popup, or a pane that is not focused, still reports where it actually is.
+  const here = process.env.TMUX_PANE ? ["-t", process.env.TMUX_PANE] : [];
+  const [currentWindow, currentSession] = process.env.TMUX
+    ? tmux(["display-message", "-p", ...here, "#{window_id}\t#{session_name}"]).split("\t")
+    : ["", ""];
+
+  const target = positional[0];
+  const { matched, label, create } = target
+    ? matchesFor(target, panes)
+    : { matched: panes.map(describe), label: "", create: "" };
+
+  if (!matched.length) {
+    fail(
+      `no open window for ${label}.\n` +
+        `Open one with:\n  ${create}`,
+    );
+  }
+
+  const rows = byWindow(
+    target ? matched.map((pane) => ({ ...pane, matched: true })) : matched,
+  ).map((pane) => rowFor(pane, currentWindow));
+
+  if (listOnly) {
+    render(rows).forEach((line) => console.log(line));
+    return;
+  }
+
+  // One match jumps outright; the picker only appears when the answer is
+  // genuinely unclear, or when no argument was given and browsing is the point.
+  const chosen =
+    rows.length === 1 && target
+      ? rows[0].pane
+      : target
+        ? await chooseFromPrompt(rows)
+        : pickWithFzf(rows);
+
+  if (!chosen) return;
+  jumpTo(chosen, currentSession);
+};
+
+main().catch((err) => fail(err.message));

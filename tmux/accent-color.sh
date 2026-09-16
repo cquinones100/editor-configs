@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 
-# Derives a deterministic accent color from directory + git context.
+# Derives a deterministic accent color from directory + git context, and the
+# name tmux puts in the window tab.
+#
 # Same HSL logic (S=80%, L=45%) and color key as session_title.py and
 # statusline-command.sh, so tmux, iTerm tabs, and Claude statusline
 # all agree on the color for a given project/branch.
 #
+# The color key and the window name are separate strings. The key is hashed, so
+# it has to stay byte-identical to the one those two build, which is why it
+# spells out "worktree:" and repeats the name. Nobody reads it. The window name
+# is only read, so it says each thing once.
+#
 # Usage: accent-color.sh [--name] <path>
-# Output: hex color (e.g. "23ef59"), or with --name, the color key string
+# Output: hex color (e.g. "23ef59"), or with --name, the window name
 
 name_only=false
 if [ "$1" = "--name" ]; then
@@ -16,6 +23,7 @@ fi
 cwd="${1:-.}"
 dirname=$(basename "$cwd")
 color_key="$dirname"
+window_name="$dirname"
 
 branch=$(git -C "$cwd" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null)
 if [ -n "$branch" ]; then
@@ -27,14 +35,21 @@ if [ -n "$branch" ]; then
     if [ "$real_git" != "$real_common" ]; then
       worktree_name=$(basename "$real_git")
       color_key="${dirname} | worktree:${worktree_name}"
+      window_name="$worktree_name"
     else
       color_key="${dirname} | branch:${branch}"
+      # The trunk is where a main clone usually sits, so naming it in the tab
+      # costs width and says nothing. Any other branch is worth seeing.
+      case "$branch" in
+        main|master) window_name="$dirname" ;;
+        *) window_name="${dirname}:${branch}" ;;
+      esac
     fi
   fi
 fi
 
 if $name_only; then
-  printf '%s' "$color_key"
+  printf '%s' "$window_name"
   exit 0
 fi
 

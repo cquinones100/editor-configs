@@ -2,7 +2,8 @@
 
 # Called by tmux pane-focus-in hook. Receives the current pane path and
 # session ID as arguments, then updates accent colors for the active pane
-# border, session badge, current window tab, and all inactive window tabs.
+# border, session badge, and current window tab from the focused pane, and
+# hands the per-window tabs to window-names.sh.
 
 pane_path="$1"
 session="$2"
@@ -20,9 +21,4 @@ tmux set -g pane-active-border-style "fg=#${hex}"
 tmux set -g status-left "#[bg=#${hex},fg=$FG_BRIGHT,bold]  #S #[bg=$BG_DARK] "
 tmux setw -g window-status-current-format "#[bg=$BG_MED,fg=#${hex},bold] #I:#W "
 
-tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' | while IFS=, read -r idx path; do
-  whex=$("$script_dir/accent-color.sh" "$path")
-  name=$("$script_dir/accent-color.sh" --name "$path")
-  tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#W "
-  tmux rename-window -t "${session}:${idx}" "$name"
-done
+"$script_dir/window-names.sh" "$session"

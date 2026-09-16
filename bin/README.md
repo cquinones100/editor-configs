@@ -6,11 +6,14 @@ just one, pass its name instead: `./sync.sh worktree-from-ticket`.
 ## worktree-from-ticket
 
 Creates a git worktree on a branch named after a Linear ticket, then opens
-claude in it with a prompt to first check the ticket against the current
-codebase (is it still relevant and necessary, is the approach sound, how could
-it be improved) and propose ticket changes before starting, then work on it
-without running tests, lint, or any other checks, then run the `review-loop`
-skill, then push and create a PR.
+claude in it with a prompt that carries the ticket's Linear state: if that state
+is a closed one (completed, cancelled, or duplicate, whatever the workspace
+calls them) the prompt asks whether to reopen the ticket before anything else
+happens. Then it checks the ticket against the current codebase (is it still
+relevant and necessary, is the approach sound, how could it be improved) and
+proposes ticket changes before starting, works on it without running tests,
+lint, or any other checks, runs the `review-loop` skill, and pushes and creates
+a PR.
 
 ```
 wt ABC-123

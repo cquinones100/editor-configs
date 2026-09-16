@@ -149,7 +149,7 @@ const fetchIssue = async ({ key, number }) => {
   const query = `
     query IssueByIdentifier($number: Float!, $key: String!) {
       issues(filter: { number: { eq: $number }, team: { key: { eq: $key } } }) {
-        nodes { identifier title branchName }
+        nodes { identifier title branchName state { name type } }
       }
     }`;
 
@@ -262,15 +262,31 @@ const main = async () => {
   const worktreePath = path.resolve(root, targetPath, branch);
 
   console.error(`Ticket:   ${issue.identifier} — ${issue.title}`);
+  console.error(`Status:   ${issue.state?.name ?? "unknown"}`);
   console.error(`Branch:   ${branch}`);
   console.error(`Worktree: ${worktreePath}`);
 
   ensureWorktree(worktreePath, branch);
   linkLocalSettings(root, worktreePath);
 
+  // Keyed on the state type, not its name: a workspace can call its completed
+  // state anything it likes (ours is "Deployed to Production", so nothing is
+  // literally named Done), while the type is one of Linear's fixed set. The
+  // three closed ones are completed, canceled, and duplicate. The state goes in
+  // the prompt as a fact rather than something the session has to go look up,
+  // and the clause is dropped entirely if Linear ever returns no state.
+  const stateClause = issue.state
+    ? `, which is in the "${issue.state.name}" state`
+    : "";
+  const isClosed = ["completed", "canceled", "duplicate"].includes(issue.state?.type);
+
   // One line: the `wt` shell function reads it back as line 2 of the cd-file.
   const prompt =
-    `Work on ticket ${issue.identifier}. ` +
+    `Work on ticket ${issue.identifier}${stateClause}. ` +
+    (isClosed
+      ? "That state is closed, so before doing anything else tell me and confirm whether we want to reopen it; " +
+        "if we do, ask what needs to be done and whether the ticket should be updated to cover the new work. "
+      : "") +
     "Before changing anything, read the ticket and compare it against the current state of the codebase: " +
     "is it still relevant, is it still necessary, is the approach it outlines sound, and how could it be improved? " +
     "If the ticket should change, present the proposed changes to me and wait for my answer before starting. " +

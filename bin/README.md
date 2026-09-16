@@ -87,7 +87,8 @@ stays one stable line that never needs re-editing when the tool changes.
   place of the identifier.
 - `wt-cleanup` is the companion for removing finished worktrees. Install it the
   same way (`./sync.sh wt-cleanup`) if you want it.
-- `wt-batch` opens several tickets at once, one tmux window each.
+- `wt-batch` opens several tickets at once, one tmux window each, and
+  `wt-jump` gets you back to any of those windows by ticket, PR, or branch.
 
 ## wt-batch
 
@@ -244,6 +245,79 @@ Linear key, no `gh`, and no network: recovery works on a plane.
   rather than as "not found", since rerunning `wt` or `wtpr` is the fix.
 - Resuming is `claude-here`'s job, so its own session picker appears when the
   worktree has more than one session.
+- For a worktree whose tmux window is still open, `wt-jump` is the shorter
+  path: it selects that window instead of starting another session in it.
+
+## wt-jump
+
+The way back to a window you still have open. Takes the same ticket or PR the
+other tools take, or any part of a branch name, finds the tmux window sitting in
+that worktree, and selects it.
+
+```
+wt-jump ABC-123      the ticket's window
+wt-jump 123          the PR's window
+wt-jump theme-slot   any window whose branch or name contains that
+wt-jump              fzf picker over every window
+wt-jump --list       print the windows, jump to none of them
+```
+
+Windows are matched on what is on disk — the worktree directory and the branch
+checked out in it — not on the window name. The name is rewritten by the
+pane-focus-in hook and says nothing about pull requests, and a window opened by
+hand never had a useful one to begin with.
+
+A bare number is answered offline wherever it can be: from a `pr-<n>` worktree,
+which is what `wtpr` creates, or from the `#<n>` the tmux tab already carries
+once `window-pr.sh` has looked it up. Only when neither knows is `gh` asked
+which branch the PR is on, so a ticket worktree that opened a PR minutes ago —
+before anything cached the number — is still reachable by it. The difference is
+about half a second.
+
+### Setup
+
+1. **Install the script.**
+
+   ```sh
+   ./sync.sh wt-jump
+   ```
+
+2. **Install fzf** if you want the no-argument picker. `brew install fzf`.
+   Jumping by ticket, PR, or branch needs nothing but tmux and git; only the
+   picker and the `M-j` binding below need fzf.
+
+No shell function, so nothing to add to your shell config. Unlike `wt` and
+`wtr`, this one never has to move your shell — tmux does the moving, and a
+child process can ask tmux to do that.
+
+### Notes
+
+- `M-j` in the tmux config opens the picker in a popup, which is the form this
+  gets used in most: a list of every window labelled by repository, PR number,
+  and branch, type a few letters, Enter. fzf searches the whole row, so a PR
+  number finds its window there as well as on the command line. The column is
+  left out when no window has a number to show. It goes through `tmux/window-jump.sh`, which exists
+  because the tmux server has no node: its environment is whatever it started
+  with, and nvm is set up in `~/.zshrc`, which only interactive shells read.
+  That wrapper finds node the cheap way, through nvm's default alias, and holds
+  the popup open on an error instead of letting it close too fast to read.
+- Every pane is considered, not just each window's active one, and the pane
+  that matched is the pane you land on — so a window holding claude beside a
+  shell in the worktree puts you in the right half of it.
+- Windows in other sessions are matched too, and the session is switched along
+  with the window.
+- One match jumps outright. Several — the same worktree open twice, or a branch
+  fragment that is not unique — print a short numbered list, first one on Enter,
+  the same prompt `worktree-resume` uses.
+- Ticket matching is bounded on both sides, so `ABC-12` never lands you in
+  `ABC-123`. A branch fragment is a plain substring, since that is what you are
+  reaching for when you type one.
+- Nothing is created. If no window is open for the identifier, the error says so
+  and prints the `wt` or `wtpr` that would open one. `wtr` is the tool for a
+  worktree that exists but has no window.
+- `gh` is only consulted for a PR number that no `pr-<n>` worktree matches, and
+  only against the repositories you have windows open in, so the offline cases
+  stay offline.
 
 ## worktree-done
 

@@ -74,6 +74,9 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/list-commands.sh ~/.config/tmux/list-commands.sh
   ln -sf ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
   ln -sf ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
+  ln -sf ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh
+  ln -sf ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh
+  ln -sf ~/editor-configs/tmux/window-pr.sh ~/.config/tmux/window-pr.sh
 }
 
 sync_ghostty() {

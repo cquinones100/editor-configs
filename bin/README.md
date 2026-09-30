@@ -10,10 +10,12 @@ claude in it with a prompt that carries the ticket's Linear state: if that state
 is a closed one (completed, cancelled, or duplicate, whatever the workspace
 calls them) the prompt asks whether to reopen the ticket before anything else
 happens. Then it checks the ticket against the current codebase (is it still
-relevant and necessary, is the approach sound, how could it be improved) and
-proposes ticket changes before starting, works on it without running tests,
-lint, or any other checks, runs the `review-loop` skill, and pushes and creates
-a PR.
+relevant and necessary, is the approach sound, how could it be improved). A
+detail the ticket gets wrong it builds correctly without asking and then edits
+into the ticket, leaving the PR description to describe the work rather than the
+journey; only a change of scope stops and waits for an answer. Then it works on
+the ticket without running tests, lint, or any other checks, runs the
+`review-loop` skill, and pushes and creates a PR.
 
 ```
 wt ABC-123

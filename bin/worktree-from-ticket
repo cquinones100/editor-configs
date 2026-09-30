@@ -289,7 +289,11 @@ const main = async () => {
       : "") +
     "Before changing anything, read the ticket and compare it against the current state of the codebase: " +
     "is it still relevant, is it still necessary, is the approach it outlines sound, and how could it be improved? " +
-    "If the ticket should change, present the proposed changes to me and wait for my answer before starting. " +
+    "Where the ticket gets a detail wrong — a wrong type, the wrong target directory, a file that turns out to be " +
+    "unused — build what the codebase actually needs rather than stopping to ask, then update the ticket so it " +
+    "matches what you built. Keep that out of the PR description: it describes the work, not the journey. " +
+    "Stop and wait for my answer only when the correction is one of scope: widening the work to another file, " +
+    "deleting a caller, changing an API. " +
     "Then work on the ticket. Don't run any tests, lint, or other checks when done. " +
     "When the work is done, run the /review-loop skill. " +
     "Push and create a PR when done.";

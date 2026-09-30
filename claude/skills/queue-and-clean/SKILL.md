@@ -6,7 +6,9 @@ disable-model-invocation: true
 
 # Queue and clean
 
-The user has queued this worktree's PR for merge, either in a merge queue or with auto-merge. Watch the PR without blocking the conversation. When it merges, remove the worktree and its local branch. If it closes without merging or leaves the queue, report that and leave everything as it is.
+The user has queued this worktree's PR for merge, either in a merge queue or with auto-merge. Watch the PR without blocking the conversation. When it merges, remove the worktree and its local branch. If it closes without merging or leaves the queue, leave everything as it is.
+
+When the work is done, the final message is either `success` or `fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished. `fail` means the PR closed or left the queue without merging, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `fail: git worktree remove: '<path>' contains modified or untracked files`). The questions in "Before watching" and in cleanup step 1 are still asked, because they pause the work rather than end it.
 
 Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 
@@ -60,12 +62,12 @@ A failed request is retried rather than read as a result, so a network blip neve
 When it exits:
 
 - `merged`: clean up.
-- `closed`: say the PR was closed without merging, and leave the worktree alone.
-- `dequeued`: say the PR left the queue without merging, usually because a required check failed. Show `gh pr checks <number>` and leave the worktree alone. Offer to watch again once the user has requeued it.
+- `closed`: leave the worktree alone and reply `fail: PR closed without merging`.
+- `dequeued`: leave the worktree alone and reply `fail: PR left the queue without merging`.
 
 ## Cleanup
 
-Only after GitHub reports the PR `MERGED`.
+Only after GitHub reports the PR `MERGED`. If any command in steps 2 to 4 errors, stop there and reply `fail: <command>: <its error message>`.
 
 1. Make sure nothing would be lost. Stop and ask if either check fails. Never reach for `--force` to get past one.
    - `git -C <worktree> status --porcelain` must print nothing.
@@ -83,6 +85,6 @@ Only after GitHub reports the PR `MERGED`.
    ```
 
 4. Run `git -C <main-clone> fetch --prune origin` so the deleted remote branch stops showing up. Do not check anything out or pull in the main clone. Its working tree is not yours to change.
-5. Report the merged PR's URL and what was removed. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
+5. Reply `success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
 
 Never run `git push` and never delete the remote branch. GitHub or the repo's settings handle that.

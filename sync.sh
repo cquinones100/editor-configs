@@ -45,7 +45,12 @@ sync_claude() {
   ln -sf ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
   ln -sf ~/editor-configs/claude/otel-headers.sh ~/.claude/otel-headers.sh
   ln -sfn ~/editor-configs/claude/commands ~/.claude/commands
-  ln -sfn ~/editor-configs/claude/skills ~/.claude/skills
+  # One link per skill rather than one for the directory: Claude Code keeps its
+  # own synced/ folder in ~/.claude/skills, so that path has to stay real.
+  mkdir -p ~/.claude/skills
+  for skill in ~/editor-configs/claude/skills/*/; do
+    ln -sfn "${skill%/}" ~/.claude/skills/
+  done
   mkdir -p ~/.claude/hooks
   for hook in ~/editor-configs/claude/hooks/*; do
     ln -sf "$hook" ~/.claude/hooks/

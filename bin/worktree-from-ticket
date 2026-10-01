@@ -296,7 +296,13 @@ const main = async () => {
     "deleting a caller, changing an API. " +
     "Then work on the ticket. Don't run any tests, lint, or other checks when done. " +
     "When the work is done, run the /review-loop skill. " +
-    "Push and create a PR when done.";
+    "Push and create a PR when done. " +
+    "Your final message has only these parts. A ticket check: \"Unchanged.\" if you didn't edit the ticket, " +
+    "otherwise the edits you made to it, as tersely as possible. Then \"PR pushed\" or \"PR not pushed\", " +
+    "and if not pushed, why. Then, only if the review loop stopped at its round cap, say so, " +
+    "since that means it needs to run again. " +
+    "Don't summarize what changed, because I review the PR itself; " +
+    "don't mention the review loop otherwise; and don't mention that tests, lint, or checks weren't run.";
 
   // Read by the `wt` shell function: line 1 the worktree path, line 2 the
   // prompt. The prompt lives here so the function and the standalone path can't

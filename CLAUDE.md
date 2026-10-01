@@ -17,11 +17,20 @@ so changing its shape in one place silently gives tmux, the iTerm tab, and the
 Claude statusline three different colors for one project. The window name is
 only ever read, so it is free to change.
 
-`tmux/window-names.sh` owns the tab: the name from `accent-color.sh --name`,
-prefixed with `#<number>` when the branch has a pull request. That lookup runs
-on every pane focus, for every window in the session, so it must never wait on
-the network — `tmux/window-pr.sh` answers from a cache and refreshes it in the
-background, and a number that was not known yet appears a second later rather
+`tmux/window-names.sh` owns the tab: the label from `tmux/tab-label.sh`, cut to
+30 characters, prefixed with `#<number>` when the branch has a pull request.
+`wt-jump` reads that prefix back to find PRs, so it stays at the front. The
+label is the name set with `M-n` (the window's `@tab_name`), else the Linear
+ticket and its title when the branch names one Linear confirms, else
+`accent-color.sh --name`. The second status line, `tmux/tab-status.sh`, starts
+with the same label uncut, so any change to what a window is called belongs in
+`tab-label.sh` and reaches both.
+
+All of this runs on every pane focus, for every window in the session, or on
+every status redraw, so none of it may wait on the network.
+`tmux/window-pr.sh` and `tmux/ticket-title.sh` answer from a cache and refresh
+it in the background, then rename the tabs when the answer changes, so a PR
+number or ticket title that was not known yet appears a second later rather
 than delaying the focus. Anything else that wants to add to the tab belongs in
 `window-names.sh` under the same rule.
 

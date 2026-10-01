@@ -15,7 +15,10 @@ detail the ticket gets wrong it builds correctly without asking and then edits
 into the ticket, leaving the PR description to describe the work rather than the
 journey; only a change of scope stops and waits for an answer. Then it works on
 the ticket without running tests, lint, or any other checks, runs the
-`review-loop` skill, and pushes and creates a PR.
+`review-loop` skill, and pushes and creates a PR. Its final message has only a
+ticket check ("Unchanged." or the edits made to the ticket), "PR pushed" or "PR
+not pushed" with the reason, and a note about the review loop only when it hit
+its round cap.
 
 ```
 wt ABC-123

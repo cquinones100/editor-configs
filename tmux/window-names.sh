@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# Names and colors every window tab in a session.
+# Names and colors every window tab in a session. The name is tab-label.sh's
+# label, cut to fit, with the PR number in front when there is one.
 #
 # Usage: window-names.sh <session>
 #
@@ -17,10 +18,20 @@ session="${1:-}"
 
 script_dir="$(dirname "$0")"
 
+# The label is cut by characters, which bash only counts under a UTF-8 locale.
+export LC_ALL=en_US.UTF-8
+
+# Long enough for a ticket ID and the start of its title. The second status
+# line shows the whole label for the focused window.
+MAX_LABEL=30
+
 tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' |
   while IFS=, read -r idx path; do
     whex=$("$script_dir/accent-color.sh" "$path")
-    name=$("$script_dir/accent-color.sh" --name "$path")
+
+    # The same label tab-status.sh puts at the front of the second status line.
+    name=$("$script_dir/tab-label.sh" "${session}:${idx}" "$path")
+    [ ${#name} -gt $MAX_LABEL ] && name="${name:0:$((MAX_LABEL - 3))}..."
 
     # The PR number goes first because it is the short, stable half: the tab
     # is scannable by number even when the branch name is cut off.

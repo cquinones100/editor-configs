@@ -77,6 +77,10 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh
   ln -sf ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh
   ln -sf ~/editor-configs/tmux/window-pr.sh ~/.config/tmux/window-pr.sh
+  ln -sf ~/editor-configs/tmux/tab-label.sh ~/.config/tmux/tab-label.sh
+  ln -sf ~/editor-configs/tmux/tab-status.sh ~/.config/tmux/tab-status.sh
+  ln -sf ~/editor-configs/tmux/tab-name.zsh ~/.config/tmux/tab-name.zsh
+  ln -sf ~/editor-configs/tmux/ticket-title.sh ~/.config/tmux/ticket-title.sh
 }
 
 sync_ghostty() {

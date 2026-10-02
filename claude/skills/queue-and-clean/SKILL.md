@@ -1,14 +1,14 @@
 ---
 name: queue-and-clean
-description: The current branch's PR has been queued for merge. Watch it in the background and, once it merges, remove this worktree and its local branch.
+description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, and once it merges remove this worktree and its local branch.
 disable-model-invocation: true
 ---
 
 # Queue and clean
 
-The user has queued this worktree's PR for merge, either in a merge queue or with auto-merge. Watch the PR without blocking the conversation. When it merges, remove the worktree and its local branch. If it closes without merging or leaves the queue, leave everything as it is.
+Queue this worktree's PR for merge, in the merge queue or with auto-merge, unless it is already queued. Then watch the PR without blocking the conversation. When it merges, remove the worktree and its local branch. If it closes without merging or leaves the queue, leave everything as it is.
 
-When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished. `fail` means the PR closed or left the queue without merging, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`). The questions in "Before watching" and in cleanup step 1 are still asked, because they pause the work rather than end it.
+When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished. `fail` means the PR could not be queued, closed or left the queue without merging, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`). The questions in "Before watching", the merge method question in "Queuing", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
 
 Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 
@@ -17,7 +17,7 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 1. Read the PR and the repo:
 
    ```
-   gh pr view <number-if-given> --json number,url,state,headRefName,headRefOid,autoMergeRequest
+   gh pr view <number-if-given> --json number,url,state,isDraft,headRefName,headRefOid,autoMergeRequest
    gh repo view --json owner,name --jq '.owner.login + " " + .name'
    ```
 
@@ -33,9 +33,37 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 3. Stop and ask when any of these is true:
    - The PR's `headRefName` is not the branch checked out here. Cleaning up would remove the wrong thing.
    - The PR is `CLOSED`.
-   - The PR is `OPEN` and the query in the next section prints `unqueued`. The user may not have queued it yet, or the queue may already have dropped it.
+   - The PR is a draft. Queuing it would mean marking it ready for review, which is the user's call.
 
-   If the PR is already `MERGED`, skip the watch and go straight to cleanup.
+   If the PR is already `MERGED`, skip the queue and the watch and go straight to cleanup.
+
+## Queuing
+
+Check whether the PR is already queued, with the same query the watch uses:
+
+```
+gh api graphql -F owner=<owner> -F repo=<repo> -F number=<number> \
+  -f query='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { autoMergeRequest { enabledAt } mergeQueueEntry { state } } } }' \
+  --jq '.data.repository.pullRequest | if .autoMergeRequest or .mergeQueueEntry then "queued" else "unqueued" end'
+```
+
+If it prints `queued`, skip the rest of this section and start watching. If it prints `unqueued`, queue it:
+
+```
+gh pr merge <number> --auto --match-head-commit <headRefOid>
+```
+
+`--match-head-commit` makes GitHub refuse if the branch moved since you read it, so what gets queued is what was checked. On a branch that requires a merge queue this needs no merge strategy: gh enables auto-merge if required checks are still running, or adds the PR to the queue if they have passed. Without a merge queue gh refuses until it is given one. Then read the methods the repo allows:
+
+```
+gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed
+```
+
+If exactly one is allowed, rerun with its flag (`--squash`, `--merge`, or `--rebase`). If more than one is, ask the user which to use. Never pass `--admin`, which skips the queue and the required checks, and never pass `--delete-branch`.
+
+If `gh pr merge` fails for any other reason, such as a missing review or a merge conflict, reply `queue-and-clean: fail: gh pr merge: <its error message>` and stop.
+
+Once it succeeds, start watching. Do not check the state yourself first: right after queuing, GitHub can briefly show neither auto-merge nor a queue entry, and the watch already allows for that. It also covers a PR that GitHub merged straight away because nothing was left to wait for.
 
 ## Watching
 

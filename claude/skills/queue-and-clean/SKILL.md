@@ -59,7 +59,33 @@ gh pr merge <number> --auto --match-head-commit <headRefOid>
 gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed
 ```
 
-If exactly one is allowed, rerun with its flag (`--squash`, `--merge`, or `--rebase`). If more than one is, ask the user which to use. Never pass `--admin`, which skips the queue and the required checks, and never pass `--delete-branch`.
+If exactly one is allowed, rerun with its flag (`--squash`, `--merge`, or `--rebase`). If more than one is, ask the user which to use. Keep that flag for any later `gh pr merge` in this run. Never pass `--admin`, which skips the queue and the required checks, and never pass `--delete-branch`.
+
+### When the repo does not allow auto-merge
+
+If `gh pr merge` fails with `Auto merge is not allowed for this repository`, the repo has auto-merge turned off in its settings. A merge queue can still be in use: gh only asks for auto-merge when required checks have not passed yet, and once they have, the same command adds the PR to the queue, or merges it outright where there is no queue. So do auto-merge's job yourself: wait for the required checks, then run the command again without `--auto`.
+
+Wait with the Bash tool's `run_in_background`, as with the watch below, so the conversation is not blocked:
+
+```
+gh pr checks <number> --required --watch --interval 30 >/dev/null 2>&1
+status=$?
+case $status in
+  0) echo passed ;;
+  8) echo pending ;;
+  *) if gh pr checks <number> --required 2>&1 | grep -q 'no required checks'; then echo passed; else echo failed; fi ;;
+esac
+```
+
+When it exits:
+
+- `passed`: run `gh pr merge <number> --match-head-commit <headRefOid>` again, with the merge method flag if one was needed above, and without `--auto`. Then start watching.
+- `failed`: reply `queue-and-clean: fail: required checks failed: <names of the failing checks>`, from `gh pr checks <number> --required`, and stop.
+- `pending`: `--watch` returned before the checks finished. Start the wait again.
+
+If the branch moved while you waited, `--match-head-commit` makes the merge fail. That is the right outcome, since the new commits are not the ones that were checked: report it as any other `gh pr merge` failure.
+
+### Any other failure
 
 If `gh pr merge` fails for any other reason, such as a missing review or a merge conflict, reply `queue-and-clean: fail: gh pr merge: <its error message>` and stop.
 

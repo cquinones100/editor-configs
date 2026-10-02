@@ -34,6 +34,15 @@ number or ticket title that was not known yet appears a second later rather
 than delaying the focus. Anything else that wants to add to the tab belongs in
 `window-names.sh` under the same rule.
 
+## Key bindings and the M-p palette
+
+`M-p` opens `tmux/palette.sh`, an fzf list of the custom bindings that picks
+one and presses its key. The list is read from tmux, not kept anywhere: a
+binding shows up when `tmux.conf` gives it a description with
+`bind -N "<what it does>"`, so every new custom binding needs one. In the
+prefix table only keys `tmux.conf` binds with `-N` are listed, since tmux's own
+prefix bindings carry descriptions too.
+
 ## Skills and the scripts they call
 
 Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls `codex-review`, so a change to the JSON the script prints or the flags it accepts has to be mirrored in the skill, and vice versa. Document each script in `bin/README.md`.

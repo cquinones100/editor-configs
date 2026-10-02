@@ -76,6 +76,7 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/workspace.sh ~/.config/tmux/workspace.sh
   ln -sf ~/editor-configs/tmux/toggle-shell-pane.sh ~/.config/tmux/toggle-shell-pane.sh
   ln -sf ~/editor-configs/tmux/palette.sh ~/.config/tmux/palette.sh
+  ln -sf ~/editor-configs/tmux/pr-ready.sh ~/.config/tmux/pr-ready.sh
   ln -sf ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
   ln -sf ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
   ln -sf ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh

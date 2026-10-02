@@ -43,6 +43,12 @@ binding shows up when `tmux.conf` gives it a description with
 prefix table only keys `tmux.conf` binds with `-N` are listed, since tmux's own
 prefix bindings carry descriptions too.
 
+`display-popup` does not expand formats in its command: `#{pane_id}` reaches
+the shell as written, and the shell reads the `#` as the start of a comment, so
+the script gets no argument at all. Its `-d` start directory is expanded, so a
+popup that needs the pane's path takes it from `-d '#{pane_current_path}'` and
+the script defaults to `$PWD`, as `M-m` does with `pr-ready.sh`.
+
 ## Skills and the scripts they call
 
 Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls `codex-review`, so a change to the JSON the script prints or the flags it accepts has to be mirrored in the skill, and vice versa. Document each script in `bin/README.md`.

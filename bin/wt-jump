@@ -12,6 +12,9 @@
 //   wt-jump              fzf picker over every window, no argument needed
 //   wt-jump --list       print the windows instead of jumping
 //
+// Rows show each window's second tmux status line (tmux/tab-status.sh), so the
+// picker searches what the bar shows.
+//
 // Windows are matched on what is already on disk — the worktree directory and
 // the branch checked out in it — rather than on the window name, which the
 // pane-focus-in hook rewrites and which says nothing about pull requests.
@@ -21,9 +24,11 @@
 // what branch the PR is on, so a ticket worktree that later opened a PR is
 // still reachable by its number.
 
-const { execFileSync, spawnSync } = require("node:child_process");
+const { execFile, execFileSync, spawnSync } = require("node:child_process");
+const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline");
+const { promisify } = require("node:util");
 
 const usage = () => {
   console.error(
@@ -64,6 +69,8 @@ const PANE_FIELDS = [
   "window_name",
   "pane_active",
   "pane_current_path",
+  "pane_current_command",
+  "pane_tty",
 ];
 
 const listPanes = () =>
@@ -71,7 +78,7 @@ const listPanes = () =>
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [windowId, paneId, session, index, windowName, active, panePath] =
+      const [windowId, paneId, session, index, windowName, active, panePath, command, tty] =
         line.split("\t");
       return {
         windowId,
@@ -81,6 +88,8 @@ const listPanes = () =>
         windowName,
         active: active === "1",
         panePath,
+        command,
+        tty,
       };
     });
 
@@ -250,31 +259,79 @@ const matchesFor = (target, panes) => {
   };
 };
 
-// The repository as well as the branch, because a row reading just "main" is
-// the same row for every repository you have open.
-const rowFor = (pane, currentWindow) => ({
-  pane,
-  where: `${pane.session}:${pane.index}`,
-  repo: pane.repo,
-  pr: pane.pr ? `#${pane.pr}` : "",
-  what:
-    (pane.branch ?? pane.dir) +
-    (pane.windowId === currentWindow ? "  (here)" : ""),
-});
+// Each row is the second tmux status line for that pane, from the same script
+// tmux runs, so the picker describes a window exactly as the bar under it does
+// and fzf searches what you have been reading there: the label, the PR, the
+// program, and Claude's session title and last prompt. Linked by
+// `./sync.sh tmux`; without it a row falls back to its repository and branch.
+const STATUS_SCRIPT = path.join(os.homedir(), ".config/tmux/tab-status.sh");
 
-// fzf searches whatever it is shown, so a PR number in the row is a PR number
-// you can type into the picker. The column disappears when no window has one,
-// rather than leaving every row with a gap in it.
-const render = (rows) => {
-  const pad = (key) => Math.max(...rows.map((row) => row[key].length));
-  const [whereWidth, repoWidth, prWidth] = [pad("where"), pad("repo"), pad("pr")];
-  return rows.map((row) =>
-    [
-      row.where.padEnd(whereWidth),
-      row.repo.padEnd(repoWidth),
-      ...(prWidth ? [row.pr.padEnd(prWidth)] : []),
-      row.what,
-    ].join("  "),
+// About a third of a second each, mostly finding out whether the pane runs
+// Claude, so every window is asked at once rather than one after another.
+const statusLineFor = async (pane) => {
+  try {
+    const { stdout } = await promisify(execFile)(
+      STATUS_SCRIPT,
+      [pane.paneId, pane.panePath, pane.command, pane.tty],
+      { encoding: "utf8", timeout: 5000 },
+    );
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// The status line is written in tmux's style syntax. `##` is a literal #, and
+// matching it in the same pass keeps a # from a prompt or a ticket title from
+// being read as the start of a style.
+const TMUX_STYLE = /##|#\[([^\]]*)\]/g;
+
+const ansiFor = (style) =>
+  style
+    .split(",")
+    .map((attr) => {
+      const colour = attr.match(/^fg=colour(\d+)$/)?.[1];
+      if (colour) return `\x1b[38;5;${colour}m`;
+      const hex = attr.match(/^fg=#([0-9a-f]{6})$/i)?.[1];
+      if (hex) {
+        const [r, g, b] = [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16));
+        return `\x1b[38;2;${r};${g};${b}m`;
+      }
+      return { bold: "\x1b[1m", nobold: "\x1b[22m", "fg=default": "\x1b[39m" }[attr] ?? "";
+    })
+    .join("");
+
+const styled = (status) =>
+  status.replace(TMUX_STYLE, (match, style) => (match === "##" ? "#" : ansiFor(style))) +
+  "\x1b[0m";
+
+const plain = (status) =>
+  status.replace(TMUX_STYLE, (match) => (match === "##" ? "#" : ""));
+
+// Without the status line: the repository as well as the branch, because a row
+// reading just "main" is the same row for every repository you have open.
+const fallbackFor = (pane) =>
+  [pane.repo, pane.pr ? `#${pane.pr}` : "", pane.branch ?? pane.dir]
+    .filter(Boolean)
+    .join("  ");
+
+const rowFor = async (pane, currentWindow) => {
+  const status = await statusLineFor(pane);
+  const here = pane.windowId === currentWindow ? "  (here)" : "";
+  return {
+    pane,
+    where: `${pane.session}:${pane.index}`,
+    plain: (status ? plain(status) : fallbackFor(pane)) + here,
+    styled: (status ? styled(status) : fallbackFor(pane)) + here,
+  };
+};
+
+// Colour only for fzf, which is told to expect it. Printed lists and the
+// numbered prompt get plain text, since they may not be going to a terminal.
+const render = (rows, { colour = false } = {}) => {
+  const whereWidth = Math.max(...rows.map((row) => row.where.length));
+  return rows.map(
+    (row) => `${row.where.padEnd(whereWidth)}  ${colour ? row.styled : row.plain}`,
   );
 };
 
@@ -283,12 +340,13 @@ const render = (rows) => {
 // ambiguous-argument case below stays a plain prompt, since it is two or three
 // rows and often arrives in a shell with no popup around it.
 const pickWithFzf = (rows) => {
-  const lines = render(rows);
+  const lines = render(rows, { colour: true });
   const input = rows.map((row, i) => `${i}\t${lines[i]}`).join("\n");
 
   const picked = spawnSync(
     "fzf",
     [
+      "--ansi",
       "--delimiter=\t",
       "--with-nth=2..",
       "--prompt=window> ",
@@ -383,9 +441,11 @@ const main = async () => {
     );
   }
 
-  const rows = byWindow(
-    target ? matched.map((pane) => ({ ...pane, matched: true })) : matched,
-  ).map((pane) => rowFor(pane, currentWindow));
+  const rows = await Promise.all(
+    byWindow(
+      target ? matched.map((pane) => ({ ...pane, matched: true })) : matched,
+    ).map((pane) => rowFor(pane, currentWindow)),
+  );
 
   if (listOnly) {
     render(rows).forEach((line) => console.log(line));

@@ -40,7 +40,10 @@ Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls
 
 The tmux config depends on `bin/` too: the `M-j` binding runs
 `tmux/window-jump.sh`, which runs `~/.local/bin/wt-jump`, so that binding needs
-both `./sync.sh tmux` and `./sync.sh wt-jump`.
+both `./sync.sh tmux` and `./sync.sh wt-jump`. The dependency runs the other
+way as well: `wt-jump` builds its picker rows from `tmux/tab-status.sh`, so a
+change to what the second status line prints shows up in the picker, and the
+line has to stay fast enough to run for every window at once.
 
 Anything in `bin/` called from a tmux binding needs a wrapper like that one. The
 tmux server keeps the environment it was started with, and nvm is set up in

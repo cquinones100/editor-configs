@@ -29,13 +29,17 @@ esac
 hex=$("$script_dir/accent-color.sh" "$path")
 
 # Claude Code's executable is named after its version, so tmux reports e.g.
-# 2.1.285. Only call it claude when a foreground process in the pane really
-# runs that file from Claude's versions directory; anything else keeps its name.
+# 2.1.285. Only call it claude when a foreground process in the pane is one
+# Claude Code itself registered: it writes ~/.claude/sessions/<pid>.json for
+# each of its processes and nothing else writes there, so an unrelated program
+# that happens to be named like a version keeps its name. Checked this way
+# rather than with lsof on the executable, which is as certain but costs a
+# third of a second a pane and saturates the CPU when wt-jump asks for every
+# window at once.
 claude_pid=""
 if [[ "$command" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   for pid in $(ps -t "${tty#/dev/}" -o pid=,stat= | awk '$2 ~ /\+/ {print $1}'); do
-    if lsof -p "$pid" -a -d txt -Fn 2>/dev/null |
-      grep -qxF "n$HOME/.local/share/claude/versions/$command"; then
+    if [ -f "$HOME/.claude/sessions/$pid.json" ]; then
       claude_pid=$pid
       command=claude
       break

@@ -271,6 +271,15 @@ wt-jump              fzf picker over every window
 wt-jump --list       print the windows, jump to none of them
 ```
 
+Each row is the window's second tmux status line, from the same
+`tmux/tab-status.sh` tmux runs for the bar: its label (custom name, ticket and
+title, or directory), PR, program, and in a Claude pane the session title and
+last prompt, coloured the same way. That is what the picker searches, so a
+ticket title or something you said to Claude finds the window. It needs
+`./sync.sh tmux` as well as `./sync.sh wt-jump`; without the tmux script a row
+falls back to its repository, PR, and branch. Every window is rendered at once,
+which takes about a second with a dozen open.
+
 Windows are matched on what is on disk — the worktree directory and the branch
 checked out in it — not on the window name. The name is rewritten by the
 pane-focus-in hook and says nothing about pull requests, and a window opened by

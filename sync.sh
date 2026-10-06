@@ -36,6 +36,10 @@ sync_neovim() {
 
 sync_git() {
   ln -sf ~/editor-configs/git/.gitconfig ~/.gitconfig
+  # This repo's own hooks, such as the one that keeps machine-specific Claude
+  # settings out of commits. Set on this clone only, not in the shared
+  # .gitconfig, so other repositories keep their hooks.
+  git -C ~/editor-configs config core.hooksPath .githooks
 }
 
 sync_claude() {

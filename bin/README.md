@@ -91,6 +91,12 @@ stays one stable line that never needs re-editing when the tool changes.
   is left alone.
 - Rerunning on the same ticket is safe: it reuses an existing worktree, and
   reuses the branch if the worktree directory was removed.
+- Unless Claude is already running in that worktree. Then `wt` refuses, rather
+  than start a second session editing the same files and pushing the same
+  branch, and prints the running session's ID, its title (a `/rename` name, or
+  the one Claude generated), and its tmux window. Running sessions are found
+  through the files Claude Code keeps in `~/.claude/sessions`, ignoring any
+  whose process has ended.
 - Pass a different parent directory as a first argument:
   `worktree-from-ticket .worktrees ABC-123`. A full Linear issue URL works in
   place of the identifier.

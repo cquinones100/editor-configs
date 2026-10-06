@@ -192,8 +192,110 @@ const linkLocalSettings = (root, worktreePath) => {
 
 // Idempotent so rerunning on the same ticket reopens the worktree instead of
 // erroring: reuse the directory if it exists, and the branch if it exists.
+const CLAUDE_DIR = path.join(os.homedir(), ".claude");
+
+const isAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM means it exists but belongs to someone else, which still counts.
+    return err.code === "EPERM";
+  }
+};
+
+// The title the session picker shows: a name given with /rename, else the
+// title Claude Code generated from the first prompt. Both live in files Claude
+// Code does not document, so anything unreadable just leaves the title blank.
+const sessionTitle = (session) => {
+  if (session.name && session.nameSource && session.nameSource !== "derived") {
+    return session.name;
+  }
+  const projects = path.join(CLAUDE_DIR, "projects");
+  const transcript = fs.existsSync(projects)
+    ? fs
+        .readdirSync(projects)
+        .map((dir) => path.join(projects, dir, `${session.sessionId}.jsonl`))
+        .find((file) => fs.existsSync(file))
+    : undefined;
+  if (!transcript) return session.name ?? "";
+  const titles = fs
+    .readFileSync(transcript, "utf8")
+    .split("\n")
+    .filter((line) => line.includes('"type":"ai-title"'))
+    .map((line) => {
+      try {
+        return JSON.parse(line).aiTitle;
+      } catch {
+        return undefined;
+      }
+    })
+    .filter(Boolean);
+  return titles.at(-1) ?? session.name ?? "";
+};
+
+// Where the session's pane is, as tmux numbers it, so you can go straight to
+// it. Blank outside tmux or when the pane has gone.
+const tmuxWindow = (session) => {
+  const pane = session.tmux?.match(/(%\d+)$/)?.[1];
+  if (!pane) return "";
+  try {
+    return execFileSync(
+      "tmux",
+      ["display-message", "-p", "-t", pane, "#{session_name}:#{window_index}"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+  } catch {
+    return "";
+  }
+};
+
+// Claude Code writes ~/.claude/sessions/<pid>.json for every running session,
+// naming its working directory. A file whose process is gone is left over from
+// a session that ended without cleaning up, and is ignored.
+const liveSessionsIn = (worktreePath) => {
+  const dir = path.join(CLAUDE_DIR, "sessions");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((file) => file.endsWith(".json"))
+    .map((file) => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
+      } catch {
+        return undefined;
+      }
+    })
+    .filter(
+      (session) =>
+        session?.sessionId &&
+        session.cwd &&
+        (session.cwd === worktreePath || session.cwd.startsWith(`${worktreePath}/`)) &&
+        isAlive(session.pid),
+    );
+};
+
 const ensureWorktree = (worktreePath, branch) => {
   if (fs.existsSync(worktreePath)) {
+    // Two sessions on one ticket edit the same files and push the same branch,
+    // so a worktree that already has Claude running in it is left to that one.
+    const sessions = liveSessionsIn(worktreePath);
+    if (sessions.length) {
+      const lines = sessions.map((session) => {
+        const title = sessionTitle(session);
+        const where = tmuxWindow(session);
+        return (
+          `  Session: ${session.sessionId}\n` +
+          `  Title:   ${title || "(none yet)"}` +
+          (where ? `\n  Window:  ${where}` : "")
+        );
+      });
+      fail(
+        `Claude is already working on this ticket, so wt will not start another session.\n` +
+          lines.join("\n\n") +
+          `\nSwitch to that session, or end it and run wt again.`,
+      );
+    }
     console.error("Worktree already exists, reusing it.");
     return;
   }

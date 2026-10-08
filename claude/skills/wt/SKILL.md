@@ -18,15 +18,30 @@ Arguments: a Linear ticket ID or URL. Without one, use the ticket this conversat
 
 2. Check that this session is running in tmux: `$TMUX_PANE` must be set. If it is not, there is no pane to hand over. Tell the user to run `wt <ID>` themselves and stop.
 
-3. Say, in one line, that this session is handing the tab to `wt <ID>`. That line is the last thing the user will see from this session, so put nothing after it.
-
-4. Run this as your final action, with the ID filled in:
+3. Read the tab's name, as its own command:
 
    ```
-   case "$(tmux show -wqv -t "$TMUX_PANE" @tab_name)" in "Shaping: "*) tmux set -wu -t "$TMUX_PANE" @tab_name ;; esac
+   tmux show-options -wqv -t "$TMUX_PANE" @tab_name
+   ```
+
+   If it starts with `Shaping: `, the name the `shape` command gave the tab, clear it so the tab takes the ticket's title once the worktree opens:
+
+   ```
+   tmux set-option -wu -t "$TMUX_PANE" @tab_name
+   ```
+
+   Leave any other name alone: the user set it with M-n.
+
+4. Say, in one line, that this session is handing the tab to `wt <ID>`. That line is the last thing the user will see from this session, so put nothing after it.
+
+5. Run this as your final action, on its own, with the ID filled in:
+
+   ```
    tmux respawn-pane -k -t "$TMUX_PANE" -c "$PWD" "zsh -i -c 'wt <ID>; exec zsh -i'"
    ```
 
-   The first line drops the "Shaping: ..." name the `shape` command gave the tab, so it takes the ticket's title once the worktree opens. A name you set yourself with M-n is left alone. `-k` stops this session, and the new command starts in the same pane. `zsh -i` reads `~/.zshrc`, which defines `wt` and puts node on the PATH. `-c "$PWD"` starts it in this directory, so `wt` finds the same repository. When the new Claude session exits, or if `wt` refuses (a closed ticket it asks about, or a worktree another session is already working in), `exec zsh -i` leaves a shell in the pane: in the worktree if `wt` got that far, here otherwise.
+   `-k` stops this session, and the new command starts in the same pane. `zsh -i` reads `~/.zshrc`, which defines `wt` and puts node on the PATH. `-c "$PWD"` starts it in this directory, so `wt` finds the same repository. When the new Claude session exits, or if `wt` refuses (a closed ticket it asks about, or a worktree another session is already working in), `exec zsh -i` leaves a shell in the pane: in the worktree if `wt` got that far, here otherwise.
 
-Do not run anything after it. The command ends this session, so there is nothing to report and no one to report it to.
+Run each tmux command above as a separate, plain command, not chained or wrapped in shell logic. The user's settings allow exactly these three by name (`tmux show-options`, `tmux set-option -wu`, `tmux respawn-pane`), and a compound command would not match those rules and would be stopped for approval.
+
+Do not run anything after the respawn. It ends this session, so there is nothing to report and no one to report it to.

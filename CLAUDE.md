@@ -51,7 +51,7 @@ the script defaults to `$PWD`, as `M-m` does with `pr-ready.sh`.
 
 ## Skills and the scripts they call
 
-Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls `codex-review`, so a change to the JSON the script prints or the flags it accepts has to be mirrored in the skill, and vice versa. `wt` replaces its own tmux pane with `zsh -i -c 'wt <ID>'`, so it relies on `~/.zshrc` defining the `wt` function from `worktree-from-ticket init zsh`. Document each script in `bin/README.md`.
+Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls `codex-review`, so a change to the JSON the script prints or the flags it accepts has to be mirrored in the skill, and vice versa. `wt` replaces its own tmux pane with `zsh -i -c 'wt <ID>'`, so it relies on `~/.zshrc` defining the `wt` function from `worktree-from-ticket init zsh`. It also clears the "Shaping: ..." tab name that `bin/shape` sets, so a change to that prefix has to be made in both. `bin/shape` only starts Claude with `/shape`; the shaping instructions live in that skill. Document each script in `bin/README.md`.
 
 The tmux config depends on `bin/` too: the `M-j` binding runs
 `tmux/window-jump.sh`, which runs `~/.local/bin/wt-jump`, so that binding needs

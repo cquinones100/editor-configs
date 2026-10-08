@@ -23,9 +23,10 @@ Arguments: a Linear ticket ID or URL. Without one, use the ticket this conversat
 4. Run this as your final action, with the ID filled in:
 
    ```
+   case "$(tmux show -wqv -t "$TMUX_PANE" @tab_name)" in "Shaping: "*) tmux set -wu -t "$TMUX_PANE" @tab_name ;; esac
    tmux respawn-pane -k -t "$TMUX_PANE" -c "$PWD" "zsh -i -c 'wt <ID>; exec zsh -i'"
    ```
 
-   `-k` stops this session, and the new command starts in the same pane. `zsh -i` reads `~/.zshrc`, which defines `wt` and puts node on the PATH. `-c "$PWD"` starts it in this directory, so `wt` finds the same repository. When the new Claude session exits, or if `wt` refuses (a closed ticket it asks about, or a worktree another session is already working in), `exec zsh -i` leaves a shell in the pane: in the worktree if `wt` got that far, here otherwise.
+   The first line drops the "Shaping: ..." name the `shape` command gave the tab, so it takes the ticket's title once the worktree opens. A name you set yourself with M-n is left alone. `-k` stops this session, and the new command starts in the same pane. `zsh -i` reads `~/.zshrc`, which defines `wt` and puts node on the PATH. `-c "$PWD"` starts it in this directory, so `wt` finds the same repository. When the new Claude session exits, or if `wt` refuses (a closed ticket it asks about, or a worktree another session is already working in), `exec zsh -i` leaves a shell in the pane: in the worktree if `wt` got that far, here otherwise.
 
 Do not run anything after it. The command ends this session, so there is nothing to report and no one to report it to.

@@ -105,6 +105,67 @@ stays one stable line that never needs re-editing when the tool changes.
 - `wt-batch` opens several tickets at once, one tmux window each, and
   `wt-jump` gets you back to any of those windows by ticket, PR, or branch.
 
+## shape
+
+The step before `wt`: shapes a Linear ticket with Claude, from a rough idea or
+an existing ticket that needs work.
+
+```
+shape "people can't tell which phase is active"
+shape ABC-123
+```
+
+It starts Claude with the `/shape` skill, which holds the instructions, so
+`/shape` works the same inside a session you already have. Claude reads the
+code before asking anything, checks Linear for tickets that already cover the
+idea, drafts the ticket in the layout the team's recent tickets use, and writes
+it to Linear only once you approve the draft. It does not touch the code.
+Afterwards `/wt <ID>` hands the same tab to `wt`, so one tab carries a ticket
+from idea to PR.
+
+- Runs in the repository's main checkout, even when called from a worktree,
+  since a ticket being shaped has no branch yet.
+- Fetches first and warns when the local main is behind its upstream, because
+  Claude reads the files on disk. It never pulls.
+- Inside tmux, names the tab "Shaping: <first words>" through the same
+  `@tab_name` option `M-n` sets. `/wt` clears that name when it takes the tab
+  over, and leaves a name you set yourself alone.
+- The team to create tickets in comes from `linearTeam` in
+  `~/.config/worktree-from-ticket/config.json`, next to the API key, with
+  optional default labels in `linearLabels`. Without `linearTeam`, Claude asks.
+  Keeping them there keeps the team out of this repository.
+
+```sh
+./sync.sh shape
+```
+
+## shape-batch
+
+Runs `shape` for several ideas or tickets at once, each in its own tmux window,
+the way `wt-batch` does for `wt`.
+
+```
+shape-batch "phase label is unclear" "results load slowly" ABC-123
+shape-batch "ABC-123, ABC-124"
+shape-batch < ideas.txt
+```
+
+An idea is free text full of spaces and commas, so unlike `wt-batch` each
+argument is one thing to shape; quote it. An argument made only of ticket
+identifiers or Linear URLs is still split on spaces and commas. With no
+arguments, ideas are read from stdin, one per line, and blank lines are
+skipped. Repeats open once.
+
+The windows go right after the current one, in the order given, and focus stays
+where it is. Each idea is single-quoted before it is typed into its window's
+shell, so whatever it contains reaches `shape` as text and is never run. Like
+`wt-batch`, it must run inside tmux, from the repo the ideas belong to, and
+needs `shape` installed.
+
+```sh
+./sync.sh shape-batch
+```
+
 ## wt-batch
 
 Runs `wt` for several tickets at once, each in its own tmux window. Tickets are

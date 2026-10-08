@@ -47,7 +47,10 @@
       "Bash(git -c core.editor=true cherry-pick --continue)",
       "Bash(gh api repos/*)",
       "Bash(gh pr list*)",
-      "Bash(ls *)"
+      "Bash(ls *)",
+      "Bash(tmux show-options *)",
+      "Bash(tmux set-option -wu *)",
+      "Bash(tmux respawn-pane *)"
     ],
     "deny": [
       "Read(.env)",

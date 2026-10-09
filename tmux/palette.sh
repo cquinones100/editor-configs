@@ -17,6 +17,38 @@
 
 set -u
 
+# Orders the rows in <file> for <query>, best first, for fzf to show as is.
+# fzf's own scoring rates characters, not words: "pr" scores as well at the
+# start of "Previous" as on "PR", and still matches the p and r in "pane
+# right". Here each word of the query scores 3 when it is a whole word of the
+# description, 2 when it starts one, 1 when it is inside one, and 0 otherwise,
+# and a row's score is the sum. Ties keep the alphabetical order. fzf still
+# filters and highlights, so loose matches stay in the list, below these.
+#
+# Usage (from fzf's reload): palette.sh --rank <file> <query>
+if [ "${1:-}" = --rank ]; then
+  awk -F'\t' -v query="${3:-}" '
+    BEGIN { n = split(tolower(query), terms, " ") }
+    {
+      text = tolower($2)
+      gsub(/[^a-z0-9]+/, " ", text)
+      m = split(text, words, " ")
+      score = 0
+      for (i = 1; i <= n; i++) {
+        best = 0
+        for (j = 1; j <= m; j++) {
+          if (words[j] == terms[i]) { best = 3; break }
+          at = index(words[j], terms[i])
+          if (at == 1 && best < 2) best = 2
+          else if (at > 1 && best < 1) best = 1
+        }
+        score += best
+      }
+      printf "%d\t%d\t%s\n", score, NR, $0
+    }' "$2" | sort -t$'\t' -k1,1nr -k2,2n | cut -f3-
+  exit 0
+fi
+
 # tmux rewrites control characters in its output, tab included, without a
 # UTF-8 locale.
 export LC_ALL=en_US.UTF-8
@@ -58,11 +90,17 @@ show_key='
 
 # The palette itself is left out: picking it would only reopen it.
 # Shown as "<description>  <key>", sorted by description, with the key dimmed.
+# The rows go to a file so every keystroke can rank them again (see --rank);
+# --no-sort keeps that order instead of fzf's own.
+rows=$(mktemp)
+trap 'rm -f "$rows"' EXIT
+bindings | awk -F'\t' '$1 != "M-p"' | sort -t$'\t' -k2,2 |
+  awk -F'\t' "$show_key"'{ printf "%s\t%-48s \033[38;5;244m%s\033[0m\n", $1, $2, shown($1) }' > "$rows"
+
 choice=$(
-  bindings | awk -F'\t' '$1 != "M-p"' | sort -t$'\t' -k2,2 |
-    awk -F'\t' "$show_key"'{ printf "%s\t%-48s \033[38;5;244m%s\033[0m\n", $1, $2, shown($1) }' |
-    fzf --ansi --delimiter=$'\t' --with-nth=2 \
-      --prompt='action> ' --layout=reverse --border=rounded --height=100% |
+  fzf --ansi --delimiter=$'\t' --with-nth=2 --no-sort \
+    --bind "change:reload('$0' --rank '$rows' {q})" \
+    --prompt='action> ' --layout=reverse --border=rounded --height=100% < "$rows" |
     cut -f1
 )
 

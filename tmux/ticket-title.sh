@@ -53,8 +53,12 @@ mkdir "$lock" 2>/dev/null || exit 0
 
   body=$(jq -nc --arg id "$id" \
     '{query: "query($id: String!) { issue(id: $id) { title } }", variables: {id: $id}}')
-  response=$(curl -s --max-time 10 https://api.linear.app/graphql \
-    -H 'Content-Type: application/json' -H "Authorization: $key" -d "$body") || exit 0
+  # The key goes to curl on stdin (-H @-) rather than as an argument, where any
+  # process on the machine could read it from `ps`. printf is a shell builtin,
+  # so the key is never on a command line here either.
+  response=$(printf 'Authorization: %s\n' "$key" |
+    curl -s --max-time 10 https://api.linear.app/graphql \
+      -H 'Content-Type: application/json' -H @- -d "$body") || exit 0
 
   # Only a definite answer is cached. A network or auth failure leaves the old
   # answer in place, so a blip never blanks a title that was already known.

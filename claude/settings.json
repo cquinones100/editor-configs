@@ -57,8 +57,6 @@
       "Read(.env.*)",
       "Read(**/.env)",
       "Read(**/.env.*)",
-      "Bash(git fetch *)",
-      "Bash(git fetch)",
       "Bash(git pull *)",
       "Bash(git pull)"
     ],

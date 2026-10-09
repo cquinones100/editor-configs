@@ -38,6 +38,6 @@ tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' |
     pr=$("$script_dir/window-pr.sh" "$path")
     [ -n "$pr" ] && name="#${pr} ${name}"
 
-    tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#{E:@agent_marker}#[fg=#${whex}]#W "
+    tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#{E:@agent_marker}#[bg=default,fg=#${whex},nobold]#{?@agent, ,}#W "
     tmux rename-window -t "${session}:${idx}" "$name"
   done

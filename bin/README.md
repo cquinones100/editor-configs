@@ -347,6 +347,11 @@ ticket title or something you said to Claude finds the window. It needs
 falls back to its repository, PR, and branch. Every window is rendered at once,
 which takes about a second with a dozen open.
 
+Windows whose Claude session is waiting on you come first, then ones that
+finished while you were elsewhere, then the rest, from the `@agent` state
+`tmux/agent-state.sh` keeps. The row says which ("waiting on you for 4m",
+"finished 2m ago"), so typing "waiting" filters to them.
+
 Windows are matched on what is on disk — the worktree directory and the branch
 checked out in it — not on the window name. The name is rewritten by the
 pane-focus-in hook and says nothing about pull requests, and a window opened by

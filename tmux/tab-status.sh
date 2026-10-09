@@ -63,6 +63,25 @@ pr=$("$script_dir/window-pr.sh" "$path")
 # title and prompt it introduces.
 out="$out  #[fg=#$hex]$command"
 
+# What the Claude session is doing, as agent-state.sh records it from Claude
+# Code's hooks: the same states the tab's mark shows, in words.
+if [ -n "$claude_pid" ]; then
+  state=$(tmux show -pqv -t "$pane" @agent_state 2>/dev/null)
+  since=$(tmux show -pqv -t "$pane" @agent_since 2>/dev/null)
+  took=""
+  if [[ $since =~ ^[0-9]+$ ]]; then
+    secs=$(( $(date +%s) - since ))
+    if (( secs < 60 )); then took="<1m"
+    elif (( secs < 3600 )); then took="$(( secs / 60 ))m"
+    else took="$(( secs / 3600 ))h"; fi
+  fi
+  case $state in
+    waiting) out="$out #[fg=colour220]waiting on you${took:+ for $took}" ;;
+    done)    out="$out #[fg=colour41]finished${took:+ $took ago}" ;;
+    working) out="$out #[fg=$FG_DIM]working" ;;
+  esac
+fi
+
 # Claude writes ~/.claude/sessions/<pid>.json for each running process, naming
 # its current session. The title comes from that session's transcript, where
 # the latest ai-title entry wins. The prompt comes from history.jsonl, which

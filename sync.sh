@@ -92,6 +92,7 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/pr-ready.sh ~/.config/tmux/pr-ready.sh
   ln -sf ~/editor-configs/tmux/pr-open.zsh ~/.config/tmux/pr-open.zsh
   ln -sf ~/editor-configs/tmux/wt-open.zsh ~/.config/tmux/wt-open.zsh
+  ln -sf ~/editor-configs/tmux/agent-state.sh ~/.config/tmux/agent-state.sh
   ln -sf ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
   ln -sf ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
   ln -sf ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh

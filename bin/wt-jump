@@ -71,6 +71,7 @@ const PANE_FIELDS = [
   "pane_current_path",
   "pane_current_command",
   "pane_tty",
+  "@agent",
 ];
 
 const listPanes = () =>
@@ -78,7 +79,7 @@ const listPanes = () =>
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [windowId, paneId, session, index, windowName, active, panePath, command, tty] =
+      const [windowId, paneId, session, index, windowName, active, panePath, command, tty, agent] =
         line.split("\t");
       return {
         windowId,
@@ -90,6 +91,7 @@ const listPanes = () =>
         panePath,
         command,
         tty,
+        agent,
       };
     });
 
@@ -185,6 +187,11 @@ const describe = (pane) => {
 
 // Panes collapse to one row per window, preferring a pane that matched over the
 // window's active pane, so selecting a row lands on the pane that earned it.
+// Windows whose Claude session is waiting on you come first, then ones that
+// finished while you were elsewhere, then the rest; tmux/agent-state.sh keeps
+// that state in the window option @agent.
+const urgency = (pane) => ({ waiting: 0, done: 1 })[pane.agent] ?? 2;
+
 const byWindow = (panes) =>
   [...panes.reduce((windows, pane) => {
     const existing = windows.get(pane.windowId);
@@ -193,7 +200,8 @@ const byWindow = (panes) =>
     }
     return windows;
   }, new Map()).values()].sort(
-    (a, b) => a.session.localeCompare(b.session) || a.index - b.index,
+    (a, b) =>
+      urgency(a) - urgency(b) || a.session.localeCompare(b.session) || a.index - b.index,
   );
 
 const matchesFor = (target, panes) => {

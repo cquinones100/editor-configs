@@ -34,6 +34,31 @@ number or ticket title that was not known yet appears a second later rather
 than delaying the focus. Anything else that wants to add to the tab belongs in
 `window-names.sh` under the same rule.
 
+## Claude session state in tmux
+
+`tmux/agent-state.sh` records what each Claude session in tmux is doing, from
+Claude Code's hooks in `claude/settings.json`: `UserPromptSubmit`,
+`PostToolUse`, and `PostToolUseFailure` mark the pane working,
+`PermissionRequest` and the question kinds of `Notification` mark it waiting,
+`Stop` marks it done, and `SessionStart` and `SessionEnd` clear it. The
+`Notification` hook also sends the macOS banner, titled with the tmux window.
+The state lives on the pane (`@agent_state`, `@agent_since`) and is rolled up
+into the window's `@agent`, most urgent first (waiting, done, working), which
+the `@agent_marker` format in `tmux.conf` shows in the tab. Every
+window-status format in `tmux.conf`, `theme.sh`, `update-colors.sh`, and
+`window-names.sh` expands that marker, so a new one has to as well.
+
+"done" means finished and not yet seen: the pane-focus-in hook clears it, and a
+session that finishes in the tab you are looking at never gets it. A pane that
+is no longer running Claude loses its state on the next focus, so a session
+that died without `SessionEnd` leaves nothing behind. `M-a` walks the tabs that
+need you, waiting first and then done, oldest first; `wt-jump` and the second
+status line show the same state.
+
+Claude Code waits on these hooks, so the script only makes tmux calls: no
+network, and no output, since Claude Code adds `UserPromptSubmit` and
+`SessionStart` output to the conversation. It does nothing outside tmux.
+
 ## Key bindings and the M-p palette
 
 `M-p` opens `tmux/palette.sh`, an fzf list of the custom bindings that picks

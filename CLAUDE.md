@@ -68,6 +68,15 @@ binding shows up when `tmux.conf` gives it a description with
 prefix table only keys `tmux.conf` binds with `-N` are listed, since tmux's own
 prefix bindings carry descriptions too.
 
+Every format inside a shell command (`run-shell`, `if-shell` without `-F`,
+`#(...)`) is written `#{q:...}`, never bare or in quotes. tmux pastes the value
+into the command before the shell parses it, so a directory named
+`repo$(...)` would run that code, and the pane-focus-in hook would do it
+without a keypress. `q:` shell-quotes the value. Values tmux makes itself
+(`#{window_id}`, `#{client_name}`) are quoted too, so the rule has no
+exceptions to remember. Formats given to tmux options such as `-c` or `-d` are
+not shell and are fine as they are.
+
 `display-popup` does not expand formats in its command: `#{pane_id}` reaches
 the shell as written, and the shell reads the `#` as the start of a comment, so
 the script gets no argument at all. Its `-d` start directory is expanded, so a

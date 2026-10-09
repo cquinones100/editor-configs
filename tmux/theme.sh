@@ -50,7 +50,7 @@ tmux set -g status-right "#[fg=$FG_DIM] %b %d  %H:%M "
 # hook; re-run the plugin to put it back.
 continuum_tmux=~/.config/tmux/plugins/tmux-continuum/continuum.tmux
 [ -x "$continuum_tmux" ] && "$continuum_tmux"
-tmux setw -g window-status-format "#[fg=$FG_DIM] #I:#W "
+tmux setw -g window-status-format "#[fg=$FG_DIM] #I:#{E:@agent_marker}#[fg=$FG_DIM]#W "
 tmux set -g pane-border-style "fg=$BG_MED"
 tmux set -g window-style "bg=$BG_DIM"
 tmux set -g window-active-style "bg=terminal"

@@ -19,6 +19,6 @@ esac
 hex=$("$script_dir/accent-color.sh" "$pane_path")
 tmux set -g pane-active-border-style "fg=#${hex}"
 tmux set -g status-left "#[bg=#${hex},fg=$FG_BRIGHT,bold]  #S #[bg=$BG_DARK] "
-tmux setw -g window-status-current-format "#[bg=$BG_MED,fg=#${hex},bold] #I:#W "
+tmux setw -g window-status-current-format "#[bg=$BG_MED,fg=#${hex},bold] #I:#{E:@agent_marker}#[fg=#${hex}]#W "
 
 "$script_dir/window-names.sh" "$session"

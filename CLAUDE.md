@@ -59,6 +59,14 @@ Claude Code waits on these hooks, so the script only makes tmux calls: no
 network, and no output, since Claude Code adds `UserPromptSubmit` and
 `SessionStart` output to the conversation. It does nothing outside tmux.
 
+## tmux plugins
+
+The plugins are pinned in `tmux/plugins.txt`. `./sync.sh tmux` installs each
+into `~/.config/tmux/plugins/<name>` at that exact commit, and `tmux.conf` runs
+each plugin's `.tmux` file itself. There is no TPM: it can only follow branches,
+so it ran whatever each default branch held on every start. Updating a plugin
+means reading what changed and putting the new commit in `plugins.txt`.
+
 ## Key bindings and the M-p palette
 
 `M-p` opens `tmux/palette.sh`, an fzf list of the custom bindings that picks

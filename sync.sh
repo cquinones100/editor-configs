@@ -80,9 +80,29 @@ sync_karabiner() {
   ln -sf ~/editor-configs/karabiner/karabiner.json ~/.config/karabiner/karabiner.json
 }
 
+# Installs the tmux plugins listed in tmux/plugins.txt, each at its pinned
+# commit. A plugin already there is moved to that commit, fetching it first if
+# it is new to the clone. Nothing else is run from the plugin repositories here;
+# tmux.conf loads them.
+sync_tmux_plugins() {
+  local dir=~/.config/tmux/plugins name url commit
+  mkdir -p "$dir"
+  grep -vE '^\s*(#|$)' ~/editor-configs/tmux/plugins.txt | while read -r name url commit; do
+    if [ ! -d "$dir/$name/.git" ]; then
+      git clone --quiet --no-checkout "$url" "$dir/$name" || { echo "  could not clone $name" >&2; continue; }
+    fi
+    git -C "$dir/$name" cat-file -e "$commit^{commit}" 2>/dev/null ||
+      git -C "$dir/$name" fetch --quiet origin "$commit" ||
+      { echo "  could not fetch $name at $commit" >&2; continue; }
+    git -C "$dir/$name" -c advice.detachedHead=false checkout --quiet --detach "$commit" &&
+      echo "  $name at ${commit:0:7}"
+  done
+}
+
 sync_tmux() {
   mkdir -p ~/.config/tmux
   ln -sf ~/editor-configs/tmux/tmux.conf ~/.config/tmux/tmux.conf
+  sync_tmux_plugins
   ln -sf ~/editor-configs/tmux/accent-color.sh ~/.config/tmux/accent-color.sh
   ln -sf ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
   ln -sf ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh

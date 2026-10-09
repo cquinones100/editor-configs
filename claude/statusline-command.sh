@@ -64,11 +64,15 @@ if [ -n "$used" ]; then
   fi
 fi
 
-# Build output with accent-colored model and directory
-output="${accent}${model}${reset} | ${accent}${cwd}${reset}"
+# Build output with accent-colored model and directory. Inside tmux the tab and
+# the second status line already name the directory and branch, so only the
+# model and context are shown there; in a plain terminal this is the only place
+# they appear.
+output="${accent}${model}${reset}"
 
-if [ -n "$branch" ]; then
-  output="${output} | ${accent}${branch}${reset}"
+if [ -z "${TMUX:-}" ]; then
+  output="${output} | ${accent}${cwd}${reset}"
+  [ -n "$branch" ] && output="${output} | ${accent}${branch}${reset}"
 fi
 
 if [ -n "$used" ]; then

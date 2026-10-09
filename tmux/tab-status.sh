@@ -83,21 +83,21 @@ if [ -n "$claude_pid" ]; then
 fi
 
 # Claude writes ~/.claude/sessions/<pid>.json for each running process, naming
-# its current session. The title comes from that session's transcript, where
-# the latest ai-title entry wins. The prompt comes from history.jsonl, which
-# gets it as soon as it is sent; the transcript's last-prompt entry lags until
-# the turn ends. Neither file is documented, so if either changes shape the
-# prompt quietly stops showing and nothing else is affected.
+# its current session and, once you /rename it, the name you gave it. That name
+# is shown; the title Claude generates is not, because it summarises only the
+# first prompt and goes stale as the session moves on. The prompt comes from
+# history.jsonl, which gets it as soon as it is sent, and is left out when it
+# is under three words ("yes", "do it"), which say nothing on their own.
+# Neither file is documented, so if either changes shape the text quietly
+# stops showing and nothing else is affected.
 session_file="$HOME/.claude/sessions/$claude_pid.json"
 if [ -n "$claude_pid" ] && [ -f "$session_file" ]; then
   session=$(jq -r '.sessionId // empty' "$session_file" 2>/dev/null)
   if [ -n "$session" ]; then
-    transcript=$(ls "$HOME"/.claude/projects/*/"$session".jsonl 2>/dev/null | head -1)
-    session_title=""
-    [ -n "$transcript" ] &&
-      session_title=$(grep -F '"type":"ai-title"' "$transcript" | tail -1 | jq -r '.aiTitle // empty' 2>/dev/null)
+    session_title=$(jq -r 'select(.nameSource != null and .nameSource != "derived") | .name // empty' "$session_file" 2>/dev/null)
     prompt=$(grep -F "\"sessionId\":\"$session\"" "$HOME/.claude/history.jsonl" 2>/dev/null | tail -1 |
       jq -r '.display // empty' 2>/dev/null | tr '\n\t' '  ' | sed 's/ *$//')
+    [ "$(wc -w <<<"$prompt")" -lt 3 ] && prompt=""
     max=60
     [ ${#prompt} -gt $max ] && prompt="${prompt:0:$((max - 3))}..."
     [ -n "$prompt" ] && prompt="\"$prompt\""

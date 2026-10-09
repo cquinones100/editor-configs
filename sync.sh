@@ -52,7 +52,16 @@ sync_claude() {
   # One link per skill rather than one for the directory: Claude Code keeps its
   # own synced/ folder in ~/.claude/skills, so that path has to stay real.
   mkdir -p ~/.claude/skills
+  # Skills kept here but not installed. review-loop is defined by the repos that
+  # use it, and a personal copy beside theirs shows up as a second /review-loop.
+  # A leftover link from before it was listed here is removed.
+  unlinked_skills=(review-loop)
   for skill in ~/editor-configs/claude/skills/*/; do
+    name=$(basename "$skill")
+    if [[ " ${unlinked_skills[*]} " == *" $name "* ]]; then
+      [ -L ~/.claude/skills/"$name" ] && rm ~/.claude/skills/"$name"
+      continue
+    fi
     ln -sfn "${skill%/}" ~/.claude/skills/
   done
   mkdir -p ~/.claude/hooks

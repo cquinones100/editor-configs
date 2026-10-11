@@ -2,6 +2,14 @@
 
 Dotfiles for the tools listed by directory. `sync.sh` symlinks them into place.
 
+## Pushing
+
+Always ask before pushing this repo, every time, whatever the branch and
+whatever an earlier push was allowed. The repo is public, so before asking,
+check the unpushed commits for anything that identifies the user or their
+employer: organization or company names, ticket IDs, PR numbers, internal
+hosts, usernames, personal paths, tokens.
+
 ## Claude Code settings
 
 - `claude/settings.json` is symlinked to `~/.claude/settings.json`, so anything Claude Code persists to user settings shows up as a tracked change here.

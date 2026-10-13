@@ -10,11 +10,21 @@ Hand this tab over to `wt` for a Linear ticket. This session ends, and in its pl
 
 The conversation does not carry over. The ticket is the hand-off, and the new session starts by reading it.
 
-Arguments: a Linear ticket ID or URL. Without one, use the ticket this conversation produced or settled on. If there is no such ticket, or more than one candidate, ask which before doing anything.
+Usually run with no argument: the ticket comes from this session. A Linear ticket ID or URL may be passed instead, and then it wins.
 
 ## Steps
 
-1. Work out the ticket ID, as above, and check it has the shape `ABC-123`. Accept a Linear URL and take the ID from its `/issue/<ID>/` part. Anything else is not a ticket ID: say so and stop. The ID is placed into a shell command below, so nothing else may go in.
+1. Work out the ticket ID.
+
+   - **Passed as an argument:** use it. Accept a Linear URL and take the ID from its `/issue/<ID>/` part.
+   - **No argument:** take the first of these that gives an answer, and do not ask for an ID:
+     1. A ticket this session created or saved through Linear. If it saved more than one, the most recent.
+     2. The one ticket ID (`ABC-123`) the conversation centered on.
+     3. The current branch, from the `On branch` line of a plain `git status`, when it starts with a ticket ID such as `abc-123-…`; uppercase it.
+
+     If the answer is a guess between several tickets (more than one saved, or a conversation about two or three), name the most likely one and ask the user to confirm it before going on. Ask which ticket outright only when none of the three gives anything.
+
+   Whichever way it was found, check the ID has the shape `ABC-123`. Anything else is not a ticket ID: say so and stop. The ID is placed into a shell command below, so nothing else may go in.
 
 2. Check that this session is running in tmux: `$TMUX_PANE` must be set. If it is not, there is no pane to hand over. Tell the user to run `wt <ID>` themselves and stop.
 

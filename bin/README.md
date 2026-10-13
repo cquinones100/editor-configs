@@ -528,6 +528,329 @@ No shell function, so nothing to add to your shell config.
 - Only the checkout is removed. The branch survives, so nothing you committed is
   lost even if the ticket turns out not to have been finished after all.
 
+## slack-relay
+
+Relays between a Slack app's DM and the Claude sessions in your tmux tabs, for
+when you are away from the computer. It runs in its own tmux tab. The command
+is `bin/slack-relay`; its code is in `lib/slack-relay/`, one file per part,
+which `./sync.sh` doesn't need to install, since the command finds it from its
+own location.
+
+```
+slack-relay          open it in a tab named "slack-relay", or go to that tab
+                     (starting it again there if it has stopped)
+slack-relay stop     stop it (or C-M-s, `stop` in the DM, or Ctrl-C in its tab)
+```
+
+`slack-relay` works from outside tmux too (a Claude job, ssh): it uses the
+running tmux server, putting a new tab in its most recently used session.
+
+A tab can hold other panes beside Claude, such as a shell, a server or
+another Claude. The relay keeps each tab to its own Claude pane, whichever
+pane you use: the first Claude pane it sees in a window (or the pane a `new:`
+tab starts in) is recorded on the window as the tmux option `@claude_pane`,
+and stays the tab's pane while it is open, through `/clear` or Claude being
+started again in it. While that pane isn't running Claude, another Claude
+pane in the window stands in; once it has closed, that one is recorded
+instead.
+
+When it starts, the relay says so in the DM with buttons for what you'd
+otherwise type: **Home** first (a link to the app's Home tab, added once
+Slack has sent the relay an event, since that is the only way it learns the
+app's ID), then Status, Threads, Progress, New tab, Help and Stop relay, which
+asks first. They answer at the top level, as the typed commands would.
+
+Each Claude tab gets its own thread in the DM, started the first time there's
+something to say about it: its alerts with their full turns, answers,
+milestone pings all go there, and whatever you reply there is
+typed into that tab. The main DM only gets one-line notices for what needs you
+or went wrong (waiting on you, a failure), posted in the tab's
+thread and also sent to the conversation, so tapping one opens the thread; you
+can answer a notice as you would the alert, and a notice for a prompt carries
+the prompt's option buttons, so it can be answered from the notice itself. A finished turn gets no notice,
+since it is already in the thread. A request you send from the main DM (`3:
+…`) goes on in the tab's thread, and its answer is sent to the main DM too. A tab's thread is watched for
+as long as the tab is open, and a new window gets a new one.
+
+In the DM:
+
+- a reply under a tab alert is typed into that tab's Claude
+- `3: <text>` or `ABC-214: <text>` types into a tab by number or ticket; sent
+  at the top level, the conversation goes on in that tab's thread
+- `3: ?`, or `?` under an alert, shows that tab's last turn: your last prompt
+  and Claude's reply since, from its transcript (the screen if there is none)
+- `status` lists every Claude tab, its state, and a link to its thread, which
+  opens at the thread's newest message
+- `threads` lists a link to each Claude tab's thread, to find a conversation
+  again; a tab with no thread yet says so, and `3: …` starts one
+- a new tab stopped at a dialog Claude Code shows before its session starts
+  ("trust this folder", "new MCP server found") gets an alert too, with the
+  dialog's options as buttons; tap one, or reply with its number or the start
+  of it, and the relay moves to it with the arrow keys and presses Enter
+- when a tab is waiting on a permission prompt or a question, the alert shows
+  the question and its numbered options, read from the screen, with a button
+  for each; tap one, or reply with the number or the start of an option. A
+  button only answers the prompt it was made for, while that same wait is on,
+  and is replaced by what was chosen once pressed. Only the number is pressed, with no Enter
+  after it, since an Enter could accept a second prompt that follows. Anything
+  else is refused while the choice is showing, rather than typed: it would end
+  with Enter, which accepts whichever option is selected. The refusal carries
+  the option buttons. Answering a prompt anywhere (a button on the alert, the
+  notice or the Home tab, or a typed reply) clears the buttons from every other
+  message showing it, and a prompt answered at the computer clears them all,
+  so no button is left that would only be refused
+- `progress 3`, or `progress` in a tab's thread, tells you what that tab is
+  doing without typing anything into it: its state, when the turn began, when
+  it last did anything and how many tools have run, then a few bullets from a
+  one-shot Haiku that reads the turn's activity and the screen. That Haiku has
+  no tools, MCP servers or settings, so nothing in a transcript can make it act;
+  it takes about five seconds
+- `progress all`, or just `progress` at the top level, does the same for every
+  Claude tab at once: one line each, most urgent first (waiting on you, then
+  stuck or failing, working, finished, idle)
+- `diff 3`, or `diff` in a tab's thread, reads that tab's branch with git: its
+  commits since the default branch and every change since, committed or not.
+  The thread gets a summary, the commits and the file list, with the whole
+  diff attached as a `.diff` file, which Slack shows as a snippet with colors
+- `rename 3 <name>` (or `rename 3: <name>`), or `rename <name>` in a tab's
+  thread, names the tab as `M-n` does: the tab bar, the second status line and
+  its thread all show it. `rename 3` alone clears it, so the tab goes back to
+  its ticket's or directory's name
+- `close 3` offers a **Close** button for that tab, and so does each tab's
+  screen on the Home tab. Slack asks to confirm first, and the button only closes the
+  tab it was drawn for (same window and process), so it can't close a tab that
+  has since taken its place. Closing ends the tab's Claude session;
+  `claude-here` in its directory resumes it
+- `esc 3`, or `esc` in a tab's thread, presses Escape in that tab, which stops
+  Claude mid-turn or declines the prompt it is waiting on; a tab that isn't
+  working or waiting is left alone, since a second Escape opens the rewind menu
+- `new <place>: <prompt>` starts it somewhere else: `new myapp: …` in that
+  repository's main checkout, `new ABC-214: …` (or any part of a branch name) in
+  the worktree that matches, `new ~/code/thing: …` in that directory. Names are
+  looked up among the repositories your tabs and recent Claude sessions use,
+  as `M-o` does; a name that matches several places, or none, starts nothing
+  and says so, and the reply names the directory and branch it picked
+- an image attached to a message (a screenshot from your phone, say) goes to
+  the tab with your text: the relay downloads it to
+  `~/.local/state/slack-relay/files/`, readable only by you, and adds
+  `[Image: <path>]` to what it types, which Claude Code reads as the picture.
+  Only PNG, JPEG, GIF and WebP up to 20 MB, only from Slack's own file host,
+  and only on a message you typed; anything else is answered, not fetched.
+  Downloads are deleted after a week
+- images a tab makes come back the same way: when a turn is posted, image
+  files it names (a Playwright screenshot, a chart it saved) are uploaded under
+  it. Only files that really are PNG, JPEG, GIF or WebP by their contents,
+  written during that turn, up to 20 MB and four a turn, and never one you sent,
+  so an old image a turn only mentions stays on the Mac
+- `new: <prompt>` starts a new Claude tab with that prompt
+- a finished turn has a **Diff** button, and **Continue** (types "continue")
+  when Claude ended by asking a question; a note that a tab may be stuck has
+  **Stop** (`esc`) and **Progress**, since that tab is still running
+- anything that names no tab and isn't a command is not acted on, so a typo
+  never starts work; the reply has a button per tab, and tapping one sends the
+  message there. `help` lists the commands
+
+When the relay is offline (the Mac off, truly asleep, or without internet),
+Slack can still tell you, because the relay leaves the warnings with Slack in
+advance. The Home tab opens with when your Mac last checked in, a time Slack
+itself renders and keeps counting ("checked in 47 minutes ago"); the relay
+publishes it every minute, so anything older than two means it is offline.
+Beside it, **Refresh** publishes it at once.
+And a message saying the relay is offline is kept scheduled in the DM about
+ten minutes ahead, renewed every two minutes: if the relay goes quiet, nothing
+pushes it back and Slack sends it, which notifies you. When the relay is back
+it says so, and for how long it was gone. A clean stop cancels it.
+
+The app's Home tab shows every Claude tab: its state, for how long, its last
+activity and one line from Haiku on what it is doing or, once it has
+stopped, where it left off (written again only when the tab does something), with an **Open** button for its screen, and for a tab waiting on a prompt, the prompt's options, which answer it from there. The relay publishes it when anything has
+changed, once a minute at most, and whenever you open it.
+
+A tab's screen (**Open**) is a Slack modal with its state, its last prompt and
+the end of its last reply, the options of a prompt it is waiting on as
+buttons, and buttons for **Message** (a field whose text is typed into the
+tab, said in its thread and handled as a reply there, so a showing choice
+still refuses anything but its options, and the answer goes in the thread),
+its thread, **Progress** (a Haiku summary, shown in the screen), **Diff**
+(posted in its thread), **Rename** (a field holding its name, cleared for its
+own name back), **Stop** (Escape, only while it works or waits) and **Close**.
+
+**Skill** runs a skill or slash command in the tab. Slack takes any message
+starting with `/` for one of its own commands and never sends it, so
+`/review-loop` can't be typed into a thread as it is at the keyboard. Skill
+opens a form instead: a menu of the skills that tab can run, and a field for
+what follows the name, such as a ticket ID. Run types `/<skill> <rest>` into
+the tab as a reply in its thread would be typed, and the answer goes there.
+The menu is the tab's own: the skills its session lists in its transcript,
+plus those only you can invoke (which that list leaves out), read from
+`~/.claude/skills` and `~/.claude/commands` and from `.claude` in the tab's
+directory and the ones above it. It is grouped yours, the project's, then
+plugins and built-in skills; a Slack menu holds 100 options, so a longer list
+is cut from the end, and a field takes any name the menu left out. The same
+Skill button sits under every
+finished turn in a tab's thread, next to Diff. `3: /review-loop` from the main
+DM, or a thread reply that starts with a space, also gets past Slack.
+
+An open screen is drawn again whenever its tab's state changes, so a prompt
+that has been answered at the computer leaves it. Like the Close button,
+every one acts only on the tab it was drawn for, and only the relay's owner
+can open a screen or use one: Home and modal presses, and the forms sent from
+them, are taken from you alone, and only the ones these screens draw. **New
+tab** at the top of the Home tab asks where and for the prompt, as
+`new <place>: <prompt>` does. The bottom of the Home tab says what the Haiku
+summaries and `progress` have cost today, from what `claude -p` reports for
+each (about $0.0002 a call), also logged a line a call. When the relay stops
+on purpose it says so, since nothing in it is current any more. Each tab's
+thread starts with a header naming the tab, with its state and since when
+(🔴 waiting on you, 🔵 working, ✅ finished, ⚪ idle) and buttons for
+Progress, Diff, Skill, Rename and Close. The header is edited whenever the
+tab is renamed or its state changes, so Slack's list of threads shows how
+every tab stands, and once the tab closes or its window runs another session
+it says the session has ended and offers **Delete thread** instead.
+
+Slack doesn't let you delete the app's messages in its DM, only your own, so
+the relay deletes a closed tab's thread for you: Delete thread on its header,
+or **Delete closed threads** on the Home tab and under `cleanup`, all
+confirmed by Slack first. It deletes the header and every message the app
+posted in the thread, with the files it uploaded there. Your own replies
+stay, since Slack doesn't let an app delete them, and the relay says how many
+were left. Only threads of tabs that have closed (recorded as they close)
+can be deleted, never a running tab's, and nothing deleted can be brought back. Answers longer than one Slack message go out as
+several.
+
+Everything it posts is standard Markdown, the way Claude writes, sent as
+Slack markdown blocks, so headings, **bold**, [links](…), lists, tables and
+code render as they do in the terminal, rather than as Slack's older mrkdwn,
+which shows most of that as raw symbols.
+
+It posts an alert when a tab's Claude is waiting on you or has finished, from
+the state `tmux/agent-state.sh` keeps. A turn that ends in the tab you're
+looking at isn't marked finished in tmux, since you saw it; its thread gets it
+all the same, from the hook's event and the final message it carries. You
+count as away once nothing has been typed or clicked for 30 seconds (macOS's
+own idle time, which a locked screen counts too).
+
+Each tab's thread always gets everything at once: finished turns, waits,
+dialogs, stall notes and milestone pings, so it is a complete record whether
+you were at the computer or not. What notifies you is the one-line notice in
+the main DM (waiting on you, a dialog, a stall, a failing test), and those wait
+while you're at the computer, since tmux already shows them, and go out in the
+order they happened once you've been away 30 seconds. Replies to what you send
+from Slack, and the results of requests you made there, never wait. Held
+notices are kept in memory, so stopping the relay drops them. Writing to the relay from Slack counts as being away for five
+minutes from your latest message, and sends what was held, since
+you're likely on your phone; unless the Mac's keyboard or mouse was used in the
+five seconds before it arrived, which means you wrote it in Slack on the Mac. An alert or answer for a tab that is
+waiting also shows the end of its screen, since a permission prompt and its
+numbered options are only there, not in the transcript; reply with the number. Tab states are read every second.
+
+Slack pushes each message to the relay the moment you send it,
+so it answers in about a second and costs nothing while you're quiet. Replies
+under anything the relay posted in the last day (up to 30 threads), and under
+each tab's thread for as long as the tab is open, are part of those
+conversations; `3: …` always reaches the tab. The log records how long each
+message waited to be handled. It keeps the Mac awake while it runs, but not
+its displays, which sleep as usual. On a MacBook with the lid closed, let the
+external monitors sleep rather than switching them off: with no display
+connected, a closed MacBook sleeps whatever keeps it awake (clamshell sleep).
+
+When it types your message into a tab, it posts nothing: your message's
+reaction says where it is, ⏳ while it waits behind a turn already running, 👀
+once that tab's Claude takes it, and ✅ once the answer is posted. While
+it runs, a "Working on it" message with **Progress** and **Stop** buttons sits
+where you asked, and is deleted once the answer is posted. If a tab that isn't busy hasn't taken it after 30 seconds, it posts
+the tab's screen, since a dialog is usually what's in the way.
+
+A tab marked working whose transcript hasn't changed for ten minutes gets a
+note in its thread (what it did last, and its screen) and a line in the main
+DM saying it may be stuck. A long test run looks the same, and the screen
+usually tells the two apart. Each stall is noted once.
+
+It follows every Claude tab's transcript and posts one line in the tab's
+latest thread (or at the top level) when a session commits, pushes, opens a
+pull request, or runs tests that fail. It doesn't watch CI: GitHub already
+notifies about checks.
+
+It knows a tab has answered from the Claude Code hooks: while it runs,
+`tmux/agent-state.sh` appends an event to `~/.local/state/slack-relay/events.jsonl`
+whenever a session takes a prompt, finishes a turn or starts waiting, naming its
+transcript.
+The file is removed only when the relay is stopped on purpose, and how far it
+has been read is saved, so turns that end while it restarts are not lost.
+When that transcript's last prompt is the text the relay typed, the relay posts
+the turn within a couple of seconds. Sessions started before the hooks fall back
+to the tab's screen staying still for 20 seconds.
+
+If the relay crashes, it is started again within seconds, after a longer wait
+each time, and posts that it restarted and why; messages sent meanwhile are
+read back from the DM and still answered, as are those sent while its
+connection to Slack was down. After five crashes in ten minutes it gives up and posts that it
+is down. Stopping it (`stop`, C-M-s, Ctrl-C, closing its tab) is never taken
+for a crash.
+
+A lock file keeps it to one relay at a time. State, the events file and a log
+(`relay.log`, which keeps what the tab shows) live in
+`~/.local/state/slack-relay/`, readable only by you.
+
+### The Slack app, and keeping it yours
+
+The relay is a Slack app of its own, `Slack relay`, which you talk to in its
+Messages tab. It needs, in the app's settings at api.slack.com/apps:
+
+- Socket Mode on, and an app-level token with `connections:write`. Slack
+  connects to the relay over a connection the relay opens, so nothing on the
+  Mac listens for connections
+- bot scopes `chat:write`, `im:history`, `im:read`, `im:write`,
+  `reactions:write` (for the 👀 it adds to your messages), `files:read` and
+  `files:write`
+- the bot events `message.im` and `app_home_opened`, and nothing else
+- Interactivity on, for the buttons (with Socket Mode, no Request URL)
+- App Home's Home Tab on, and its Messages Tab on, with messages allowed from it
+
+Both tokens live in the macOS Keychain, never in a file; each command asks for
+the token rather than taking it on the command line:
+
+```sh
+security add-generic-password -U -a "$USER" -s slack-relay-bot-token -w   # xoxb-…
+security add-generic-password -U -a "$USER" -s slack-relay-app-token -w   # xapp-…
+```
+
+Anyone in the workspace can open a DM with an app, so the relay only acts on
+messages typed by one member, named in
+`~/.config/slack-relay/config.json` (outside this repository):
+
+```json
+{ "owner": "<your Slack member ID: Profile → ⋯ → Copy member ID>" }
+```
+
+Everything else is ignored and logged, with no reply, so the app doesn't even
+say it's listening: other members, other conversations, other workspaces, bots
+(the relay's own posts included), edits and deletions. A message has to have
+been typed, too: other apps can post as you (anything holding your Slack user
+token, the Slack connector your Claude sessions use included), so a message
+counts only if it carries the `client_msg_id` Slack's own apps give what you
+type, which the Web API doesn't let an app set, and no `app_id`. Otherwise a
+Claude session that read something malicious could post `1: …` as you and
+drive your other tabs. For the same reason reactions control nothing: Slack
+can't say whether you added one or an app did as you. The owner comes from
+that file, never from a message. Everything the relay writes is refused before
+it leaves the Mac unless it is for the app's DM with you, whatever asked for
+it. Buttons are trusted the same way: a press counts only if it is yours, on a
+message in that DM, and Slack only reports a press a person made in Slack, so
+no app can press one as you. The app subscribes to no channel events and has no scopes to read
+channels, so adding it to one shows it nothing.
+
+```sh
+./sync.sh slack-relay
+```
+
+Its tests run against a tmux server of their own, a temporary home directory
+and stand-ins for Slack, so they never type into your tabs or post anything:
+
+```sh
+node --test test/*.test.js
+```
+
 ## codex-review
 
 Runs Codex as a skeptical, read-only static reviewer of the current branch and

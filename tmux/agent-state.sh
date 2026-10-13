@@ -28,7 +28,81 @@ set -u
 # without a UTF-8 locale.
 export LC_ALL=en_US.UTF-8
 
-[ -n "${TMUX:-}" ] || exit 0
+# The relay's own Haiku sessions (bin/slack-relay) inherit these hooks; their
+# turns are Slack calls, not work anyone is waiting on.
+[ -n "${SLACK_RELAY_HELPER:-}" ] && exit 0
+
+# slack-relay wants to know when any Claude session finishes a turn or starts
+# waiting on you, including sessions outside tmux, with the transcript that
+# says what happened (a finished turn's event carries its final message, from
+# the Stop hook, since the transcript can lag behind), and when a session
+# takes a prompt, with its text, so it can tell you Claude has your message. The relay keeps an events file, and
+# removes it only when stopped on purpose; each such hook appends one line to
+# it. Without the file nothing is written, and the prompt hook's input isn't
+# even read. This runs before the tmux check for that reason.
+RELAY_EVENTS=~/.local/state/slack-relay/events.jsonl
+payload=""
+relay_event() {
+  [ -f "$RELAY_EVENTS" ] || return 0
+  jq -c --arg event "$1" --argjson time "$(date +%s)" \
+    '{event: $event, time: $time, session_id, transcript_path, cwd}
+      + (if .prompt then {prompt: .prompt[0:300]} else {} end)
+      + (if .last_assistant_message then {last: .last_assistant_message} else {} end)' <<<"$payload" >>"$RELAY_EVENTS" 2>/dev/null
+}
+case "${1:-}:${2:-}" in
+  set:done | set:waiting)
+    payload=$(cat 2>/dev/null)
+    relay_event "$2"
+    ;;
+  set:working)
+    # UserPromptSubmit and the tool hooks both say "working"; only the first
+    # is a prompt being taken.
+    if [ -f "$RELAY_EVENTS" ]; then
+      payload=$(cat 2>/dev/null)
+      [ "$(jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null)" = UserPromptSubmit ] && relay_event prompt
+    fi
+    ;;
+  notification:*)
+    payload=$(cat 2>/dev/null)
+    case $(jq -r '.notification_type // empty' <<<"$payload" 2>/dev/null) in
+      permission_prompt | elicitation_dialog | elicitation_url_dialog | agent_needs_input) relay_event waiting ;;
+    esac
+    ;;
+esac
+
+# A conversation moved into the background runs in a job with no tmux of its
+# own (no TMUX, no TMUX_PANE), while the tab it came from keeps a parked Claude
+# whose session names the job (parkedJobId, matching the job's jobId). Its
+# hooks are marked on that tab, so the tab shows what the conversation is
+# doing rather than staying idle. The job may itself have been parked into
+# another, so the links are followed up to the tab. The session files are a
+# handful of small JSON files, so the lookup takes a few milliseconds.
+parked_pane() {
+  local session=$1 job pid parent hops=0 sessions=~/.claude/sessions
+  job=$(jq -r --arg s "$session" 'select(.sessionId == $s) | .jobId // empty' "$sessions"/*.json 2>/dev/null | head -1)
+  while [ -n "$job" ] && (( hops++ < 5 )); do
+    pid=$(jq -r --arg j "$job" 'select(.parkedJobId == $j) | .pid // empty' "$sessions"/*.json 2>/dev/null | head -1)
+    [ -n "$pid" ] || return 1
+    parent=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    # The tab's Claude is the pane's process, or a child of its shell.
+    pane=$(tmux list-panes -a -F '#{pane_pid} #{pane_id}' 2>/dev/null | awk -v a="$pid" -v b="$parent" '$1 == a || $1 == b { print $2; exit }')
+    [ -n "$pane" ] && { echo "$pane"; return 0; }
+    # Not in a tab: that Claude may be a job parked in turn.
+    job=$(jq -r --arg p "$pid" 'select((.pid | tostring) == $p) | .jobId // empty' "$sessions"/*.json 2>/dev/null | head -1)
+  done
+  return 1
+}
+if [ -z "${TMUX_PANE:-}" ]; then
+  case "${1:-}" in
+    set | notification)
+      [ -n "$payload" ] || payload=$(cat 2>/dev/null)
+      session=$(jq -r '.session_id // empty' <<<"$payload" 2>/dev/null)
+      [ -n "$session" ] && TMUX_PANE=$(parked_pane "$session") || exit 0
+      ;;
+  esac
+fi
+
+[ -n "${TMUX:-}${TMUX_PANE:-}" ] || exit 0
 
 # A pane still running Claude: its command is Claude Code's executable, which
 # is named after its version. A pane that has gone back to a shell keeps no
@@ -58,8 +132,14 @@ refresh() {
 }
 
 set_state() {
-  local pane=$1 state=$2 window
+  local pane=$1 state=$2 window current
   window=$(tmux display -p -t "$pane" '#{window_id}' 2>/dev/null) || return
+  # The same state again changes nothing, so @agent_since keeps when it began:
+  # a permission prompt sets "waiting" twice (PermissionRequest, then the
+  # Notification hook about six seconds later), and every tool call sets
+  # "working", and neither should look like a new wait or a new turn.
+  current=$(tmux display -p -t "$pane" '#{@agent_state}' 2>/dev/null)
+  [ "$current" = "$state" ] && return
   # Finishing in front of you is not news: the tab you are looking at in an
   # attached session does not get "done".
   if [ "$state" = done ] &&
@@ -83,7 +163,7 @@ case "${1:-}" in
 
   notification)
     [ -n "${TMUX_PANE:-}" ] || exit 0
-    payload=$(cat)
+    # Read above, before the tmux check, so the relay hears about it too.
     kind=$(jq -r '.notification_type // empty' <<<"$payload" 2>/dev/null)
     message=$(jq -r '.message // empty' <<<"$payload" 2>/dev/null)
     # Permission prompts and questions are Claude waiting on you. The

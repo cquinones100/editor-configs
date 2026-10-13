@@ -477,6 +477,176 @@ No shell function, so nothing to add to your shell config.
 - Only the checkout is removed. The branch survives, so nothing you committed is
   lost even if the ticket turns out not to have been finished after all.
 
+## slack-relay
+
+Relays between your Slack self-DM and the Claude sessions in your tmux tabs, for
+when you are away from the computer. It runs in its own tmux tab. The command
+is `bin/slack-relay`; its code is in `lib/slack-relay/`, one file per part,
+which `./sync.sh` doesn't need to install, since the command finds it from its
+own location.
+
+```
+slack-relay          open it in a tab named "slack-relay", or go to that tab
+slack-relay stop     stop it (or C-M-s, `stop` in the DM, or Ctrl-C in its tab)
+```
+
+Each Claude tab gets its own thread in the DM, started the first time there's
+something to say about it: its alerts with their full turns, "Sent to"
+confirmations, answers, milestone pings and CI results all go there, and
+whatever you reply there is typed into that tab. The main DM only gets one-line
+notices (waiting on you, done, a failure, CI results), posted in the tab's
+thread and also sent to the conversation, so tapping one opens the thread; you
+can answer or react to a notice as to the alert. A tab's thread is watched for
+as long as the tab is open, and a new window gets a new one.
+
+In the DM:
+
+- a reply under a tab alert is typed into that tab's Claude
+- `3: <text>` or `ABC-214: <text>` types into a tab by number or ticket; sent
+  at the top level, the conversation goes on in that tab's thread
+- `3: ?`, or `?` under an alert, shows that tab's last turn: your last prompt
+  and Claude's reply since, from its transcript (the screen if there is none)
+- `status` lists every Claude tab and its state
+- a reaction on anything the relay posted about a tab answers it: 👍 (or ✅)
+  picks option 1 of the prompt a waiting tab is showing, ✋ (or 🛑) presses
+  Escape, 🔁 (or ⏩) types "continue". Each emoji counts once, and 👍 only
+  while the tab is still waiting with options on screen
+- a new tab stopped at a dialog Claude Code shows before its session starts
+  ("trust this folder", "new MCP server found") gets an alert too, with the
+  dialog's options numbered; reply with the number or the start of one and the
+  relay moves to it with the arrow keys and presses Enter. Reactions don't
+  answer these, since the first option is often "No, exit"
+- when a tab is waiting on a permission prompt or a question, the alert shows
+  the question and its numbered options, read from the screen; reply with the
+  number or the start of an option. Only the number is pressed, with no Enter
+  after it, since an Enter could accept a second prompt that follows
+- `progress 3`, or `progress` in a tab's thread, tells you what that tab is
+  doing without typing anything into it: its state, when the turn began, when
+  it last did anything and how many tools have run, then a few bullets from a
+  one-shot Haiku that reads the turn's activity and the screen. That Haiku has
+  no tools, MCP servers or settings, so nothing in a transcript can make it act;
+  it takes about five seconds
+- `progress all`, or just `progress` at the top level, does the same for every
+  Claude tab at once: one line each, most urgent first (waiting on you, then
+  stuck or failing, working, finished, idle)
+- `diff 3`, or `diff` in a tab's thread, reads that tab's branch with git: its
+  commits since the default branch and every change since, committed or not.
+  The thread gets a summary and the file list; the whole diff (up to 20,000
+  characters) goes in a canvas
+- `esc 3`, or `esc` in a tab's thread, presses Escape in that tab, which stops
+  Claude mid-turn or declines the prompt it is waiting on; a tab that isn't
+  working or waiting is left alone, since a second Escape opens the rewind menu
+- `new <place>: <prompt>` starts it somewhere else: `new myapp: …` in that
+  repository's main checkout, `new ABC-214: …` (or any part of a branch name) in
+  the worktree that matches, `new ~/code/thing: …` in that directory. Names are
+  looked up among the repositories your tabs and recent Claude sessions use,
+  as `M-o` does; a name that matches several places, or none, starts nothing
+  and says so, and the reply names the directory and branch it picked
+- `new: <prompt>` starts a new Claude tab with that prompt; anything that is not
+  a command is not acted on, and the reply lists the commands, so a typo never
+  starts work
+
+A canvas named "<your name>'s Claude tabs" shows every Claude tab: its state, for how long,
+its last activity and, for tabs at work or waiting, one line from Haiku on what
+it is doing. The relay creates it on its first start, links it in the start
+message so you can pin it, and updates it when anything has changed, once a
+minute at most, editing its sections in place. When the relay stops on purpose, the
+dashboard's first line says so, since nothing below it is current any more. Answers longer than 2,000 characters (finished turns, alerts, `?`) go
+in a canvas too, since a canvas renders Claude's Markdown; the thread gets the
+opening and a link. Canvases have their own Haiku session, with a hook that
+allows only the exact content the relay asked for and updates only to
+canvases it made (listed in `canvases.txt` in the state directory). Every canvas
+it makes is titled with your name, read once from your Slack profile, so it
+is clear whose Claude made it.
+
+It posts an alert when a tab's Claude is waiting on you or has finished, from
+the state `tmux/agent-state.sh` keeps. An alert or answer for a tab that is
+waiting also shows the end of its screen, since a permission prompt and its
+numbered options are only there, not in the transcript; reply with the number. Tab states are read every second.
+
+Three Haiku readers take turns at quick checks, one starting about every 0.8
+seconds while you're using it, and every 5 seconds once you've sent nothing
+for ten minutes; the first message or reaction after that brings the pace
+back. Each check is a Haiku turn, which is what the relay costs: around the
+clock at full pace it measured about 3,800 an hour. Each quick check reads
+new top-level messages and, in the same call, new replies in the few threads active
+in the last ten minutes (the ones you're talking in), and hands over Slack's answer the moment it arrives, without
+waiting for Haiku to finish its turn. A message is usually picked up within a
+few seconds wherever you send it. Every 30 seconds a fourth reader of its own
+reads back through the last day of the DM, for replies under any older message
+the relay posted (up to 30 of them); that read is big, which is why it has its
+own reader. A reply under anything older than a day isn't seen, but `3: …`
+always reaches the tab. Reactions have a session of their own too, so 👀 never
+waits behind a long post, and hook events are acted on the moment they land.
+The log records how long each message waited to be read and how long each post
+took. This favours speed over cost. It keeps the Mac awake while it runs.
+
+Slack goes through Claude Code's Slack connector, because the workspace allows
+no app of our own: long-running `claude -p` sessions on Haiku (four readers, a
+poster, one for reactions and one for canvases), each allowed only the Slack
+tools it needs, with a hook on the
+poster that refuses any channel but the DM, and any text but the exact text the
+relay asked for (spacing aside), so Haiku can't reword a reply on its way out.
+A message Haiku can't copy is replaced by a short note saying so rather than
+lost. Keeping them
+running saves Claude Code's startup on every call; each is replaced after 200
+calls, or once its context grows past 300,000 tokens. Replies longer than one
+Slack message go out as several.
+
+When it types your message into a tab, it reacts 👀 to your message once that
+tab's Claude takes it. If the tab was mid-turn, the reply says Claude Code
+queued it. If a tab that isn't busy hasn't taken it after 30 seconds, it posts
+the tab's screen, since a dialog is usually what's in the way.
+
+A tab marked working whose transcript hasn't changed for ten minutes gets a
+note in its thread (what it did last, and its screen) and a line in the main
+DM saying it may be stuck. A long test run looks the same, and the screen
+usually tells the two apart. Each stall is noted once.
+
+It follows every Claude tab's transcript and posts one line in the tab's
+latest thread (or at the top level) when a session commits, pushes, opens a
+pull request, or runs tests that fail. After a push or a new pull request it
+watches the pull request's checks with `gh` every 30 seconds and posts when
+one fails, by name, at once, or when they're all green on two reads in a row
+with the same checks, so a workflow that only starts after others isn't
+missed; it gives up after an hour, or after
+ten minutes with no checks at all.
+
+It knows a tab has answered from the Claude Code hooks: while it runs,
+`tmux/agent-state.sh` appends an event to `~/.local/state/slack-relay/events.jsonl`
+whenever a session takes a prompt, finishes a turn or starts waiting, naming its
+transcript.
+The file is removed only when the relay is stopped on purpose, and how far it
+has been read is saved, so turns that end while it restarts are not lost.
+When that transcript's last prompt is the text the relay typed, the relay posts
+the turn within a couple of seconds. Sessions started before the hooks fall back
+to the tab's screen staying still for 20 seconds. Haiku only makes the calls: the
+relay reads Slack's raw replies from the run's output and parses the messages
+itself, and decides from timestamps what is new and which threads to read, so a
+message can't be reworded, dropped, or handled twice. With a Slack app it could
+use Socket Mode instead and answer in about a second.
+
+If the relay crashes, it is started again within seconds, after a longer wait
+each time, and posts that it restarted and why; messages sent meanwhile are
+still answered. After five crashes in ten minutes it gives up and posts that it
+is down. Stopping it (`stop`, C-M-s, Ctrl-C, closing its tab) is never taken
+for a crash.
+
+A lock file keeps it to one relay at a time. State, the events file and a log
+(`relay.log`, which keeps what the tab shows) live in
+`~/.local/state/slack-relay/`, readable only by you.
+
+```sh
+./sync.sh slack-relay
+```
+
+Its tests run against a tmux server of their own, a temporary home directory
+and stand-ins for Slack, so they never type into your tabs or post anything:
+
+```sh
+node --test test/*.test.js
+```
+
 ## codex-review
 
 Runs Codex as a skeptical, read-only static reviewer of the current branch and

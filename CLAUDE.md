@@ -56,6 +56,13 @@ the `@agent_marker` format in `tmux.conf` shows in the tab. Every
 window-status format in `tmux.conf`, `theme.sh`, `update-colors.sh`, and
 `window-names.sh` expands that marker, so a new one has to as well.
 
+A conversation moved into the background keeps running in a job with no tmux
+of its own, so its hooks have no `TMUX_PANE`. The tab it came from holds a
+parked Claude whose session file names the job (`parkedJobId`, matching the
+job's `jobId` in `~/.claude/sessions/`), and `agent-state.sh` follows that
+link to mark the tab, so a backgrounded conversation still shows as working,
+waiting or done there rather than idle.
+
 "done" means finished and not yet seen: the pane-focus-in hook clears it, and a
 session that finishes in the tab you are looking at never gets it. A pane that
 is no longer running Claude loses its state on the next focus, so a session
@@ -65,7 +72,12 @@ status line show the same state.
 
 Claude Code waits on these hooks, so the script only makes tmux calls: no
 network, and no output, since Claude Code adds `UserPromptSubmit` and
-`SessionStart` output to the conversation. It does nothing outside tmux.
+`SessionStart` output to the conversation. Outside tmux it does only one thing:
+while `bin/slack-relay` runs, the prompt-submit, turn-end and waiting hooks
+append an event naming the session's transcript (and, for a prompt, its text) to `~/.local/state/slack-relay/events.jsonl`,
+which the relay creates and removes only when stopped on purpose, so a crashed
+relay picks up where it left off. That is how the relay knows a request
+it typed into a tab has been answered, even by a session outside tmux.
 
 ## tmux plugins
 
@@ -101,7 +113,7 @@ the script defaults to `$PWD`, as `M-m` does with `pr-ready.sh`.
 
 ## Skills and the scripts they call
 
-Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls `codex-review`, so a change to the JSON the script prints or the flags it accepts has to be mirrored in the skill, and vice versa. `review-loop` is kept here but not installed: `sync.sh` skips the skills listed in `unlinked_skills`, because the repos that use it define their own and a personal copy shows up beside theirs as a second `/review-loop`. `wt` replaces its own tmux pane with `zsh -i -c 'wt <ID>'`, so it relies on `~/.zshrc` defining the `wt` function from `worktree-from-ticket init zsh`. It also clears the "Shaping: ..." tab name that `bin/shape` sets, so a change to that prefix has to be made in both. `bin/shape` only starts Claude with `/shape`; the shaping instructions live in that skill. Document each script in `bin/README.md`.
+Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls `codex-review`, so a change to the JSON the script prints or the flags it accepts has to be mirrored in the skill, and vice versa. `review-loop` is kept here but not installed: `sync.sh` skips the skills listed in `unlinked_skills`, because the repos that use it define their own and a personal copy shows up beside theirs as a second `/review-loop`. `wt` replaces its own tmux pane with `zsh -i -c 'wt <ID>'`, so it relies on `~/.zshrc` defining the `wt` function from `worktree-from-ticket init zsh`. It also clears the "Shaping: ..." tab name that `bin/shape` sets, so a change to that prefix has to be made in both. `bin/shape` only starts Claude with `/shape`; the shaping instructions live in that skill. `bin/slack-relay` reads the `@agent_state` and `@agent_since` pane options that `tmux/agent-state.sh` keeps, to tell the user which tabs need them, so a change to those names or states has to reach it. `slack-relay` reaches Slack through `claude -p` on Haiku with a hook that only allows posting to the DM; keep that hook if its Slack calls change. Its code is in `lib/slack-relay/`, one module per part, and `bin/slack-relay` only picks the command and exports every part for the tests; a module that needs another's name requires it directly, and none may require one that leads back to it, since a cycle hands it an empty module. Its tests, `node --test test/*.test.js`, run against a throwaway tmux server, a temporary HOME and Slack stand-ins; a test must never reach your real tmux server or Slack, so keep any new one inside that setup. Document each script in `bin/README.md`.
 
 `M-o` is the other half of `M-j`: `tmux/window-revive.sh` lists the worktrees
 no tab has open and reopens one with `claude-here`, the same handoff `wtr`

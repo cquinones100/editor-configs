@@ -20,7 +20,7 @@ Usually run with no argument: the ticket comes from this session. A Linear ticke
    - **No argument:** take the first of these that gives an answer, and do not ask for an ID:
      1. A ticket this session created or saved through Linear. If it saved more than one, the most recent.
      2. The one ticket ID (`ABC-123`) the conversation centered on.
-     3. The current branch, from the `On branch` line of a plain `git status`, when it starts with a ticket ID such as `abc-123-…`; uppercase it.
+     3. The current branch, from the first line of `git status --porcelain --branch` (`## <branch>`, then `...<upstream>` if it has one; a detached HEAD has no branch), when it starts with a ticket ID such as `abc-123-…`; uppercase it.
 
      If the answer is a guess between several tickets (more than one saved, or a conversation about two or three), name the most likely one and ask the user to confirm it before going on. Ask which ticket outright only when none of the three gives anything.
 

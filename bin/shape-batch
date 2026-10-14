@@ -13,7 +13,7 @@
 //   shape-batch "ABC-123, ABC-124"
 //   shape-batch < ideas.txt
 //
-// The windows sit right after the current one, in the order given. Focus stays
+// The windows go at the end of the tab list, in the order given. Focus stays
 // where it is. Each tab is named "Shaping: ..." by `shape` itself once it
 // starts, so /wt can later clear that name when it hands the tab over.
 //
@@ -77,16 +77,12 @@ const main = () => {
   const items = [...new Set(inputs.flatMap(itemsFrom).map((item) => item.trim()).filter(Boolean))];
   if (items.length === 0) usage();
 
-  // Each window goes after the previous one so the order matches the input; a
-  // bare `-a` would put every window right after the current one and reverse
-  // them.
-  items.reduce((after, item) => {
+  // Each window goes at the end, so the order matches the input and no open
+  // tab is renumbered: M-1 to M-9 reach tabs by number.
+  items.forEach((item) => {
     const windowId = tmux([
       "new-window",
       "-d",
-      "-a",
-      "-t",
-      after,
       "-n",
       "shaping",
       "-c",
@@ -97,8 +93,7 @@ const main = () => {
     ]);
     tmux(["send-keys", "-t", windowId, `shape ${quoted(item)}`, "Enter"]);
     console.error(`Shaping ${item.length > 60 ? `${item.slice(0, 57)}...` : item} in window ${windowId}`);
-    return windowId;
-  }, tmux(["display-message", "-p", "#{window_id}"]));
+  });
 };
 
 main();

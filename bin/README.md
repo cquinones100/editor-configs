@@ -157,8 +157,8 @@ identifiers or Linear URLs is still split on spaces and commas. With no
 arguments, ideas are read from stdin, one per line, and blank lines are
 skipped. Repeats open once.
 
-The windows go right after the current one, in the order given, and focus stays
-where it is. Each idea is single-quoted before it is typed into its window's
+The windows go at the end of the tab list, in the order given, so no open tab
+is renumbered, and focus stays where it is. Each idea is single-quoted before it is typed into its window's
 shell, so whatever it contains reaches `shape` as text and is never run. Like
 `wt-batch`, it must run inside tmux, from the repo the ideas belong to, and
 needs `shape` installed.
@@ -179,8 +179,8 @@ wt-batch "ABC-123, ABC-124"
 wt-batch ABC-123, https://linear.app/your-workspace/issue/ABC-124/some-title
 ```
 
-The windows are inserted right after the current one, in the order given, each
-named after its ticket. Focus stays where it is, so the tabs fill in behind you
+The windows go at the end of the tab list, in the order given, so no open tab
+is renumbered, each named after its ticket. Focus stays where it is, so the tabs fill in behind you
 while you keep working. Repeated tickets open once, and every ticket is checked
 before any window opens, so a typo in one leaves none of them half-started.
 

@@ -10,7 +10,7 @@
 //   wt-batch "ABC-123, ABC-124"
 //   wt-batch ABC-123, https://linear.app/team/issue/ABC-124/some-title
 //
-// The windows sit right after the current one, in the order given, each named
+// The windows go at the end of the tab list, in the order given, each named
 // after its ticket. Focus stays where it is; the tabs fill in behind you.
 //
 // `wt` is typed into each new window's interactive shell rather than run as the
@@ -69,16 +69,12 @@ const main = () => {
   ];
   if (tickets.length === 0) usage();
 
-  // Each window is inserted after the previous one so the order matches the
-  // command line. A bare `-a` would put every window right after the current
-  // one and reverse them.
-  tickets.reduce((after, ticket) => {
+  // Each window goes at the end, so the order matches the command line and no
+  // open tab is renumbered: M-1 to M-9 reach tabs by number.
+  tickets.forEach((ticket) => {
     const windowId = tmux([
       "new-window",
       "-d",
-      "-a",
-      "-t",
-      after,
       "-n",
       ticket,
       "-c",
@@ -89,8 +85,7 @@ const main = () => {
     ]);
     tmux(["send-keys", "-t", windowId, `wt ${ticket}`, "Enter"]);
     console.error(`Opened ${ticket} in window ${windowId}`);
-    return windowId;
-  }, tmux(["display-message", "-p", "#{window_id}"]));
+  });
 };
 
 main();

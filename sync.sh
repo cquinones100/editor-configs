@@ -118,6 +118,7 @@ sync_tmux() {
   ~/editor-configs/tmux/resurrect-tidy.sh
   ln -sf ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
   ln -sf ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
+  ln -sf ~/editor-configs/tmux/linear-project.sh ~/.config/tmux/linear-project.sh
   ln -sf ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh
   ln -sf ~/editor-configs/tmux/window-revive.sh ~/.config/tmux/window-revive.sh
   ln -sf ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh

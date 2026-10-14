@@ -74,7 +74,9 @@ mkdir "$lock" 2>/dev/null || exit 0
 
   # Same as window-pr.sh: only when the answer changed, so a title shows up in
   # the tab while you are sitting in the window rather than on the next focus.
+  # path-facts.sh's answers carry the old title, so they go first.
   if [ "$title" != "$cached" ]; then
+    rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/tmux-path-facts/"*
     tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r session; do
       "$script_dir/window-names.sh" "$session"
     done

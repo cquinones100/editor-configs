@@ -27,15 +27,15 @@ MAX_LABEL=30
 
 tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' |
   while IFS=, read -r idx path; do
-    whex=$("$script_dir/accent-color.sh" "$path")
+    # Color, label and PR in one cached answer (see path-facts.sh).
+    IFS=$'\t' read -r whex label pr <<<"$("$script_dir/path-facts.sh" "$path")"
 
     # The same label tab-status.sh puts at the front of the second status line.
-    name=$("$script_dir/tab-label.sh" "${session}:${idx}" "$path")
+    name=$("$script_dir/tab-label.sh" "${session}:${idx}" "$path" "$label")
     [ ${#name} -gt $MAX_LABEL ] && name="${name:0:$((MAX_LABEL - 3))}..."
 
     # The PR number goes first because it is the short, stable half: the tab
     # is scannable by number even when the branch name is cut off.
-    pr=$("$script_dir/window-pr.sh" "$path")
     [ -n "$pr" ] && name="#${pr} ${name}"
 
     tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#{E:@agent_marker}#[bg=default,fg=#${whex},nobold]#{?@agent, ,}#W "

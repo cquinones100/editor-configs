@@ -85,7 +85,9 @@ mkdir "$lock" 2>/dev/null || exit 0
   # Only when the answer actually changed, so the common case — still no PR —
   # renames nothing. The next focus would pick this up anyway; this is what
   # makes a number appear while you are sitting in the window watching it.
+  # path-facts.sh's answers carry the old number, so they go first.
   if [ "$found" != "$cached" ]; then
+    rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/tmux-path-facts/"*
     tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r session; do
       "$script_dir/window-names.sh" "$session"
     done

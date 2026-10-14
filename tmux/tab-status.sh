@@ -14,19 +14,21 @@ set -u
 pane="${1:-}" path="${2:-}" command="${3:-}" tty="${4:-}"
 [ -n "$pane" ] || exit 0
 
-script_dir="$(dirname "$0")"
+script_dir="${0%/*}"
 
 # Substrings below count characters, not bytes, only under a UTF-8 locale, and
 # the tmux server's environment may not have one.
 export LC_ALL=en_US.UTF-8
 
 # The same palette update-colors.sh picks from the mode theme.sh last set.
-mode=$(cat "$script_dir/.theme-mode" 2>/dev/null || echo dark)
+mode=dark
+read -r mode 2>/dev/null <"$script_dir/.theme-mode"
 case "$mode" in
   light) FG=colour234; FG_DIM=colour238; FG_BRIGHT=colour232 ;;
   *)     FG=colour248; FG_DIM=colour244; FG_BRIGHT=colour255 ;;
 esac
-hex=$("$script_dir/accent-color.sh" "$path")
+# Color, label and PR in one cached answer (see path-facts.sh).
+IFS=$'\t' read -r hex facts_label pr <<<"$("$script_dir/path-facts.sh" "$path")"
 
 # Claude Code's executable is named after its version, so tmux reports e.g.
 # 2.1.285. Only call it claude when a foreground process in the pane is one
@@ -49,14 +51,13 @@ fi
 
 # Doubled #s so tmux prints what the user or Linear wrote rather than reading
 # it as a format.
-label=$("$script_dir/tab-label.sh" "$pane" "$path")
+label=$("$script_dir/tab-label.sh" "$pane" "$path" "$facts_label")
 if [ -n "$(tmux show -wqv -t "$pane" @tab_name 2>/dev/null)" ]; then
   out="#[fg=$FG_BRIGHT,bold]${label//#/##}#[nobold]"
 else
   out="#[fg=$FG_BRIGHT]${label//#/##}"
 fi
 
-pr=$("$script_dir/window-pr.sh" "$path")
 [ -n "$pr" ] && out="$out  #[fg=$FG] ##$pr"
 
 # Last before the Claude summary, so in a Claude pane "claude" sits next to the
@@ -66,8 +67,8 @@ out="$out  #[fg=#$hex]$command"
 # What the Claude session is doing, as agent-state.sh records it from Claude
 # Code's hooks: the same states the tab's mark shows, in words.
 if [ -n "$claude_pid" ]; then
-  state=$(tmux show -pqv -t "$pane" @agent_state 2>/dev/null)
-  since=$(tmux show -pqv -t "$pane" @agent_since 2>/dev/null)
+  # | between them, since whitespace would collapse an empty state.
+  IFS="|" read -r state since <<<"$(tmux display -p -t "$pane" '#{@agent_state}|#{@agent_since}' 2>/dev/null)"
   took=""
   if [[ $since =~ ^[0-9]+$ ]]; then
     secs=$(( $(date +%s) - since ))
@@ -90,11 +91,20 @@ fi
 # is under three words ("yes", "do it"), which say nothing on their own.
 # Neither file is documented, so if either changes shape the text quietly
 # stops showing and nothing else is affected.
+#
+# Working that out takes seven processes, so it is kept per Claude process
+# and reused only while it is strictly newer than both files. -nt is a shell
+# builtin, and a prompt written in the same second as the answer makes it
+# count as old, so a new prompt is never missed.
 session_file="$HOME/.claude/sessions/$claude_pid.json"
-if [ -n "$claude_pid" ] && [ -f "$session_file" ]; then
-  session=$(jq -r '.sessionId // empty' "$session_file" 2>/dev/null)
+summary_cache="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-tab-status/$claude_pid"
+if [ -n "$claude_pid" ] && [ -f "$session_file" ] && [ "$summary_cache" -nt "$session_file" ] && [ "$summary_cache" -nt "$HOME/.claude/history.jsonl" ]; then
+  IFS= read -r summary <"$summary_cache"
+  [ -n "$summary" ] && out="$out   #[fg=$FG_DIM]${summary//#/##}"
+elif [ -n "$claude_pid" ] && [ -f "$session_file" ]; then
+  # One jq for both: the session ID, then the name you gave it, if any.
+  { IFS= read -r session; IFS= read -r session_title; } <<<"$(jq -r '.sessionId // "", (select(.nameSource != null and .nameSource != "derived") | .name // "")' "$session_file" 2>/dev/null)"
   if [ -n "$session" ]; then
-    session_title=$(jq -r 'select(.nameSource != null and .nameSource != "derived") | .name // empty' "$session_file" 2>/dev/null)
     prompt=$(grep -F "\"sessionId\":\"$session\"" "$HOME/.claude/history.jsonl" 2>/dev/null | tail -1 |
       jq -r '.display // empty' 2>/dev/null | tr '\n\t' '  ' | sed 's/ *$//')
     [ "$(wc -w <<<"$prompt")" -lt 3 ] && prompt=""
@@ -102,6 +112,7 @@ if [ -n "$claude_pid" ] && [ -f "$session_file" ]; then
     [ ${#prompt} -gt $max ] && prompt="${prompt:0:$((max - 3))}..."
     [ -n "$prompt" ] && prompt="\"$prompt\""
     summary="${session_title:+$session_title${prompt:+: }}$prompt"
+    mkdir -p "${summary_cache%/*}" && printf '%s\n' "$summary" >"$summary_cache" 2>/dev/null
     [ -n "$summary" ] && out="$out   #[fg=$FG_DIM]${summary//#/##}"
   fi
 fi

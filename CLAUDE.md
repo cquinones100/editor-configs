@@ -42,6 +42,17 @@ number or ticket title that was not known yet appears a second later rather
 than delaying the focus. Anything else that wants to add to the tab belongs in
 `window-names.sh` under the same rule.
 
+It must not start many processes either. A security agent on this Mac inspects
+every process that starts, and the status line and focus hook used to start
+dozens per window, which made tmux sluggish. `tmux/path-facts.sh` therefore
+answers a directory's color, ticket label and PR from a cache that holds only
+while the branch stays the same (ten minutes once there is a PR, one minute
+before), and `window-pr.sh` and `ticket-title.sh` clear that cache when they
+learn something new. `tab-status.sh` keeps a Claude pane's session name and
+prompt the same way, until the session file or prompt history changes. Anything that
+depends only on the directory and its branch belongs there, and should be read
+from there.
+
 ## Claude session state in tmux
 
 `tmux/agent-state.sh` records what each Claude session in tmux is doing, from

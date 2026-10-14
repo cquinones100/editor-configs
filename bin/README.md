@@ -128,8 +128,9 @@ from idea to PR.
 - Fetches first and warns when the local main is behind its upstream, because
   Claude reads the files on disk. It never pulls.
 - Inside tmux, names the tab "Shaping: <first words>" through the same
-  `@tab_name` option `M-n` sets. `/wt` clears that name when it takes the tab
-  over, and leaves a name you set yourself alone.
+  `@tab_name` option `M-n` sets. `/wt` clears that name, or one you set
+  yourself, when it takes the tab over, so the tab is named for the ticket
+  like every other ticket tab.
 - The team to create tickets in comes from `linearTeam` in
   `~/.config/worktree-from-ticket/config.json`, next to the API key, with
   optional default labels in `linearLabels`. Without `linearTeam`, Claude asks.

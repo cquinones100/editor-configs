@@ -56,6 +56,12 @@ const fail = (message) => {
 // new tmux panes and splits inherit it; if claude ran inside the script the cd
 // could only happen after it exited.
 //
+// Inside tmux it renames the tabs once it has cd'd. tmux only does that on a
+// pane focus, and the pane `wt` runs in already has the focus, so without this
+// the tab would keep its old name until you switched away and back. The new
+// name follows tmux/tab-label.sh: the ticket and its title, read from the
+// branch.
+//
 // The path comes back via --cd-file rather than stdout because $( ) would make
 // stdout a pipe, and anything interactive downstream would see a non-TTY.
 //
@@ -77,6 +83,9 @@ const shellFunction = () => `wt() {
     return 1
   fi
   cd "$dir" || return 1
+  if [ -n "$TMUX_PANE" ]; then
+    ~/.config/tmux/window-names.sh "$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}')"
+  fi
   claude "$prompt"
 }`;
 

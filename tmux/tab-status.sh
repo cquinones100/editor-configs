@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 # Prints the second status line for the focused pane: its window's label (the
-# same one in the tab, but not cut short), the PR, the command, and in a Claude
-# pane the session's title and last prompt.
+# same one in the tab, but not cut short), the PR and whether it has every
+# commit made here, the command, and in a Claude pane the session's title and
+# last prompt.
 #
 # Usage: tab-status.sh <pane_id> <path> <command> <tty>
 #
@@ -58,7 +59,19 @@ else
   out="#[fg=$FG_BRIGHT]${label//#/##}"
 fi
 
-[ -n "$pr" ] && out="$out  #[fg=$FG] ##$pr"
+if [ -n "$pr" ]; then
+  out="$out  #[fg=$FG] ##$pr"
+  # Whether the PR has everything committed here: the commits ahead of the
+  # branch's upstream, or of origin's copy of it when no upstream is set.
+  # Counted against what was last fetched or pushed, so it never touches the
+  # network, and in one git call when there is an upstream.
+  ahead=$(git -C "$path" --no-optional-locks rev-list --count '@{upstream}..HEAD' 2>/dev/null) ||
+    ahead=$(git -C "$path" --no-optional-locks rev-list --count "origin/$(git -C "$path" branch --show-current)..HEAD" 2>/dev/null)
+  if [[ $ahead =~ ^[0-9]+$ ]]; then
+    if (( ahead > 0 )); then out="$out #[fg=colour220]↑$ahead to push"
+    else out="$out #[fg=$FG_DIM]pushed"; fi
+  fi
+fi
 
 # Last before the Claude summary, so in a Claude pane "claude" sits next to the
 # title and prompt it introduces.

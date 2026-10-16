@@ -111,6 +111,7 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/palette.sh ~/.config/tmux/palette.sh
   ln -sf ~/editor-configs/tmux/pr-ready.sh ~/.config/tmux/pr-ready.sh
   ln -sf ~/editor-configs/tmux/pr-open.zsh ~/.config/tmux/pr-open.zsh
+  ln -sf ~/editor-configs/tmux/ticket-open.zsh ~/.config/tmux/ticket-open.zsh
   ln -sf ~/editor-configs/tmux/wt-open.zsh ~/.config/tmux/wt-open.zsh
   ln -sf ~/editor-configs/tmux/agent-state.sh ~/.config/tmux/agent-state.sh
   ln -sf ~/editor-configs/tmux/resurrect-tidy.sh ~/.config/tmux/resurrect-tidy.sh

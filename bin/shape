@@ -10,7 +10,7 @@
 // this only gets the session started in the right place.
 //
 //   shape "people can't tell which phase is active"
-//   shape ABC-123        refine an existing ticket
+//   shape ABC-123        an existing ticket: review it, or refine it
 //
 // Runs in the repository's main checkout, even when called from a worktree,
 // since a ticket being shaped has no branch yet. Fetches first and warns when

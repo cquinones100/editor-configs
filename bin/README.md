@@ -120,7 +120,10 @@ It starts Claude with the `/shape` skill, which holds the instructions, so
 code before asking anything, checks Linear for tickets that already cover the
 idea, drafts the ticket in the layout the team's recent tickets use, and writes
 it to Linear only once you approve the draft. It does not touch the code.
-Afterwards `/wt <ID>` hands the same tab to `wt`, so one tab carries a ticket
+Given an existing ticket, it reads it first and asks whether to run the
+repository's `/review-loop` on it in ticket mode (Codex checks the ticket
+against the code), or keep shaping it; a review's findings can then be folded
+into the ticket, again only once you approve. Afterwards `/wt <ID>` hands the same tab to `wt`, so one tab carries a ticket
 from idea to PR.
 
 - Runs in the repository's main checkout, even when called from a worktree,

@@ -1,6 +1,6 @@
 ---
 name: shape
-description: Shape a Linear ticket with the user. Read the code first, check Linear for tickets that already cover the work, draft the ticket in the team's usual form, and create or update it once the user approves. Hands off to /wt afterwards.
+description: Shape a Linear ticket with the user. Read the code first, check Linear for tickets that already cover the work, draft the ticket in the team's usual form, and create or update it once the user approves. Given an existing ticket, asks whether to run a review loop on it or keep shaping it. Hands off to /wt afterwards.
 disable-model-invocation: true
 ---
 
@@ -8,13 +8,22 @@ disable-model-invocation: true
 
 Turn a rough idea into a Linear ticket someone can pick up and build: clear on the problem, grounded in the code as it is, honest about scope. The `shape` command in `bin/` starts a session with this skill; it also works in a session that is already running.
 
-Arguments: a description of the problem or idea, or a Linear ticket ID or URL to refine an existing ticket. With neither, ask what the ticket is about.
+Arguments: a description of the problem or idea, or a Linear ticket ID or URL (`ABC-123`, or a link with `/issue/ABC-123/` in it) to work on an existing ticket. With neither, ask what the ticket is about. Given a ticket, read it first and then ask what to do with it (see "Given a ticket" below).
 
 ## Ground rules
 
 - Read only. Do not edit, create, or delete files in the repository, and do not commit, branch, or push. Shaping ends with a ticket, not a change; `/wt` starts the work.
 - Answer what the code can answer yourself. Ask the user about intent, priority, and scope, not about how the code works today.
 - Nothing is written to Linear until the user approves a draft.
+
+## Given a ticket
+
+When the argument names an existing ticket, fetch it and its comments with the Linear connector before anything else. If it doesn't exist or can't be read, say so and stop. Then give a two-line summary of where it stands (its title, state, and whether it already has a problem statement, an approach and acceptance criteria) and ask which of these to do, with `AskUserQuestion`:
+
+- **Run a review loop on it.** Hand the ticket to the repository's `/review-loop` skill in ticket mode, which has Codex review the ticket's text against the code as it is (see that skill and its `references/ticket-mode.md`). Use it when the ticket looks ready and you want it checked before anyone builds it. If this repository has no `review-loop` skill, say so and continue shaping instead. When the loop finishes, show its findings and ask whether to fold them into the ticket by continuing below from step 5; nothing is written to Linear without approval, as always.
+- **Continue shaping it.** Carry on with the steps below, refining this ticket rather than drafting a new one. Use it when the ticket is still rough, or the user wants to change its scope.
+
+Put the one the ticket's state suggests first, marked as recommended: a review loop for a ticket that already reads as complete, shaping for one that doesn't.
 
 ## Steps
 

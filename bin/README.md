@@ -413,6 +413,53 @@ child process can ask tmux to do that.
   only against the repositories you have windows open in, so the offline cases
   stay offline.
 
+## wt-revive
+
+The way back to a worktree whose tab you closed. Lists the worktrees no tmux
+pane has open, and opens a tab in the one you pick, resuming its Claude with
+`claude-here`, as `wtr` does.
+
+```
+wt-revive          fzf picker, from the current directory's repository
+wt-revive <dir>    the same, starting from <dir>'s repository
+wt-revive --list   print the rows, open nothing
+```
+
+The repositories are the one you are in, every open pane's, and every one a
+Claude session ran in over the last two weeks, so a repository whose tabs are
+all closed still counts. Each row is a worktree of one of them: its repository
+and branch, how long since it was last used, and the last prompt Claude was
+given there that says something ("yes" and "go ahead" don't), most recent
+first. Worktrees whose directory is gone are left out.
+
+What each transcript says, its last directory and last prompt, is kept in
+`~/.cache/wt-revive/index.json` (readable only by you, since it holds prompts)
+against the file's size and modified time, along with the repository each
+directory belongs to. A press reads only the transcripts that changed since the
+last one, so it takes about a quarter of a second rather than the three the
+version that read the end of every transcript each time took.
+
+### Setup
+
+```sh
+./sync.sh wt-revive
+./sync.sh tmux
+```
+
+`M-o` in the tmux config opens it in a popup through `tmux/window-revive.sh`,
+which puts node on the PATH (the tmux server has none, as with `wt-jump`) and
+holds the popup open when there is an error or nothing to reopen.
+
+### Notes
+
+- A worktree counts as open when any pane is in it or below it.
+- The session shown is the newest one that ended in the worktree or a
+  directory below it. A session that started elsewhere and moved into the
+  worktree belongs to the worktree.
+- A worktree with any tab still in it isn't listed, the main checkout
+  included. A closed tab that shared its directory with other tabs is reopened
+  by hand: a new tab there and `claude --resume` to pick the session.
+
 ## worktree-done
 
 Reads every worktree in the repo, asks Linear what state each one's ticket is

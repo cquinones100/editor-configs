@@ -114,14 +114,20 @@ the script defaults to `$PWD`, as `M-m` does with `pr-ready.sh`.
 
 Skills in `claude/skills/` may depend on a script in `bin/`. `review-loop` calls `codex-review`, so a change to the JSON the script prints or the flags it accepts has to be mirrored in the skill, and vice versa. `review-loop` is kept here but not installed: `sync.sh` skips the skills listed in `unlinked_skills`, because the repos that use it define their own and a personal copy shows up beside theirs as a second `/review-loop`. `wt` replaces its own tmux pane with `zsh -i -c 'wt <ID>'`, so it relies on `~/.zshrc` defining the `wt` function from `worktree-from-ticket init zsh`. It also clears the tab's `@tab_name` (the "Shaping: ..." name `bin/shape` sets, or one set with `M-n`), and the `wt` function renames the tabs once it has moved into the worktree, so the tab takes the ticket's name from `tmux/tab-label.sh` straight away rather than on the next focus. `bin/shape` only starts Claude with `/shape`; the shaping instructions live in that skill. Document each script in `bin/README.md`.
 
-`M-o` is the other half of `M-j`: `tmux/window-revive.sh` lists the worktrees
-no tab has open and reopens one with `claude-here`, the same handoff `wtr`
-makes, so a change to how `claude-here` resumes a directory reaches both. It
-finds a worktree's last session from the `cwd` in Claude Code's transcripts.
+`M-o` is the other half of `M-j`: `bin/wt-revive`, run through the
+`tmux/window-revive.sh` wrapper, lists the worktrees no tab has open and
+reopens one with `claude-here`, the same handoff `wtr` makes, so a change to
+how `claude-here` resumes a directory reaches both. It finds a worktree's last
+session from the `cwd` in Claude Code's transcripts, and keeps what each
+transcript says in `~/.cache/wt-revive/index.json` against its size and
+modified time, so a press reads only the transcripts that changed. Reading the
+end of every transcript on every press, one pipeline each, started about a
+thousand processes and took three seconds.
 
 The tmux config depends on `bin/` too: the `M-j` binding runs
 `tmux/window-jump.sh`, which runs `~/.local/bin/wt-jump`, so that binding needs
-both `./sync.sh tmux` and `./sync.sh wt-jump`. The dependency runs the other
+both `./sync.sh tmux` and `./sync.sh wt-jump`, as `M-o` needs
+`./sync.sh wt-revive`. The dependency runs the other
 way as well: `wt-jump` builds its picker rows from `tmux/tab-status.sh`, so a
 change to what the second status line prints shows up in the picker, and the
 line has to stay fast enough to run for every window at once.

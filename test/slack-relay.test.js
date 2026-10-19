@@ -1389,6 +1389,18 @@ test("Claude started under a Node wrapper, as claude-here starts it, is still th
   }
 });
 
+test("a tab goes by its whole name, not the one cut short to fit the tab bar", async () => {
+  const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", "-n", "#1234 ABC-12: Filter and pag...", fakeClaude);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  try {
+    assert.equal(relay.claudeTabs().find((t) => t.id === window).name, "#1234 ABC-12: Filter and pag...", "the tab's own name until window-names.sh has run");
+    tmux("set", "-w", "-t", window, "@tab_label", "#1234 ABC-12: Filter and page the idea list in place");
+    assert.equal(relay.claudeTabs().find((t) => t.id === window).name, "#1234 ABC-12: Filter and page the idea list in place");
+  } finally {
+    tmux("kill-window", "-t", window);
+  }
+});
+
 test("transcriptFor keeps its answer until the session file changes", () => {
   const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", fakeClaude);
   const panePid = tmux("display", "-p", "-t", window, "#{pane_pid}");

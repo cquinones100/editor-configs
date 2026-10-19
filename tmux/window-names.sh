@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 # Names and colors every window tab in a session. The name is tab-label.sh's
-# label, cut to fit, with the PR number in front when there is one.
+# label, cut to fit, with the PR number in front when there is one. The same
+# name uncut goes in the window's @tab_label, for bin/slack-relay, which has
+# the room to show it.
 #
 # Usage: window-names.sh <session>
 #
@@ -32,12 +34,16 @@ tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' |
 
     # The same label tab-status.sh puts at the front of the second status line.
     name=$("$script_dir/tab-label.sh" "${session}:${idx}" "$path" "$label")
+    full=$name
     [ ${#name} -gt $MAX_LABEL ] && name="${name:0:$((MAX_LABEL - 3))}..."
 
     # The PR number goes first because it is the short, stable half: the tab
     # is scannable by number even when the branch name is cut off.
-    [ -n "$pr" ] && name="#${pr} ${name}"
+    [ -n "$pr" ] && name="#${pr} ${name}" && full="#${pr} ${full}"
 
-    tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#{E:@agent_marker}#[bg=default,fg=#${whex},nobold]#{?@agent, ,}#W "
-    tmux rename-window -t "${session}:${idx}" "$name"
+    # One tmux call for all three, since this runs for every window on every
+    # pane focus.
+    tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#{E:@agent_marker}#[bg=default,fg=#${whex},nobold]#{?@agent, ,}#W " \; \
+      rename-window -t "${session}:${idx}" "$name" \; \
+      setw -t "${session}:${idx}" @tab_label "$full"
   done

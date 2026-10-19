@@ -30,7 +30,9 @@ only ever read, so it is free to change.
 `wt-jump` reads that prefix back to find PRs, so it stays at the front. The
 label is the name set with `M-n` (the window's `@tab_name`), else the Linear
 ticket and its title when the branch names one Linear confirms, else
-`accent-color.sh --name`. The second status line, `tmux/tab-status.sh`, starts
+`accent-color.sh --name`. The same name uncut, PR prefix included, goes in
+the window's `@tab_label`, which `bin/slack-relay` shows in Slack in place of
+the cut one. The second status line, `tmux/tab-status.sh`, starts
 with the same label uncut, so any change to what a window is called belongs in
 `tab-label.sh` and reaches both.
 

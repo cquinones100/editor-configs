@@ -47,81 +47,75 @@ gh api graphql -F owner=<owner> -F repo=<repo> -F number=<number> \
   --jq '.data.repository.pullRequest | if .autoMergeRequest or .mergeQueueEntry then "queued" else "unqueued" end'
 ```
 
-If it prints `queued`, skip the rest of this section and start watching. If it prints `unqueued`, queue it:
+If it prints `queued`, skip the rest of this section and start watching. If it prints `unqueued`, read how the repo merges before trying anything, since that decides the command:
 
 ```
-gh pr merge <number> --auto --match-head-commit <headRefOid>
+gh api graphql -F owner=<owner> -F repo=<repo> -F base=<baseRefName> \
+  -f query='query($owner: String!, $repo: String!, $base: String!) { repository(owner: $owner, name: $repo) { autoMergeAllowed mergeQueue(branch: $base) { id } } }' \
+  --jq '.data.repository | "auto-merge=\(.autoMergeAllowed) queue=\(.mergeQueue != null)"'
 ```
 
-`--match-head-commit` makes GitHub refuse if the branch moved since you read it, so what gets queued is what was checked. On a branch that requires a merge queue this needs no merge strategy: gh enables auto-merge if required checks are still running, or adds the PR to the queue if they have passed. Without a merge queue gh refuses until it is given one. Then read the methods the repo allows:
+(`baseRefName` comes from `gh pr view <number> --json baseRefName`.) Then:
+
+- **Auto-merge allowed** (`auto-merge=true`): `gh pr merge <number> --auto --match-head-commit <headRefOid>`. GitHub queues or merges the PR itself once its checks pass. Then start watching.
+- **Auto-merge off, with a merge queue** (`auto-merge=false queue=true`): wait until the PR is ready (below), then add it to the queue directly. Don't use `gh pr merge` here. gh chooses between queuing and auto-merge from GitHub's `mergeStateStatus`, which GitHub works out lazily and often reports as `UNKNOWN` or `BLOCKED` for a PR that can be queued, so gh asks for auto-merge and the repo refuses.
+- **Auto-merge off, no merge queue** (`auto-merge=false queue=false`): wait until the PR is ready (below), then `gh pr merge <number> --match-head-commit <headRefOid>` without `--auto`.
+
+`--match-head-commit` (and `expectedHeadOid` below) make GitHub refuse if the branch moved since you read it, so what gets queued is what was checked. Without a merge queue, gh needs a merge method: read the ones the repo allows,
 
 ```
 gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed
 ```
 
-If exactly one is allowed, rerun with its flag (`--squash`, `--merge`, or `--rebase`). If more than one is, ask the user which to use. Keep that flag for any later `gh pr merge` in this run. Never pass `--admin`, which skips the queue and the required checks, and never pass `--delete-branch`.
+and if exactly one is allowed, pass its flag (`--squash`, `--merge`, or `--rebase`). If more than one is, ask the user which to use. Keep that flag for any later `gh pr merge` in this run. Never pass `--admin`, which skips the queue and the required checks, and never pass `--delete-branch`.
 
-### When the repo does not allow auto-merge
+### Waiting until the PR is ready
 
-If `gh pr merge` fails with `Auto merge is not allowed for this repository`, the repo has auto-merge turned off in its settings. A merge queue can still be in use: gh only asks for auto-merge when GitHub does not yet consider the PR mergeable, and once it does, the same command adds the PR to the queue, or merges it outright where there is no queue. So do auto-merge's job yourself: wait until GitHub calls the PR mergeable, then run the command again without `--auto`.
-
-Wait on GitHub's own merge state, not on `gh pr checks --watch`. That command stops as soon as every check reported so far has finished, and a required check that has not been created yet does not count, so it can say "passed" while GitHub still reports the PR as `BLOCKED`. Retrying then fails with the same auto-merge error.
-
-Start this with the Bash tool's `run_in_background`, as with the watch below, so the conversation is not blocked:
+When the repo doesn't allow auto-merge, do its job: wait until the required checks have passed and the PR has no conflicts, judged from the checks themselves rather than `mergeStateStatus`. Start this with the Bash tool's `run_in_background`, as with the watch below, so the conversation is not blocked:
 
 ```
-stuck=0
+settled=0
 while :; do
-  pr_state=$(gh pr view <number> --json state,mergeStateStatus,statusCheckRollup \
-    --jq '[.state, .mergeStateStatus, ([.statusCheckRollup[] | select((.status // "COMPLETED") != "COMPLETED" or .state == "PENDING" or .state == "EXPECTED")] | length)] | @tsv') \
-    || { sleep 30; continue; }
-  IFS=$'\t' read -r state merge running <<<"$pr_state"
-  case "$state" in
-    MERGED) echo merged; exit 0 ;;
-    CLOSED) echo closed; exit 0 ;;
-  esac
-  if gh pr checks <number> --required 2>/dev/null | awk -F'\t' '$2 == "fail"' | grep -q .; then
-    echo failed; exit 0
-  fi
-  case "$merge" in
-    CLEAN|HAS_HOOKS|UNSTABLE|BEHIND) echo ready; exit 0 ;;
-    DIRTY) echo conflicts; exit 0 ;;
-    BLOCKED)
-      if [ "$running" -eq 0 ]; then
-        stuck=$((stuck + 1)); [ "$stuck" -ge 20 ] && { echo stuck; exit 0; }
-      else
-        stuck=0
-      fi ;;
-    *) stuck=0 ;;
+  info=$(gh pr view <number> --json state,mergeable --jq '[.state, .mergeable] | @tsv') || { sleep 30; continue; }
+  IFS=$'\t' read -r state mergeable <<<"$info"
+  case "$state" in MERGED) echo merged; exit 0 ;; CLOSED) echo closed; exit 0 ;; esac
+  [ "$mergeable" = CONFLICTING ] && { echo conflicts; exit 0; }
+  # Each required check's bucket. gh exits non-zero while checks fail or are
+  # pending, so only no output at all is an error; a repo with no required
+  # checks says so on stderr.
+  out=$(gh pr checks <number> --required --json bucket --jq 'if length == 0 then "none" else ([.[].bucket] | unique | join(" ")) end' 2>&1)
+  case "$out" in *"no required checks"*) out=none ;; esac
+  [ -z "$out" ] && { settled=0; sleep 30; continue; }
+  case " $out " in *" fail "*|*" cancel "*) echo failed; exit 0 ;; esac
+  case " $out " in
+    *" pending "*) settled=0 ;;
+    *) settled=$((settled + 1)); [ "$settled" -ge 2 ] && { echo ready; exit 0; } ;;
   esac
   sleep 30
 done
 ```
 
-`BEHIND` counts as ready because a merge queue brings the branch up to date itself; if the repo has no queue and insists on an up-to-date branch, the merge below fails and says so. A failed request is retried rather than read as an answer. `BLOCKED` with nothing still running is given ten minutes, since a required check can take that long to appear at all, before it is treated as stuck.
+Ready has to hold twice in a row, a minute apart, because a required check can be created late. A failed request is retried rather than read as an answer.
 
 When it exits:
 
-- `ready`: run `gh pr merge <number> --match-head-commit <headRefOid>` again, with the merge method flag if one was needed above, and without `--auto`. Then start watching. If it fails with the same auto-merge error, GitHub changed its mind between the two calls: start the wait again, up to three times in all, then report it as any other `gh pr merge` failure.
+- `ready`: with a merge queue, add the PR to it. `expectedHeadOid` does what `--match-head-commit` does:
+
+  ```
+  gh api graphql -F id="$(gh pr view <number> --json id --jq .id)" -F oid=<headRefOid> \
+    -f query='mutation($id: ID!, $oid: GitObjectID!) { enqueuePullRequest(input: {pullRequestId: $id, expectedHeadOid: $oid}) { mergeQueueEntry { position state } } }'
+  ```
+
+  The user's `enforce-gh-api-readonly.sh` hook blocks every other GraphQL mutation and lets this one through on its own, so send it alone. Never call `enablePullRequestAutoMerge`: the repo has turned auto-merge off on purpose. Without a merge queue, run `gh pr merge` as above. Then start watching.
+
+  If GitHub refuses because a required check hasn't passed after all (one that appeared late), start the wait again, up to three times in all. If it refuses because of a required review or anything else that isn't a check, reply `queue-and-clean: fail: <GitHub's error message>`. If the branch moved while you waited, the head check makes it refuse; that is the right outcome, since the new commits are not the ones that were checked: report it as any other failure.
 - `failed`: required checks failed. Go to "Fixing".
 - `conflicts`: the PR has merge conflicts. Go to "Fixing".
-- `stuck`: reply `queue-and-clean: fail: PR is blocked by something other than checks, such as a required review` and stop.
 - `merged` or `closed`: someone else finished it. Go to cleanup for `merged`; reply `queue-and-clean: fail: PR closed without merging` for `closed`.
-
-If `gh pr merge` still asks for auto-merge after the third wait, and the repo has a merge queue, add the PR to the queue directly. `expectedHeadOid` does what `--match-head-commit` does:
-
-```
-gh api graphql -F id="$(gh pr view <number> --json id --jq .id)" -F oid=<headRefOid> \
-  -f query='mutation($id: ID!, $oid: GitObjectID!) { enqueuePullRequest(input: {pullRequestId: $id, expectedHeadOid: $oid}) { mergeQueueEntry { position state } } }'
-```
-
-The user's `enforce-gh-api-readonly.sh` hook blocks every other GraphQL mutation and lets this one through on its own, so send it alone. Never call `enablePullRequestAutoMerge`: the repo has turned auto-merge off on purpose.
-
-If the branch moved while you waited, `--match-head-commit` makes the merge fail. That is the right outcome, since the new commits are not the ones that were checked: report it as any other `gh pr merge` failure.
 
 ### Any other failure
 
-If `gh pr merge` fails because of a merge conflict or a failing required check, go to "Fixing". If it fails for any other reason, such as a missing review, reply `queue-and-clean: fail: gh pr merge: <its error message>` and stop.
+If `gh pr merge` or the queue mutation fails because of a merge conflict or a failing required check, go to "Fixing". If it fails for any other reason, such as a missing review, reply `queue-and-clean: fail: <the command>: <its error message>` and stop.
 
 Once it succeeds, start watching. Do not check the state yourself first: right after queuing, GitHub can briefly show neither auto-merge nor a queue entry, and the watch already allows for that. It also covers a PR that GitHub merged straight away because nothing was left to wait for.
 

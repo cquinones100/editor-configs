@@ -104,26 +104,31 @@ fi
 
 [ -n "${TMUX:-}${TMUX_PANE:-}" ] || exit 0
 
-# A pane still running Claude: its command is Claude Code's executable, which
-# is named after its version. A pane that has gone back to a shell keeps no
-# state, so a session that died without its SessionEnd hook does not leave a
-# mark behind.
-runs_claude() { [[ $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; }
+source "${BASH_SOURCE[0]%/*}/claude-pane.sh"
+
+# A pane still running Claude, from its command and terminal. A pane that has
+# gone back to a shell keeps no state, so a session that died without its
+# SessionEnd hook does not leave a mark behind. Claude Code's own executable is
+# taken on its name, without a process; only a node pane, which may be Claude
+# under claude-here, is looked at more closely.
+runs_claude() {
+  [[ $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || claude_pid "$1" "$2" >/dev/null
+}
 
 # Recomputes @agent for one window from its panes, dropping the state of any
 # pane no longer running Claude.
 refresh() {
-  local window=$1 best="" rank=0 pane state command r
-  while IFS=$'\t' read -r pane state command; do
+  local window=$1 best="" rank=0 pane state command tty r
+  while IFS=$'\t' read -r pane state command tty; do
     [ -n "$state" ] || continue
-    if ! runs_claude "$command"; then
+    if ! runs_claude "$command" "$tty"; then
       tmux set -pu -t "$pane" @agent_state 2>/dev/null
       tmux set -pu -t "$pane" @agent_since 2>/dev/null
       continue
     fi
     case $state in waiting) r=3 ;; done) r=2 ;; working) r=1 ;; *) r=0 ;; esac
     (( r > rank )) && { rank=$r; best=$state; }
-  done < <(tmux list-panes -t "$window" -F $'#{pane_id}\t#{@agent_state}\t#{pane_current_command}' 2>/dev/null)
+  done < <(tmux list-panes -t "$window" -F $'#{pane_id}\t#{@agent_state}\t#{pane_current_command}\t#{pane_tty}' 2>/dev/null)
   if [ -n "$best" ]; then
     tmux set -w -t "$window" @agent "$best"
   else
@@ -194,13 +199,15 @@ case "${1:-}" in
 
   next)
     # Everything that needs you, in order: waiting first, then done, oldest
-    # first within each. Each press goes to the entry after the current tab and
+    # first within each. A node pane counts too, as Claude may be running under
+    # claude-here there; one that isn't loses its state when it is next focused.
+    # Each press goes to the entry after the current tab and
     # wraps at the end, so pressing it repeatedly walks the whole list. A tab
     # stays waiting after a visit until you answer it, so it has to be a walk:
     # "the most urgent tab" would keep coming back to the same one.
     here=$(tmux display -p '#{window_id}')
     list=$(tmux list-panes -a -F $'#{@agent_state}\t#{@agent_since}\t#{window_id}\t#{pane_id}\t#{session_name}\t#{pane_current_command}' |
-      awk -F'\t' '($1 == "waiting" || $1 == "done") && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ {
+      awk -F'\t' '($1 == "waiting" || $1 == "done") && ($6 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ || $6 == "node") {
         print ($1 == "waiting" ? 0 : 1) "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' |
       sort -t$'\t' -k1,1n -k2,2n)
     if [ -z "$list" ]; then

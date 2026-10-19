@@ -1350,6 +1350,45 @@ test("a tab with no state is checked for a dialog every few seconds, not every s
   tmux("kill-window", "-t", window);
 });
 
+test("Claude started under a Node wrapper, as claude-here starts it, is still the tab's Claude", async () => {
+  // tmux reports such a pane as node; Claude is the wrapper's child.
+  const wrapper = path.join(tmp, "wrapper.js");
+  fs.writeFileSync(wrapper, `require("node:child_process").spawn(${JSON.stringify(fakeClaude)}, { stdio: "inherit" }).on("exit", () => process.exit());`);
+  const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", `${process.execPath} ${wrapper}`);
+  const plain = tmux("new-window", "-d", "-P", "-F", "#{window_id}", `${process.execPath} -e "setInterval(() => {}, 1000)"`);
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  const [pane, tty] = tmux("display", "-p", "-t", window, "#{pane_id}\t#{pane_tty}").split("\t");
+  const claudePid = execFileSync("ps", ["-t", tty.replace("/dev/", ""), "-o", "pid=,comm="], { encoding: "utf8" })
+    .split("\n")
+    .find((line) => line.trim().endsWith("2.1.0"))
+    .trim()
+    .split(/\s+/)[0];
+  const sessionFile = path.join(home, ".claude/sessions", `${claudePid}.json`);
+  fs.writeFileSync(sessionFile, JSON.stringify({ pid: Number(claudePid), sessionId: "wrapped" }));
+  fs.writeFileSync(path.join(home, ".claude/projects/-work/wrapped.jsonl"), "");
+  const hook = path.join(__dirname, "../tmux/agent-state.sh");
+  const env = { ...process.env, HOME: home, TMUX_PANE: pane };
+  try {
+    assert.equal(tmux("display", "-p", "-t", window, "#{pane_current_command}"), "node");
+    const tab = relay.claudeTabs().find((t) => t.id === window);
+    assert.equal(tab?.pane, pane);
+    assert.equal(relay.claudeTabs().find((t) => t.id === plain), undefined, "a node program with no Claude isn't a tab");
+    assert.equal(relay.transcriptFor(window), path.join(home, ".claude/projects/-work/wrapped.jsonl"));
+
+    execFileSync("bash", [hook, "set", "working"], { env });
+    assert.equal(tmux("display", "-p", "-t", window, "#{@agent}"), "working", "agent-state.sh keeps its state");
+
+    // Claude gone from it, and the next change in the window drops its state.
+    fs.rmSync(sessionFile);
+    tmux("set", "-p", "-t", pane, "@agent_state", "waiting");
+    execFileSync("bash", [hook, "seen", window], { env });
+    assert.equal(tmux("display", "-p", "-t", window, "#{@agent_state}"), "");
+  } finally {
+    fs.rmSync(sessionFile, { force: true });
+    [window, plain].forEach((id) => tmux("kill-window", "-t", id));
+  }
+});
+
 test("transcriptFor keeps its answer until the session file changes", () => {
   const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", fakeClaude);
   const panePid = tmux("display", "-p", "-t", window, "#{pane_pid}");

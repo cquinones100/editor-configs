@@ -16,6 +16,7 @@ pane="${1:-}" path="${2:-}" command="${3:-}" tty="${4:-}"
 [ -n "$pane" ] || exit 0
 
 script_dir="${0%/*}"
+source "$script_dir/claude-pane.sh"
 
 # Substrings below count characters, not bytes, only under a UTF-8 locale, and
 # the tmux server's environment may not have one.
@@ -31,24 +32,10 @@ esac
 # Color, label and PR in one cached answer (see path-facts.sh).
 IFS=$'\t' read -r hex facts_label pr <<<"$("$script_dir/path-facts.sh" "$path")"
 
-# Claude Code's executable is named after its version, so tmux reports e.g.
-# 2.1.285. Only call it claude when a foreground process in the pane is one
-# Claude Code itself registered: it writes ~/.claude/sessions/<pid>.json for
-# each of its processes and nothing else writes there, so an unrelated program
-# that happens to be named like a version keeps its name. Checked this way
-# rather than with lsof on the executable, which is as certain but costs a
-# third of a second a pane and saturates the CPU when wt-jump asks for every
-# window at once.
-claude_pid=""
-if [[ "$command" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  for pid in $(ps -t "${tty#/dev/}" -o pid=,stat= | awk '$2 ~ /\+/ {print $1}'); do
-    if [ -f "$HOME/.claude/sessions/$pid.json" ]; then
-      claude_pid=$pid
-      command=claude
-      break
-    fi
-  done
-fi
+# The pane is called claude only when Claude Code is in its foreground (see
+# claude-pane.sh), so an unrelated program named like a version, or any other
+# node program, keeps its name.
+claude_pid=$(claude_pid "$command" "$tty") && command=claude
 
 # Doubled #s so tmux prints what the user or Linear wrote rather than reading
 # it as a format.

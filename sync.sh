@@ -115,6 +115,7 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/wt-open.zsh ~/.config/tmux/wt-open.zsh
   ln -sf ~/editor-configs/tmux/slack-relay-open.sh ~/.config/tmux/slack-relay-open.sh
   ln -sf ~/editor-configs/tmux/agent-state.sh ~/.config/tmux/agent-state.sh
+  ln -sf ~/editor-configs/tmux/claude-pane.sh ~/.config/tmux/claude-pane.sh
   ln -sf ~/editor-configs/tmux/resurrect-tidy.sh ~/.config/tmux/resurrect-tidy.sh
   # Saves made before resurrect's post-save hook ran the tidy-up are handled once here.
   ~/editor-configs/tmux/resurrect-tidy.sh

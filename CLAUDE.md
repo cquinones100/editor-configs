@@ -74,6 +74,14 @@ job's `jobId` in `~/.claude/sessions/`), and `agent-state.sh` follows that
 link to mark the tab, so a backgrounded conversation still shows as working,
 waiting or done there rather than idle.
 
+Whether a pane runs Claude is decided in `tmux/claude-pane.sh`, which
+`agent-state.sh` and `tab-status.sh` source, and again in
+`lib/slack-relay/tabs.js`, so a change to one belongs in the other. tmux names
+a pane after its foreground program: Claude Code's executable is named after
+its version, but Claude started by `claude-here` runs as a Node script's child
+and the pane reads `node`. A pane counts as Claude when a foreground process on
+its terminal has a session file in `~/.claude/sessions/`.
+
 "done" means finished and not yet seen: the pane-focus-in hook clears it, and a
 session that finishes in the tab you are looking at never gets it. A pane that
 is no longer running Claude loses its state on the next focus, so a session

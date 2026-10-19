@@ -168,33 +168,15 @@ When it exits:
 
 ## Fixing
 
-When the branch is why the PR can't merge, make it mergeable rather than stopping. Work in this worktree, on the PR's branch. Do at most three rounds of fix, push and requeue in one run; if the PR still can't merge after the third, reply `queue-and-clean: fail: <what still fails>, after <what you tried>`.
+When the branch is why the PR can't merge (a required check failed, it has merge conflicts, or the merge queue dropped it for one of those), hand it to `/ci-loop`: read `~/.claude/skills/ci-loop/SKILL.md` and follow it for this PR, including its section "When queue-and-clean runs this". It finds the failure, fixes it in this worktree or reruns a failure the branch didn't cause, pushes without force, and watches until the PR's checks pass. Tell it what brought the PR there: the failing checks, the conflicts, or the merge queue's reason for dropping it.
 
-**Failing checks.** Find the failing runs and read their logs:
+When it hands back:
 
-```
-gh pr checks <number> --required
-gh run view <run-id> --log-failed
-```
+- **Green, or a queue failure the branch didn't cause:** read the new head with `gh pr view <number> --json headRefOid` and go back to "Queuing" with it. A push takes the PR out of the merge queue, and `--match-head-commit` has to name the new commit. Keep what it fixed or reran, for the final message.
+- **It stopped to ask, and the user answered:** carry on as the answer says.
+- **It failed, or stopped for something it leaves alone:** reply `queue-and-clean: fail: <its reason>`.
 
-After the merge queue drops a PR, the failure is usually in the queue's own run, which tests the branch merged with the latest base branch, not on the PR. Its branch is named `gh-readonly-queue/<base>/pr-<number>-<sha>`:
-
-```
-gh run list --event merge_group --limit 20 --json databaseId,headBranch,conclusion,name \
-  --jq '.[] | select(.headBranch | contains("/pr-<number>-")) | select(.conclusion == "failure")'
-```
-
-Then decide what kind of failure it is:
-
-- **Caused by this branch:** a test, type check, lint or build step that fails on code this PR changed or that depends on it. Fix it, run the same check locally where the repo lets you, and commit with a message that says what the fix is. Fix only what fails; don't refactor or extend the PR on the way.
-- **Not caused by this branch:** a test that fails on code the PR didn't touch, a timeout, a runner or network error, or a failure that also shows on the base branch. Rerun the failed jobs once, `gh run rerun <run-id> --failed`, and go back to waiting. If the same job fails again, treat it as the branch's after all, or stop and ask if you can't see how the branch causes it.
-- **Can't tell from the logs:** stop and ask, with the failing job's name and the relevant lines of its log.
-
-**Merge conflicts, or a branch that has to be up to date.** Merge the base branch into this one rather than rebasing, so the push needs no force: `git fetch origin`, then `git merge origin/<base>`. Resolve the conflicts so both sides' intent survives, run the tests that cover the conflicted files, and commit the merge. If a conflict can't be resolved without choosing between two behaviors, stop and ask. Rebase only if the user asks for it, since that needs a force-push.
-
-**Stop and ask instead** when the PR needs a review or an approval, when the fix would change what the PR does rather than repair it, or when it would mean editing CI configuration, skipping or deleting a test, or lowering a threshold to make a check pass.
-
-**After each fix:** push to the PR's branch with a plain `git push`, never `--force` or `--force-with-lease`. Read the new head with `gh pr view <number> --json headRefOid`, then go back to "Queuing" with it: a push takes the PR out of the merge queue, and `--match-head-commit` has to name the new commit. Keep track of what each round fixed, for the final message.
+Hand the PR over at most three times in one run, since each requeue can fail again on a newer base branch. After the third, reply `queue-and-clean: fail: <what still fails>, after <what was tried>`.
 
 ## Cleanup
 
@@ -218,4 +200,4 @@ Only after GitHub reports the PR `MERGED`. If any command in steps 2 to 4 errors
 4. Run `git -C <main-clone> fetch --prune origin` so the deleted remote branch stops showing up. Do not check anything out or pull in the main clone. Its working tree is not yours to change.
 5. Reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
 
-The only pushes are the fix commits in "Fixing", to the PR's own branch, and never a force-push. Never delete the remote branch: GitHub or the repo's settings handle that.
+The only pushes are `/ci-loop`'s fix commits (see "Fixing"), to the PR's own branch, and never a force-push. Never delete the remote branch: GitHub or the repo's settings handle that.

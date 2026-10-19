@@ -1,14 +1,14 @@
 ---
 name: queue-and-clean
-description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, and once it merges remove this worktree and its local branch.
+description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, fix what stops it merging (failing checks, conflicts, being dropped from the merge queue), and once it merges remove this worktree and its local branch.
 disable-model-invocation: true
 ---
 
 # Queue and clean
 
-Queue this worktree's PR for merge, in the merge queue or with auto-merge, unless it is already queued. Then watch the PR without blocking the conversation. When it merges, remove the worktree and its local branch. If it closes without merging or leaves the queue, leave everything as it is.
+Queue this worktree's PR for merge, in the merge queue or with auto-merge, unless it is already queued. Then watch the PR without blocking the conversation. When something the branch can fix stops it merging (a required check fails, it has merge conflicts, or the merge queue drops it), fix it, push, queue it again and go back to watching, as described in "Fixing". When it merges, remove the worktree and its local branch. If it closes without merging, or stops for something you can't fix, leave everything as it is.
 
-When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished. `fail` means the PR could not be queued, closed or left the queue without merging, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`). The questions in "Before watching", the merge method question in "Queuing", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
+When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished; if you fixed anything on the way, say what in a few words after it, as `queue-and-clean: success (fixed: <what>)`, for example `queue-and-clean: success (fixed: lint error in api.ts; reran a flaky e2e job)`. `fail` means the PR could not be queued, closed without merging, stopped for something "Fixing" leaves alone or still failed after its last round, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`), and what you tried when you tried fixing it. The questions in "Before watching", the merge method question in "Queuing", the questions in "Fixing", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
 
 Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 
@@ -103,8 +103,8 @@ done
 When it exits:
 
 - `ready`: run `gh pr merge <number> --match-head-commit <headRefOid>` again, with the merge method flag if one was needed above, and without `--auto`. Then start watching. If it fails with the same auto-merge error, GitHub changed its mind between the two calls: start the wait again, up to three times in all, then report it as any other `gh pr merge` failure.
-- `failed`: reply `queue-and-clean: fail: required checks failed: <names of the failing checks>`, from `gh pr checks <number> --required`, and stop.
-- `conflicts`: reply `queue-and-clean: fail: PR has merge conflicts` and stop.
+- `failed`: required checks failed. Go to "Fixing".
+- `conflicts`: the PR has merge conflicts. Go to "Fixing".
 - `stuck`: reply `queue-and-clean: fail: PR is blocked by something other than checks, such as a required review` and stop.
 - `merged` or `closed`: someone else finished it. Go to cleanup for `merged`; reply `queue-and-clean: fail: PR closed without merging` for `closed`.
 
@@ -121,7 +121,7 @@ If the branch moved while you waited, `--match-head-commit` makes the merge fail
 
 ### Any other failure
 
-If `gh pr merge` fails for any other reason, such as a missing review or a merge conflict, reply `queue-and-clean: fail: gh pr merge: <its error message>` and stop.
+If `gh pr merge` fails because of a merge conflict or a failing required check, go to "Fixing". If it fails for any other reason, such as a missing review, reply `queue-and-clean: fail: gh pr merge: <its error message>` and stop.
 
 Once it succeeds, start watching. Do not check the state yourself first: right after queuing, GitHub can briefly show neither auto-merge nor a queue entry, and the watch already allows for that. It also covers a PR that GitHub merged straight away because nothing was left to wait for.
 
@@ -141,6 +141,10 @@ while :; do
     *unqueued) misses=$((misses + 1)); [ "$misses" -ge 2 ] && { echo dequeued; exit 0; } ;;
     *) misses=0 ;;
   esac
+  # With auto-merge, a failed required check leaves the PR waiting forever.
+  if gh pr checks <number> --required 2>/dev/null | awk -F'\t' '$2 == "fail"' | grep -q .; then
+    echo failed; exit 0
+  fi
   sleep 60
 done
 ```
@@ -151,7 +155,46 @@ When it exits:
 
 - `merged`: clean up.
 - `closed`: leave the worktree alone and reply `queue-and-clean: fail: PR closed without merging`.
-- `dequeued`: leave the worktree alone and reply `queue-and-clean: fail: PR left the queue without merging`.
+- `failed`: a required check failed while auto-merge waited. Go to "Fixing".
+- `dequeued`: find out why the PR left the queue. GitHub records it:
+
+  ```
+  gh api graphql -F owner=<owner> -F repo=<repo> -F number=<number> \
+    -f query='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) { nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } } } } } }' \
+    --jq '.data.repository.pullRequest.timelineItems.nodes[0] | .reason + " " + .createdAt'
+  ```
+
+  If the reason is about checks failing or a conflict, go to "Fixing". If someone removed it by hand, or the reason is anything else, leave the worktree alone and reply `queue-and-clean: fail: PR left the queue: <reason>`.
+
+## Fixing
+
+When the branch is why the PR can't merge, make it mergeable rather than stopping. Work in this worktree, on the PR's branch. Do at most three rounds of fix, push and requeue in one run; if the PR still can't merge after the third, reply `queue-and-clean: fail: <what still fails>, after <what you tried>`.
+
+**Failing checks.** Find the failing runs and read their logs:
+
+```
+gh pr checks <number> --required
+gh run view <run-id> --log-failed
+```
+
+After the merge queue drops a PR, the failure is usually in the queue's own run, which tests the branch merged with the latest base branch, not on the PR. Its branch is named `gh-readonly-queue/<base>/pr-<number>-<sha>`:
+
+```
+gh run list --event merge_group --limit 20 --json databaseId,headBranch,conclusion,name \
+  --jq '.[] | select(.headBranch | contains("/pr-<number>-")) | select(.conclusion == "failure")'
+```
+
+Then decide what kind of failure it is:
+
+- **Caused by this branch:** a test, type check, lint or build step that fails on code this PR changed or that depends on it. Fix it, run the same check locally where the repo lets you, and commit with a message that says what the fix is. Fix only what fails; don't refactor or extend the PR on the way.
+- **Not caused by this branch:** a test that fails on code the PR didn't touch, a timeout, a runner or network error, or a failure that also shows on the base branch. Rerun the failed jobs once, `gh run rerun <run-id> --failed`, and go back to waiting. If the same job fails again, treat it as the branch's after all, or stop and ask if you can't see how the branch causes it.
+- **Can't tell from the logs:** stop and ask, with the failing job's name and the relevant lines of its log.
+
+**Merge conflicts, or a branch that has to be up to date.** Merge the base branch into this one rather than rebasing, so the push needs no force: `git fetch origin`, then `git merge origin/<base>`. Resolve the conflicts so both sides' intent survives, run the tests that cover the conflicted files, and commit the merge. If a conflict can't be resolved without choosing between two behaviors, stop and ask. Rebase only if the user asks for it, since that needs a force-push.
+
+**Stop and ask instead** when the PR needs a review or an approval, when the fix would change what the PR does rather than repair it, or when it would mean editing CI configuration, skipping or deleting a test, or lowering a threshold to make a check pass.
+
+**After each fix:** push to the PR's branch with a plain `git push`, never `--force` or `--force-with-lease`. Read the new head with `gh pr view <number> --json headRefOid`, then go back to "Queuing" with it: a push takes the PR out of the merge queue, and `--match-head-commit` has to name the new commit. Keep track of what each round fixed, for the final message.
 
 ## Cleanup
 
@@ -175,4 +218,4 @@ Only after GitHub reports the PR `MERGED`. If any command in steps 2 to 4 errors
 4. Run `git -C <main-clone> fetch --prune origin` so the deleted remote branch stops showing up. Do not check anything out or pull in the main clone. Its working tree is not yours to change.
 5. Reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
 
-Never run `git push` and never delete the remote branch. GitHub or the repo's settings handle that.
+The only pushes are the fix commits in "Fixing", to the PR's own branch, and never a force-push. Never delete the remote branch: GitHub or the repo's settings handle that.

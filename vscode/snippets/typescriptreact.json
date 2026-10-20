@@ -1,9 +1,0 @@
-{
-	"jest-preview-debug": {
-		"prefix": ["debug", "require", "require('jest-preview')"],
-		"body": [
-			"require('jest-preview').debug();"
-		],
-		"description": "Debug the current test with Jest Preview"
-	}
-}

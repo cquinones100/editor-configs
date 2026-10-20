@@ -2,6 +2,8 @@
 
 Dotfiles for the tools listed by directory. `sync.sh` symlinks them into place.
 
+The global `~/.gitconfig` isn't kept here: it holds a machine's git identity and paths, which don't belong in a public repo. `./sync.sh git` only sets this clone's `core.hooksPath`.
+
 ## Pushing
 
 Always ask before pushing this repo, every time, whatever the branch and

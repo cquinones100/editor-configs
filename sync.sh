@@ -10,10 +10,8 @@ esac
 
 if [[ "$OS" == "macos" ]]; then
   LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
-  VSCODE_DIR="$HOME/Library/Application Support/Code/User"
 else
   LAZYGIT_DIR="$HOME/.config/lazygit"
-  VSCODE_DIR="$HOME/.config/Code/User"
 fi
 
 sync_lazygit() {
@@ -21,24 +19,17 @@ sync_lazygit() {
   ln -sf ~/editor-configs/lazygit/config.yml "$LAZYGIT_DIR/config.yml"
 }
 
-sync_vscode() {
-  mkdir -p "$VSCODE_DIR"
-  ln -sf ~/editor-configs/vscode/settings.json "$VSCODE_DIR/settings.json"
-  ln -sf ~/editor-configs/vscode/tasks.json "$VSCODE_DIR/tasks.json"
-  ln -sf ~/editor-configs/vscode/keybindings.json "$VSCODE_DIR/keybindings.json"
-  ln -sfn ~/editor-configs/vscode/snippets "$VSCODE_DIR/snippets"
-}
-
 sync_neovim() {
   rm -rf ~/.config/nvim
   ln -sfn ~/editor-configs/nvim ~/.config/nvim
 }
 
+# This clone's git setup only. The global ~/.gitconfig isn't managed here: it
+# holds a machine's identity and paths, which have no place in a public repo.
 sync_git() {
-  ln -sf ~/editor-configs/git/.gitconfig ~/.gitconfig
   # This repo's own hooks, such as the one that keeps machine-specific Claude
-  # settings out of commits. Set on this clone only, not in the shared
-  # .gitconfig, so other repositories keep their hooks.
+  # settings out of commits. Set on this clone only, so other repositories
+  # keep their hooks.
   git -C ~/editor-configs config core.hooksPath .githooks
 }
 
@@ -145,10 +136,11 @@ sync_pgcli() {
   ln -sf ~/editor-configs/pgcli/config ~/.pgclirc
 }
 
+# What `./sync.sh` offers: iTerm and Karabiner only exist on macOS.
 if [[ "$OS" == "macos" ]]; then
-  configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli)
+  configs=(lazygit neovim git claude iterm karabiner tmux ghostty pgcli bin)
 else
-  configs=(lazygit vscode neovim git claude tmux ghostty pgcli)
+  configs=(lazygit neovim git claude tmux ghostty pgcli bin)
 fi
 
 failed=()
@@ -169,7 +161,6 @@ report() {
     exit 1
   fi
 }
-configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli)
 sync_bin() {
   mkdir -p ~/.local/bin
   # Executables only, so docs alongside the scripts don't get linked in.
@@ -201,8 +192,6 @@ bin_scripts() {
     [[ -f "$script" && -x "$script" ]] && basename "$script"
   done
 }
-
-configs=(lazygit vscode neovim git claude iterm karabiner tmux ghostty pgcli bin)
 
 sync_all() {
   for config in "${configs[@]}"; do

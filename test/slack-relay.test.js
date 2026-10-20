@@ -99,6 +99,7 @@ beforeEach(() => {
     if (method === "chat.delete" || method === "reactions.remove") return { ok: true };
     if (method === "chat.scheduleMessage") return { ok: true, scheduled_message_id: `Q${calls.filter((c) => c.method === method).length}` };
     if (method === "chat.deleteScheduledMessage") return { ok: true };
+    if (method === "chat.scheduledMessages.list") return { ok: true, scheduled_messages: [] };
     if (method === "files.getUploadURLExternal") return { ok: true, upload_url: "https://files.example/upload", file_id: "F1" };
     if (method === "files.completeUploadExternal") {
       uploads.at(-1).share = params;
@@ -183,34 +184,34 @@ test("transcriptFor follows parked sessions to the end of the chain", () => {
   tmux("kill-window", "-t", window);
 });
 
-test("a top-level request is typed into the tab and goes on in the tab's home thread", async () => {
+test("a top-level message sent to a tab with the picker is typed into it and goes on in the tab's home thread", async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   // tmux takes a moment to see the pane's command as the fake Claude.
   await new Promise((resolve) => setTimeout(resolve, 300));
   const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
   const ts = `${Math.floor(Date.now() / 1000)}.000001`;
 
-  await relay.handle(state, { ts, text: `${index}: hello from slack`, thread_ts: null });
+  // Naming no tab, it is only offered to them; the tab's button sends it.
+  await relay.handle(state, { ts, text: "hello from slack", thread_ts: null });
+  assert.doesNotMatch(tmux("capture-pane", "-p", "-t", window), /hello from slack/, "not typed anywhere yet");
+  const picker = calls.find((c) => c.method === "chat.postMessage" && /Send it to a tab/.test(c.params.text));
+  const button = picker.params.blocks[1].elements.find((b) => JSON.parse(b.value).w === window);
+  await relay.handlePress(state, { value: JSON.parse(button.value), message: { ts: posts[0].ts, text: posts[0].body } });
   await new Promise((resolve) => setTimeout(resolve, 200));
 
   assert.match(tmux("capture-pane", "-p", "-t", window), /hello from slack/);
   // The tab's home thread starts; nothing else is posted until the answer,
   // which goes there and to the main DM.
-  assert.equal(posts.length, 1);
-  const homeThread = posts[0].ts;
-  assert.match(posts[0].body, new RegExp(`^🤖 \\*\\*Tab ${index}, .*\\*\\*\\n⚪ Idle\\n\\nThis is its thread`));
-  assert.equal(posts[0].thread, undefined);
+  assert.equal(posts.length, 2);
+  const homeThread = posts[1].ts;
+  assert.match(posts[1].body, new RegExp(`^🤖 \\*\\*Tab ${index}, .*\\*\\*\\n⚪ Idle\\n\\nThis is its thread`));
+  assert.equal(posts[1].thread, undefined);
   assert.equal(state.homes[window].ts, homeThread);
   assert.equal(state.alerts[homeThread].window, window);
   assert.equal(state.following[window].broadcast, true);
   assert.equal(state.following[window].text, "hello from slack");
   assert.equal(state.following[window].thread, homeThread);
   assert.equal(state.following[window].request, ts);
-
-  // The next request reuses the home thread.
-  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000017`, text: `${index}: and again`, thread_ts: null });
-  assert.equal(posts.length, 1);
-  assert.equal(state.following[window].thread, homeThread);
   tmux("kill-window", "-t", window);
 });
 
@@ -230,7 +231,7 @@ test("a reply under an alert goes to the alert's tab", async () => {
   tmux("kill-window", "-t", window);
 });
 
-test("unrecognised, mistargeted and old messages are not typed anywhere", async () => {
+test("unrecognised messages, ones naming a tab by number, and old ones are not typed anywhere", async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   // tmux takes a moment to see the pane's command as the fake Claude.
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -238,8 +239,8 @@ test("unrecognised, mistargeted and old messages are not typed anywhere", async 
   const now = Math.floor(Date.now() / 1000);
 
   await relay.handle(state, { ts: `${now}.000003`, text: `l: yes`, thread_ts: null });
-  await relay.handle(state, { ts: `${now}.000004`, text: `99: yes`, thread_ts: null });
-  await relay.handle(state, { ts: `${now - 600}.000005`, text: `${index}: yes`, thread_ts: null });
+  await relay.handle(state, { ts: `${now}.000004`, text: `${index}: yes`, thread_ts: null });
+  await relay.handle(state, { ts: `${now - 600}.000005`, text: "yes", thread_ts: null });
   await relay.handle(state, { ts: `${now}.000006`, text: "just chatting", thread_ts: "1791500000.000200" });
   await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -248,7 +249,7 @@ test("unrecognised, mistargeted and old messages are not typed anywhere", async 
   const picker = calls.find((c) => c.method === "chat.postMessage" && c.params.text === posts[0].body).params.blocks[1];
   assert.equal(picker.type, "actions");
   assert.ok(picker.elements.some((b) => b.text.text.startsWith(`${index} `) && JSON.parse(b.value).w === window));
-  assert.equal(posts[1].body, "🤖 No Claude tab 99.");
+  assert.match(posts[1].body, /That doesn't name a tab or a command/, "a number in front names no tab");
   assert.match(posts[2].body, /I missed this while I wasn't running/);
   assert.match(posts[3].body, /This thread isn't linked to a tab/);
   assert.equal(posts[3].thread, "1791500000.000200");
@@ -444,11 +445,13 @@ test("a message queued behind a busy tab's turn gets ⏳, and nothing is posted"
   tmux("set", "-p", "-t", window, "@agent_state", "working");
   const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
   const ts = `${Math.floor(Date.now() / 1000)}.000009`;
+  const linked = `${Math.floor(Date.now() / 1000) - 30}.000500`;
+  state.alerts[linked] = { window, index: Number(index), name: "work" };
 
-  await relay.handle(state, { ts, text: `${index}: and also this`, thread_ts: null });
+  await relay.handle(state, { ts, text: "and also this", thread_ts: linked });
 
   assert.deepEqual(reactions, [{ ts, emoji: "hourglass_flowing_sand" }]);
-  assert.equal(posts.length, 1, "only the tab's thread starting");
+  assert.equal(posts.length, 0, "nothing posted");
   assert.equal(state.following[window].request, ts);
   assert.equal(state.following[window].taken, false);
   tmux("kill-window", "-t", window);
@@ -543,7 +546,9 @@ test("esc presses Escape in a working tab and stops following it", async () => {
     following: { [window]: { thread: null, index: Number(index), name: "work", text: "long job", sentAt: Date.now(), screen: "", changedAt: 0 } },
   };
 
-  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000010`, text: `esc ${index}`, thread_ts: null });
+  const linked = `${Math.floor(Date.now() / 1000) - 30}.000500`;
+  state.alerts[linked] = { window, index: Number(index), name: "work" };
+  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000010`, text: "esc", thread_ts: linked });
   await new Promise((resolve) => setTimeout(resolve, 200));
 
   assert.match(tmux("capture-pane", "-p", "-t", window), /\^\[/);
@@ -664,7 +669,9 @@ test("progress falls back to the last few steps when the summary fails", async (
   const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
 
   // The tests' own `claude` always fails.
-  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000014`, text: `progress ${index}`, thread_ts: null });
+  const linked = `${Math.floor(Date.now() / 1000) - 30}.000500`;
+  state.alerts[linked] = { window, index: Number(index), name: "work" };
+  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000014`, text: "progress", thread_ts: linked });
 
   assert.match(posts[0].body, /is idle, last activity just now, 1 tool so far\.\nI couldn't summarize it, so here is what it did last:\n• Bash: make deploy$/);
   fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`));
@@ -710,45 +717,6 @@ test("the Home tab is published, then again only when it changes or you open it"
 
   await relay.refreshDashboard(state, { quick: true, opened: true });
   assert.equal(views.length, 3, "opening the Home tab shows it as it is now");
-  tmux("kill-window", "-t", window);
-});
-
-test("diff summarizes a tab's branch and uploads the whole diff as a file", async () => {
-  const repo = path.join(tmp, "repo");
-  fs.mkdirSync(repo);
-  const git = (...args) => execFileSync("git", ["-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { stdio: "ignore" });
-  git("init", "-q", "-b", "main");
-  fs.writeFileSync(path.join(repo, "app.js"), "one\n");
-  git("add", ".");
-  git("commit", "-q", "-m", "Start");
-  git("switch", "-q", "-c", "feature");
-  fs.writeFileSync(path.join(repo, "app.js"), "one\ntwo\n");
-  git("commit", "-q", "-am", "Add two");
-  fs.writeFileSync(path.join(repo, "app.js"), "one\ntwo\nthree\n");
-  fs.writeFileSync(path.join(repo, "notes.md"), "new\n");
-  const [window, index] = tmux("new-window", "-d", "-c", repo, "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
-  const request = `${Math.floor(Date.now() / 1000)}.000015`;
-
-  await relay.handle(state, { ts: request, text: `diff ${index}`, thread_ts: null });
-
-  assert.deepEqual(reactions, [{ ts: request, emoji: "eyes" }]);
-  assert.equal(posts.length, 1, "the summary, as a message of its own");
-  assert.equal(uploads.length, 1);
-  assert.match(uploads[0].content, /\+two\n\+three/);
-  const shared = uploads[0].share;
-  assert.equal(shared.channel_id, "D1");
-  assert.deepEqual(shared.files, [{ id: "F1", title: shared.files[0].title }]);
-  assert.match(shared.files[0].title, /\(feature\) against main$/);
-  assert.equal(calls.find((c) => c.method === "files.getUploadURLExternal").params.filename, "feature.diff");
-  assert.match(posts[0].body, /branch `feature`: 1 commit on top of `main`, 1 file changed, 2 insertions\(\+\), and 1 new file not yet added\./);
-  assert.match(posts[0].body, /\*\*Commits\*\*\n- `[0-9a-f]+` Add two/);
-  assert.match(posts[0].body, /\*\*New files not yet added:\*\* `notes\.md`/);
-  assert.match(posts[0].body, /app\.js \| 2 \+\+/);
-  assert.equal(shared.thread_ts, posts[0].ts, "the whole diff in the summary's thread");
-  assert.equal(shared.initial_comment, undefined);
-  assert.doesNotMatch(tmux("capture-pane", "-p", "-t", window), /diff/);
   tmux("kill-window", "-t", window);
 });
 
@@ -909,6 +877,20 @@ test("the Home tab has a line for every tab, finished ones too, written again on
     fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`), { force: true });
     try { tmux("kill-window", "-t", window); } catch {}
   }
+});
+
+test("the Home tab puts what needs you first: waiting, then finished, longest first, then working, then idle", () => {
+  const row = (index, state, since) => ({ id: `@${index}`, index, name: `tab${index}`, state, since: String(since), pid: "1", choices: [] });
+  const rows = [row(1, "idle", 100), row(2, "working", 200), row(3, "done", 300), row(4, "waiting", 400), row(5, "done", 250), row(6, "waiting", 350), row(7, "working", 150)];
+  const view = relay.dashboardView({ dm: { channel: "D1" }, closedHomes: {} }, rows);
+  const order = view.blocks.flatMap((block) =>
+    block.type === "header" ? [block.text.text] : block.type === "section" && /^\*\d+\*/.test(block.text.text) ? [Number(block.text.text.match(/^\*(\d+)\*/)[1])] : [],
+  );
+  assert.deepEqual(order, ["Claude tabs", "Needs you (4)", 6, 4, 5, 3, "Working (2)", 2, 7, "Idle (1)", 1]);
+
+  // A group with nothing in it isn't shown.
+  const calm = relay.dashboardView({ dm: { channel: "D1" }, closedHomes: {} }, [row(1, "idle", 100)]);
+  assert.deepEqual(calm.blocks.filter((block) => block.type === "header").map((block) => block.text.text), ["Claude tabs", "Idle (1)"]);
 });
 
 test("a stopped relay marks the Home tab out of date", async () => {
@@ -1177,6 +1159,23 @@ test("agent-state.sh gives the relay a finished turn's final message", () => {
   assert.equal(event.event, "done");
   assert.equal(event.last, "All done.");
   fs.rmSync(relay.EVENTS_FILE);
+});
+
+test("a failed test run is told by the runner's summary, and a command that never ran isn't a failure", () => {
+  const line = relay.milestoneLine;
+  // Piped into grep, the run exits 0, but its summary says two failed.
+  assert.equal(line("test", "# tests 9\n# pass 7\n# fail 2", false, "node --test test/*.test.js | grep '^#'"), 'tests failed: `node --test test/*.test.js | grep \'^#\'`, ending "# fail 2"');
+  assert.equal(line("test", "# pass 9\n# fail 0", false, "node --test"), undefined);
+  assert.match(line("test", "--- FAIL: TestSum (0.00s)\nFAIL\texample.com/sum", true, "go test ./..."), /ending "FAIL\texample\.com\/sum"$/);
+  // A sed before the tests failed: the tests didn't.
+  assert.equal(line("test", "sed: 1: \"s/a/b\": unterminated substitute pattern", true, "sed -i '' 's/a/b' x && node --test"), undefined);
+  // Blocked by a hook, declined, or not even parsed: nothing ran.
+  const blocked = "PreToolUse:Bash hook error: [bash ~/.claude/hooks/enforce-git-hooks-run.sh]: Do not skip git hooks";
+  assert.equal(line("commit", blocked, true, "git commit -n -m x"), undefined);
+  assert.equal(line("push", "The user doesn't want to proceed with this tool use.", true, "git push"), undefined);
+  assert.equal(line("test", "(eval):14: unmatched `", true, "node -e '...' && node --test"), undefined);
+  // A commit git itself refused is still one that failed.
+  assert.equal(line("commit", "pre-commit: autoMode is staged\nerror: the hook refused", true, "git commit -m x"), "a commit failed: error: the hook refused");
 });
 
 test("milestones count git's own push and commit, not a subcommand's, nor text that mentions them", () => {
@@ -1505,17 +1504,17 @@ test("the dispatcher handles each message once, in order, and moves the cursor p
   // Two overlapping checks: the second sees one message again, and the
   // messages arrive out of order.
   processMessages([
-    { ts: `${now}.000002`, text: "98: second", byClaude: false, thread_ts: null },
-    { ts: `${now}.000001`, text: "99: first", byClaude: false, thread_ts: null },
+    { ts: `${now}.000002`, text: "cleanup", byClaude: false, thread_ts: null },
+    { ts: `${now}.000001`, text: "help", byClaude: false, thread_ts: null },
   ]);
   processMessages([
-    { ts: `${now}.000002`, text: "98: second", byClaude: false, thread_ts: null },
+    { ts: `${now}.000002`, text: "cleanup", byClaude: false, thread_ts: null },
     { ts: `${now}.000003`, text: "🤖 the relay's own post", byClaude: true, thread_ts: null },
     { ts: `${now}.000004`, text: "status", byClaude: false, thread_ts: thread },
   ]);
   await settled();
 
-  assert.deepEqual(posts.map((p) => p.body.split("\n")[0]), ["🤖 No Claude tab 99.", "🤖 No Claude tab 98.", "🤖 **Status**"]);
+  assert.deepEqual(posts.map((p) => p.body.split("\n")[0]), ["🤖 **What I understand**", "🤖 No closed tabs have threads left to delete.", "🤖 **Status**"]);
   assert.equal(state.cursor, `${now}.000003`, "past the relay's own post too");
   assert.equal(state.threads[thread], `${now}.000004`);
 });
@@ -1528,13 +1527,13 @@ test("a message that fails is answered with the error, and the next one still ru
   processMessages([
     // No text to read, so handling it fails.
     { ts: `${now}.000005`, text: undefined, byClaude: false, thread_ts: "1791700000.000060" },
-    { ts: `${now}.000006`, text: "99: after it", byClaude: false, thread_ts: null },
+    { ts: `${now}.000006`, text: "cleanup", byClaude: false, thread_ts: null },
   ]);
   await settled();
 
   assert.match(posts[0].body, /^🤖 That failed: /);
   assert.equal(posts[0].thread, "1791700000.000060");
-  assert.equal(posts.at(-1).body, "🤖 No Claude tab 99.");
+  assert.equal(posts.at(-1).body, "🤖 No closed tabs have threads left to delete.");
 });
 
 test("the watchdog restarts a crashed relay, telling it why, until it ends cleanly", async () => {
@@ -1905,7 +1904,7 @@ test("only images, from Slack's file host, under the size limit, are fetched; an
   };
   const image = { id: "F1", name: "a.png", mimetype: "image/png", size: 1, url: "https://files.slack.com/files-pri/T1-F1/a.png" };
 
-  assert.match((await relay.download({ ...image, mimetype: "application/zip", name: "a.zip" })).error, /isn't an image I can pass on/);
+  assert.match((await relay.download({ ...image, mimetype: "application/zip", name: "a.zip" })).error, /isn't an image or video I can pass on/);
   assert.match((await relay.download({ ...image, size: relay.MAX_FILE_BYTES + 1 })).error, /larger than 20 MB/);
   assert.match((await relay.download({ ...image, url: "https://evil.example/a.png" })).error, /isn't on Slack's file host/);
   assert.match((await relay.download({ ...image, url: "http://files.slack.com/a.png" })).error, /isn't on Slack's file host/);
@@ -1925,6 +1924,8 @@ test("a turn's new images are shared under it, and nothing else that only looks 
   // Made during the turn: one named by absolute path, one relative to the session's directory.
   fs.writeFileSync(path.join(work, "shot.png"), png);
   fs.writeFileSync(path.join(work, "out/chart.png"), png);
+  // Made during the turn but named only by its tools, as a scratch image is.
+  fs.writeFileSync(path.join(work, "probe.png"), png);
   // Mentioned, but not shareable: older than the turn, not really an image, one you sent, and missing.
   fs.writeFileSync(path.join(work, "old.png"), png);
   fs.utimesSync(path.join(work, "old.png"), new Date(sent - 60_000), new Date(sent - 60_000));
@@ -1934,18 +1935,84 @@ test("a turn's new images are shared under it, and nothing else that only looks 
   const transcript = path.join(home, ".claude/projects/-work/images.jsonl");
   fs.writeFileSync(transcript, [
     { type: "user", message: { content: "take screenshots" }, timestamp: new Date(sent).toISOString(), cwd: work },
-    { type: "assistant", cwd: work, message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: `capture > ${path.join(work, "shot.png")}` } }] } },
-    { type: "user", cwd: work, message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "Saved out/chart.png" }] } },
+    { type: "assistant", cwd: work, message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: `capture > ${path.join(work, "shot.png")} && crop > probe.png` } }] } },
+    { type: "user", cwd: work, message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "Saved out/chart.png and probe.png" }] } },
     { type: "assistant", cwd: work, message: { content: [{ type: "text", text: `Done: ${path.join(work, "shot.png")}, out/chart.png. Also see old.png, fake.png, ${path.join(relay.FILES_DIR, "F9-mine.png")} and gone.png.` }] } },
   ].map((entry) => JSON.stringify(entry)).join("\n"));
 
-  assert.deepEqual(relay.turnImages(transcript), [path.join(work, "shot.png"), path.join(work, "out/chart.png")]);
+  assert.deepEqual(relay.turnMedia(transcript), [path.join(work, "shot.png"), path.join(work, "out/chart.png")], "not probe.png, which only the tools named");
 
   const state = { dm: { channel: "D1", user: "U1" } };
-  await relay.shareImages(state, transcript, "1791500000.000700");
+  await relay.shareMedia(state, transcript, "1791500000.000700");
   assert.deepEqual(uploads.map((u) => u.share.thread_ts), ["1791500000.000700", "1791500000.000700"]);
   assert.deepEqual(calls.filter((c) => c.method === "files.getUploadURLExternal").map((c) => c.params.filename), ["shot.png", "chart.png"]);
   assert.equal(uploads[0].content.length, png.length);
+});
+
+test("a video you attach is typed into the tab by its path and then its stills, in order", { skip: !fs.existsSync("/opt/homebrew/bin/ffmpeg") && "needs ffmpeg" }, async () => {
+  const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const alert = `${Math.floor(Date.now() / 1000) - 30}.000100`;
+  const state = { dm: { channel: "D1", user: "U1", team: "T1" }, threads: {}, alerts: { [alert]: { window, index: Number(index), name: "work" } }, reported: {}, following: {} };
+  // A real three-second video, made by ffmpeg, as what Slack hands over.
+  const recording = path.join(tmp, "recording.mp4");
+  execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=duration=3:size=1920x1080:rate=30", "-pix_fmt", "yuv420p", recording]);
+  relay.slack.get = async () => fs.readFileSync(recording);
+  const message = relay.messageFrom(state, {
+    type: "message", subtype: "file_share", channel: "D1", user: "U1", client_msg_id: "c1",
+    ts: `${Math.floor(Date.now() / 1000)}.000041`, thread_ts: alert, text: "it flickers here",
+    files: [{ id: "F0REC", name: "flicker.mp4", mimetype: "video/mp4", size: fs.statSync(recording).size, url_private_download: "https://files.slack.com/files-pri/T1-F0REC/download/flicker.mp4" }],
+  }, "T1");
+
+  try {
+    await relay.handle(state, message);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const saved = path.join(relay.FILES_DIR, "F0REC-flicker.mp4");
+    const stills = Array.from({ length: relay.FRAMES }, (_, i) => `${saved}-frame-0${i + 1}.jpg`);
+    stills.forEach((still) => assert.ok(fs.existsSync(still), `${path.basename(still)} was taken`));
+    assert.equal(execFileSync("sips", ["-g", "pixelWidth", stills[0]], { encoding: "utf8" }).match(/pixelWidth: (\d+)/)[1], "1280", "scaled down to be read, not kept full size");
+    // Compared without spaces, which the pane adds and drops where a long line
+    // wraps, and only as far as the second still: the stand-in Claude reads a
+    // line as a terminal does, cut at 1024 characters, which the real one isn't.
+    const typed = tmux("capture-pane", "-p", "-J", "-t", window).replace(/\s/g, "");
+    const expected = `it flickers here [Video: ${saved}] Stills from it, in order: [Image: ${stills[0]}] [Image: ${stills[1]}]`;
+    assert.ok(typed.includes(expected.replace(/\s/g, "")), typed.slice(-700));
+    assert.ok(!posts.some((p) => /take stills/.test(p.body)));
+
+    // A file that only claims to be a video gets no stills, and you are told.
+    relay.slack.get = async () => Buffer.from("not a video");
+    await relay.handle(state, { ...message, ts: `${Math.floor(Date.now() / 1000)}.000042`, files: [{ ...message.files[0], id: "F0BAD", name: "bad.mp4" }] });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.ok(posts.some((p) => /couldn.t take stills from bad\.mp4, so the tab gets only its path/.test(p.body)));
+  } finally {
+    tmux("kill-window", "-t", window);
+  }
+});
+
+test("a video is fetched up to its own size limit; a turn's new videos are shared under it like its images", async () => {
+  const video = { id: "F3", name: "a.mp4", mimetype: "video/mp4", size: relay.MAX_FILE_BYTES + 1, url: "https://files.slack.com/files-pri/T1-F3/a.mp4" };
+  relay.slack.get = async () => Buffer.from("x");
+  assert.equal((await relay.download({ ...video, mimetype: "image/png", name: "a.png" })).error, "a.png is larger than 20 MB.");
+  assert.equal((await relay.download({ ...video, size: relay.MAX_VIDEO_BYTES + 1 })).error, "a.mp4 is larger than 200 MB.");
+  assert.ok((await relay.download(video)).path, "a video over the image limit is still fetched");
+
+  const work = path.join(tmp, "videowork");
+  fs.mkdirSync(work, { recursive: true });
+  const sent = Date.now() - 10_000;
+  // MP4 and WebM by their first bytes, and one that is only named like a video.
+  fs.writeFileSync(path.join(work, "run.mp4"), Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftypisom rest")]));
+  fs.writeFileSync(path.join(work, "trace.webm"), Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.from("rest")]));
+  fs.writeFileSync(path.join(work, "fake.mov"), "not a video");
+  const transcript = path.join(home, ".claude/projects/-work/videos.jsonl");
+  fs.writeFileSync(transcript, [
+    { type: "user", message: { content: "record the flow" }, timestamp: new Date(sent).toISOString(), cwd: work },
+    { type: "assistant", cwd: work, message: { content: [{ type: "text", text: "Recorded run.mp4 and trace.webm; fake.mov is not one." }] } },
+  ].map((entry) => JSON.stringify(entry)).join("\n"));
+
+  assert.deepEqual(relay.turnMedia(transcript), [path.join(work, "run.mp4"), path.join(work, "trace.webm")]);
+  await relay.shareMedia({ dm: { channel: "D1", user: "U1" } }, transcript, "1791500000.000800");
+  assert.deepEqual(calls.filter((call) => call.method === "files.getUploadURLExternal").map((call) => call.params.filename), ["run.mp4", "trace.webm"]);
 });
 
 test("status and threads link each tab's thread", async () => {
@@ -1969,7 +2036,7 @@ test("status and threads link each tab's thread", async () => {
   assert.ok(posts[1].body.startsWith("🤖 **Threads**"));
   assert.match(posts[1].body, /\| Tab \| Name \| State \| Thread \|/);
   assert.ok(posts[1].body.includes(`| **${index}** |`) && posts[1].body.includes(`[open](${link})`));
-  assert.match(posts[1].body, new RegExp(`_No thread yet for [^:]*\\btab ${otherIndex}\\b[^:]*: send \`\\d+: …\` to start one\\._$`));
+  assert.match(posts[1].body, new RegExp(`_No thread yet for [^:]*\\btab ${otherIndex}\\b[^:]*: open it on the Home tab and send it a Message to start one\\._$`));
   [window, other].forEach((id) => tmux("kill-window", "-t", id));
 });
 
@@ -2056,6 +2123,37 @@ test("only your presses, on the relay's DM, count; a link button is left to Slac
   assert.equal(relay.pressFrom(state, { ...payload, actions: [{ value: "not json" }] }), undefined);
 });
 
+test("a button made for one tab answers that tab, even in a thread now linked to another", async () => {
+  const [mine, mineIndex] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
+  const [other, otherIndex] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  ["Allow rm -rf build?", "❯ 1. Yes", "  2. No"].forEach((line) => {
+    tmux("send-keys", "-t", mine, "-l", line);
+    tmux("send-keys", "-t", mine, "Enter");
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  tmux("set", "-p", "-t", mine, "@agent_state", "waiting");
+  tmux("set", "-p", "-t", mine, "@agent_since", "1791500400");
+  // The button was posted in this thread for one tab; the thread has since
+  // been linked to the other.
+  const thread = `${Math.floor(Date.now() / 1000) - 30}.000400`;
+  const state = {
+    dm: { channel: "D1", user: "U1" }, threads: { [thread]: thread }, reported: {}, following: {},
+    alerts: { [thread]: { window: other, index: Number(otherIndex), name: "other" } },
+  };
+  const tab = relay.claudeTabs().find((t) => t.id === mine);
+  const yes = relay.optionButtons(tab, relay.optionsIn(relay.screen(mine)))[0];
+  try {
+    await relay.handlePress(state, { value: yes.value, message: { ts: `${Math.floor(Date.now() / 1000)}.000401`, thread_ts: thread, text: "🤖 Tab, waiting" } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(tmux("capture-pane", "-p", "-t", mine).split("\n").filter((line) => line.trim()).at(-1), "1", "the tab it was made for got the answer");
+    assert.doesNotMatch(tmux("capture-pane", "-p", "-t", other), /1/, "the thread's other tab got nothing");
+    assert.match(posts.at(-1).body, new RegExp(`in tab ${mineIndex}, `));
+  } finally {
+    [mine, other].forEach((w) => tmux("kill-window", "-t", w));
+  }
+});
+
 test("a waiting tab's alert has its options as buttons, and a press answers only that prompt", async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -2094,7 +2192,7 @@ test("a waiting tab's alert has its options as buttons, and a press answers only
   tmux("kill-window", "-t", window);
 });
 
-test("a finished turn offers Diff, and Continue only when Claude ended by asking; Continue types it", async () => {
+test("a finished turn offers Skill, and nothing that answers for you, even when Claude ended by asking", async () => {
   const [window] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));
   const panePid = tmux("display", "-p", "-t", window, "#{pane_pid}");
@@ -2115,22 +2213,76 @@ test("a finished turn offers Diff, and Continue only when Claude ended by asking
   try {
     turn("Fixed the build. Every check passes.");
     const plain = await finish(Math.floor(Date.now() / 1000));
-    assert.deepEqual(plain.buttons.map((b) => b.text.text), ["Diff", "Skill"], "nothing running to stop, nothing asked");
+    assert.deepEqual(plain.buttons.map((b) => b.text.text), ["Skill"], "nothing running to stop, nothing asked");
 
     turn("I found two more failures. **Want me to fix them too?**");
     const asked = await finish(Math.floor(Date.now() / 1000) + 1);
-    assert.deepEqual(asked.buttons.map((b) => b.text.text), ["Continue", "Diff", "Skill"]);
-
-    const alert = posts.find((p) => p.body === asked.sent.params.text);
-    await relay.handlePress(state, { value: JSON.parse(asked.buttons[0].value), message: { ts: alert.ts, thread_ts: alert.thread, text: alert.body } });
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    assert.match(tmux("capture-pane", "-p", "-t", window), /continue/);
-    assert.equal(state.following[window].text, "continue");
+    assert.deepEqual(asked.buttons.map((b) => b.text.text), ["Skill"], "a question is answered in the thread");
   } finally {
     fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`));
     tmux("kill-window", "-t", window);
   }
 });
+test("a finished turn that asks gets the replies you'd tap, from Haiku's reading of it, and a stale one isn't typed", async () => {
+  const [window] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const panePid = tmux("display", "-p", "-t", window, "#{pane_pid}");
+  fs.writeFileSync(path.join(home, ".claude/sessions", `${panePid}.json`), JSON.stringify({ pid: Number(panePid), sessionId: "quick" }));
+  const transcript = path.join(home, ".claude/projects/-work/quick.jsonl");
+  const turn = (said) => fs.writeFileSync(transcript, [
+    { type: "user", message: { content: "fix the build" } },
+    { type: "assistant", message: { content: [{ type: "text", text: said }] } },
+  ].map((entry) => JSON.stringify(entry)).join("\n"));
+  // A stand-in Haiku that answers what the test says, and counts its calls.
+  const bin = path.join(tmp, "quick-bin");
+  const answer = path.join(tmp, "quick-answer.json");
+  const asked = path.join(tmp, "quick-asked");
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, "claude"), `#!/bin/sh\ncat >/dev/null\necho x >> '${asked}'\ncat '${answer}'\n`, { mode: 0o755 });
+  const haiku = (reply) => fs.writeFileSync(answer, JSON.stringify({ result: JSON.stringify(reply), total_cost_usd: 0.0001 }));
+  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
+  const tab = () => relay.claudeTabs().find((t) => t.id === window);
+  const pathBefore = process.env.PATH;
+  process.env.PATH = `${bin}:${pathBefore}`;
+  try {
+    // Asking whether to go on: Yes, go ahead, before Skill.
+    turn("Fixed it, and found two more failures. Want me to fix them too?");
+    haiku({ kind: "permission", options: [] });
+    const first = await relay.post(state, "🤖 The turn", undefined, { buttons: relay.turnButtons(tab()) });
+    await relay.offerQuickReplies(state, tab(), first, "Fixed it, and found two more failures. Want me to fix them too?");
+    const offered = calls.filter((call) => call.method === "chat.update").at(-1).params;
+    assert.equal(offered.ts, first);
+    assert.deepEqual(offered.blocks[1].elements.map((b) => b.text.text), ["Yes, go ahead", "Skill"]);
+
+    // Asking you to pick: a button per option.
+    haiku({ kind: "choice", options: ["Postgres", "SQLite"] });
+    assert.deepEqual((await relay.quickReplies(tab(), "Which should back it?\n1. Postgres\n2. SQLite")).map((b) => b.text), ["Postgres", "SQLite"]);
+    // A question only your words answer: nothing.
+    haiku({ kind: "none", options: [] });
+    assert.deepEqual(await relay.quickReplies(tab(), "What should the new page be called?"), []);
+    // No question at all: Haiku isn't even asked.
+    const calledBefore = fs.readFileSync(asked, "utf8").split("\n").filter(Boolean).length;
+    assert.deepEqual(await relay.quickReplies(tab(), "Fixed the build. Every check passes."), []);
+    assert.equal(fs.readFileSync(asked, "utf8").split("\n").filter(Boolean).length, calledBefore);
+
+    // Tapped: typed into the tab as your reply.
+    const yes = offered.blocks[1].elements[0];
+    await relay.handlePress(state, { value: JSON.parse(yes.value), message: { ts: first, thread_ts: undefined, text: "🤖 The turn" } });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.match(tmux("capture-pane", "-p", "-t", window), /Yes, go ahead/);
+    assert.match(updates.at(-1).body, /_Replied \*\*Yes, go ahead\*\*\._/);
+
+    // Claude has said more since: the old reply isn't typed.
+    turn("Done with those too. All green.");
+    await relay.handlePress(state, { value: JSON.parse(yes.value), message: { ts: first, thread_ts: undefined, text: "🤖 The turn" } });
+    assert.match(posts.at(-1).body, /Claude has said more since, so that reply is out of date/);
+  } finally {
+    process.env.PATH = pathBefore;
+    fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`), { force: true });
+    tmux("kill-window", "-t", window);
+  }
+});
+
 test("a message that names no tab can be sent to one with a tap", async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -2190,7 +2342,7 @@ test("a tab's thread header follows its name and state, and says when its sessio
   assert.equal(updates[0].ts, home);
   assert.match(updates[0].body, new RegExp(`^🤖 \\*\\*Tab ${index}, ABC-214: Make the thing\\*\\*\\n⚪ Idle\\n\\nThis is its thread`));
   const buttons = calls.filter((c) => c.method === "chat.update").at(-1).params.blocks[1].elements;
-  assert.deepEqual(buttons.map((b) => b.text.text), ["Progress", "Diff", "Skill", "Rename", "Close"]);
+  assert.deepEqual(buttons.map((b) => b.text.text), ["Progress", "Skill", "Rename", "Close"]);
 
   // A new state: the header says so, and since when.
   tmux("set", "-p", "-t", window, "@agent_state", "waiting");
@@ -2241,6 +2393,18 @@ test("a message sent mid-turn is answered with that turn, not the screen", async
   tmux("kill-window", "-t", window);
 });
 
+test("a tab's screen you have closed is forgotten without an error in the log", async () => {
+  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
+  relay.openScreens.set("VCLOSED", { w: "@999", p: "1", state: "idle", since: "", at: Date.now() });
+  answers["views.update"] = () => {
+    throw new Error("views.update: not_found");
+  };
+  await relay.refreshScreens(state, []);
+  assert.equal(relay.openScreens.has("VCLOSED"), false);
+  const logged = fs.existsSync(relay.LOG_FILE) ? fs.readFileSync(relay.LOG_FILE, "utf8") : "";
+  assert.doesNotMatch(logged, /screen update failed: views\.update: not_found/);
+});
+
 test("Open on the Home tab opens a screen for exactly that tab, and only for you", async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -2274,7 +2438,7 @@ test("Open on the Home tab opens a screen for exactly that tab, and only for you
   assert.ok(screen.title.text.length <= 24, "Slack's limit");
   assert.deepEqual(JSON.parse(screen.private_metadata), { w: window, p: pid });
   const buttons = screen.blocks.find((b) => b.type === "actions").elements;
-  assert.deepEqual(buttons.map((b) => b.text.text), ["Message", "Skill", "Progress", "Diff", "Rename", "Close"], "no Stop for an idle tab, no thread it hasn't got");
+  assert.deepEqual(buttons.map((b) => b.text.text), ["Message", "Skill", "Progress", "Rename", "Close"], "no Stop for an idle tab, no thread it hasn't got");
   assert.ok(buttons.every((b) => JSON.parse(b.value).w === window && JSON.parse(b.value).p === pid));
   assert.ok(buttons.at(-1).confirm, "Close asks once more");
 
@@ -2427,34 +2591,6 @@ test("Message on a tab's screen types it into the tab, as a reply in its thread"
   }
 });
 
-test("Diff on a tab's screen posts its diff in its thread", async () => {
-  const repo = path.join(tmp, "screen-repo");
-  fs.mkdirSync(repo);
-  const git = (...args) => execFileSync("git", ["-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { stdio: "ignore" });
-  git("init", "-q", "-b", "main");
-  fs.writeFileSync(path.join(repo, "app.js"), "one\n");
-  git("add", ".");
-  git("commit", "-q", "-m", "Start");
-  git("switch", "-q", "-c", "feature");
-  fs.writeFileSync(path.join(repo, "app.js"), "one\ntwo\n");
-  git("commit", "-q", "-am", "Add two");
-  const [window] = tmux("new-window", "-d", "-c", repo, "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const pid = tmux("display", "-p", "-t", window, "#{pane_pid}");
-  const state = { dm: { channel: "D1", user: "U1", team: "T1" }, threads: {}, alerts: {}, reported: {}, following: {} };
-  answers["views.update"] = () => ({ ok: true });
-  try {
-    await relay.handlePress(state, { value: { a: "screen-diff", w: window, p: pid }, view: { id: "VTAB" }, triggerId: "TR4" });
-    const home = state.homes[window].ts;
-    assert.ok(posts.some((p) => p.thread === home && /branch `feature`: 1 commit on top of `main`/.test(p.body)), "the summary, in its thread");
-    assert.equal(uploads.length, 1);
-    assert.equal(uploads[0].share.thread_ts, home);
-    assert.match(calls.filter((c) => c.method === "views.update").at(-1).params.view.blocks.at(-1).text.text, /^Posted its diff in </);
-  } finally {
-    tmux("kill-window", "-t", window);
-  }
-});
-
 test("New tab on the Home tab starts Claude with the prompt, from you only", async () => {
   const state = { dm: { channel: "D1", user: "U1", team: "T1" }, threads: {}, alerts: {}, reported: {}, following: {} };
   answers["views.open"] = () => ({ ok: true, view: { id: "VNEW" } });
@@ -2462,7 +2598,11 @@ test("New tab on the Home tab starts Claude with the prompt, from you only", asy
   await relay.handlePress(state, relay.pressFrom(state, home));
   const form = calls.find((c) => c.method === "views.open").params.view;
   assert.equal(form.callback_id, "new");
-  const start = (place, prompt, user = "U1") => ({ type: "view_submission", user: { id: user, team_id: "T1" }, team: { id: "T1" }, view: { ...form, state: { values: { place: { place: { value: place } }, prompt: { prompt: { value: prompt } } } } } });
+  // Where is picked from the menu, with the field beside it left empty.
+  const start = (place, prompt, user = "U1") => ({
+    type: "view_submission", user: { id: user, team_id: "T1" }, team: { id: "T1" },
+    view: { ...form, state: { values: { place: { place: { selected_option: { value: place } } }, typed: { typed: { value: null } }, prompt: { prompt: { value: prompt } } } } },
+  });
   assert.equal(relay.submissionFrom(state, start(tmp, "hi", "U2")), undefined, "only yours");
 
   const before = tmux("list-windows", "-F", "#{window_id}").split("\n");
@@ -2480,12 +2620,53 @@ test("New tab on the Home tab starts Claude with the prompt, from you only", asy
   }
 });
 
+test("New tab's Where menu lists every checkout and directory Claude has run in that still exists, at its top level, newest first, by repository", () => {
+  const repo = path.join(tmp, "menu-repo");
+  const worktree = path.join(tmp, "menu-worktree");
+  const plain = path.join(tmp, "menu-plain");
+  fs.mkdirSync(path.join(repo, "sub"), { recursive: true });
+  fs.mkdirSync(plain, { recursive: true });
+  execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "first"]);
+  execFileSync("git", ["-C", repo, "worktree", "add", "-q", "-b", "abc-12-thing", worktree]);
+  // One session in each, a day apart, oldest first, and one where the directory is gone.
+  const projects = path.join(home, ".claude/projects/-menu");
+  fs.mkdirSync(projects, { recursive: true });
+  [repo, path.join(repo, "sub"), worktree, plain, path.join(tmp, "menu-gone")].forEach((dir, i) => {
+    const file = path.join(projects, `menu-${i}.jsonl`);
+    fs.writeFileSync(file, `${JSON.stringify({ type: "user", cwd: dir, message: { content: "hi" } })}\n`);
+    const at = new Date(Date.now() - (10 - i) * 86_400_000);
+    fs.utimesSync(file, at, at);
+  });
+  try {
+    const groups = relay.placeChoices();
+    const mine = groups.find((g) => g.group === "menu-repo");
+    // The session in sub counts for the main checkout, the more recent of the two.
+    assert.deepEqual(mine.choices.map((choice) => [choice.label, choice.value]), [
+      ["⎇ menu-worktree", worktree],
+      ["menu-repo", repo],
+    ]);
+    assert.equal(groups.at(-1).group, "Other directories", "directories outside a repository come last");
+    assert.ok(groups.at(-1).choices.some((choice) => choice.value === plain));
+    assert.ok(!groups.flatMap((g) => g.choices).some((choice) => choice.value.endsWith("menu-gone")), "a directory that's gone isn't offered");
+
+    const form = relay.newScreen();
+    const menu = form.blocks.find((block) => block.block_id === "place").element;
+    assert.equal(menu.type, "static_select");
+    assert.deepEqual(menu.option_groups.find((g) => g.label.text === "menu-repo").options.map((o) => o.value), [worktree, repo]);
+    assert.ok(form.blocks.some((block) => block.block_id === "typed"), "and a field for anywhere else");
+  } finally {
+    fs.rmSync(projects, { recursive: true, force: true });
+    execFileSync("git", ["-C", repo, "worktree", "remove", "--force", worktree]);
+  }
+});
+
 test("a tab's skills come from its session's list and from your and its project's skill folders", async () => {
   const project = path.join(tmp, "skills-project");
   fs.mkdirSync(path.join(project, ".claude/commands"), { recursive: true });
   fs.writeFileSync(path.join(project, ".claude/commands/deploy.md"), "---\ndescription: Deploy this project\n---\nDeploy it.\n");
   fs.mkdirSync(path.join(home, ".claude/skills/shape"), { recursive: true });
-  fs.writeFileSync(path.join(home, ".claude/skills/shape/SKILL.md"), "---\nname: shape\ndescription: \"Shape a ticket\"\ndisable-model-invocation: true\n---\n");
+  fs.writeFileSync(path.join(home, ".claude/skills/shape/SKILL.md"), "---\nname: shape\ndescription: \"Shape a ticket\"\nargument-hint: \"[idea or ticket ID]\"\ndisable-model-invocation: true\n---\n");
   const [window] = tmux("new-window", "-d", "-c", project, "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));
   const panePid = tmux("display", "-p", "-t", window, "#{pane_pid}");
@@ -2502,11 +2683,41 @@ test("a tab's skills come from its session's list and from your and its project'
     const skills = relay.skillsFor(relay.claudeTabs().find((t) => t.id === window));
     // Yours, then the project's, then the rest of what the session lists.
     assert.deepEqual(skills.map((s) => [s.source, s.name]), [["yours", "shape"], ["project", "deploy"], ["session", "aikido:scan"], ["session", "pdf"], ["session", "review-loop"]]);
+
+    // The ones you use most go first, most used first, each use counting for
+    // less the longer ago it was: deploy's 40 uses were months ago. A skill
+    // used once, or one this tab can't run, isn't among them.
+    const day = 86_400_000;
+    fs.writeFileSync(path.join(home, ".claude.json"), JSON.stringify({
+      skillUsage: {
+        "review-loop": { usageCount: 50, lastUsedAt: Date.now() - day },
+        pdf: { usageCount: 3, lastUsedAt: Date.now() },
+        deploy: { usageCount: 40, lastUsedAt: Date.now() - 200 * day },
+        shape: { usageCount: 1, lastUsedAt: Date.now() },
+        gone: { usageCount: 100, lastUsedAt: Date.now() },
+      },
+    }));
+    const ranked = relay.skillsFor(relay.claudeTabs().find((t) => t.id === window));
+    assert.deepEqual(ranked.map((s) => [s.source, s.name]), [["frequent", "review-loop"], ["frequent", "pdf"], ["frequent", "deploy"], ["yours", "shape"], ["session", "aikido:scan"]]);
+    const menu = relay.skillScreen(relay.claudeTabs().find((t) => t.id === window), "screen").blocks.find((block) => block.block_id === "skill").element;
+    assert.deepEqual(menu.option_groups.map((g) => g.label.text), ["Frequently used", "Yours", "Plugins and built-in"]);
     assert.equal(skills.find((s) => s.name === "review-loop").description, "Review the branch with Codex");
     assert.equal(skills.find((s) => s.name === "aikido:scan").description, "Scan for issues");
     assert.equal(skills.find((s) => s.name === "deploy").description, "Deploy this project");
     assert.equal(skills.find((s) => s.name === "shape").description, "Shape a ticket", "only you can invoke it, so the session's list leaves it out");
+    assert.equal(skills.find((s) => s.name === "shape").hint, "[idea or ticket ID]", "from its argument-hint");
+    assert.equal(skills.find((s) => s.name === "deploy").hint, "", "a skill that doesn't say has none");
+
+    // Picked, the form says what it takes, and keeps what was typed.
+    const picked = relay.skillScreen(relay.claudeTabs().find((t) => t.id === window), "screen", "shape", "the export runs twice");
+    const args = picked.blocks.find((block) => block.block_id === "args");
+    assert.equal(args.label.text, "Arguments");
+    assert.match(args.hint.text, /^\/shape takes \[idea or ticket ID\]\. /);
+    assert.equal(args.element.placeholder.text, "[idea or ticket ID]");
+    assert.equal(args.element.initial_value, "the export runs twice");
+    assert.equal(picked.blocks.find((block) => block.block_id === "skill").element.initial_option.value, "shape");
   } finally {
+    fs.rmSync(path.join(home, ".claude.json"), { force: true });
     fs.rmSync(path.join(home, ".claude/skills"), { recursive: true, force: true });
     fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`), { force: true });
     fs.rmSync(transcript, { force: true });
@@ -2537,6 +2748,21 @@ test("Skill under a finished turn opens a menu of the tab's skills, and Run type
     assert.deepEqual(form.blocks[0].element.option_groups.map((g) => [g.label.text, g.options.map((o) => o.value)]), [["Plugins and built-in", ["review-loop"]]]);
     assert.equal(form.blocks[0].element.option_groups[0].options[0].description.text, "Review the branch");
     assert.ok(!form.blocks.some((b) => b.block_id === "typed"), "everything fits in the menu");
+
+    // Picking a skill draws the form again, saying what it takes, for you only
+    // and only from the Skill form's own menu.
+    const pick = (skill, { user = "U1", callback = "skill" } = {}) => ({ type: "block_actions", user: { id: user, team_id: "T1" }, team: { id: "T1" }, trigger_id: "TR10", container: { type: "view", view_id: "VSKILL" }, view: { ...form, callback_id: callback, type: "modal", id: "VSKILL", hash: "H1", state: { values: { args: { args: { value: "ABC-12" } } } } }, actions: [{ type: "static_select", action_id: "skill", block_id: "skill", selected_option: { value: skill } }] });
+    assert.equal(relay.pressFrom(state, pick("review-loop", { user: "U2" })), undefined, "not yours");
+    assert.equal(relay.pressFrom(state, pick("review-loop", { callback: "rename" })), undefined, "not the Skill form");
+    assert.equal(form.blocks[0].dispatch_action, true, "a pick is sent at once");
+    await relay.handlePress(state, relay.pressFrom(state, pick("review-loop")));
+    const redrawn = calls.find((c) => c.method === "views.update").params;
+    assert.equal(redrawn.view_id, "VSKILL");
+    assert.equal(redrawn.hash, "H1", "refused by Slack if the form changed since");
+    const argsField = redrawn.view.blocks.find((b) => b.block_id === "args");
+    assert.match(argsField.hint.text, /^\/review-loop doesn't say what it takes\./, "the session's list carries no hint");
+    assert.equal(argsField.element.initial_value, "ABC-12", "what was typed stays");
+    calls.length = 0;
 
     const run = (skill, args, user = "U1") => ({ type: "view_submission", user: { id: user, team_id: "T1" }, team: { id: "T1" }, view: { ...form, id: "VSKILL", root_view_id: "VSKILL", state: { values: { skill: { skill: { type: "static_select", selected_option: { value: skill } } }, args: { args: { value: args } } } } } });
 
@@ -2569,6 +2795,39 @@ test("Skill under a finished turn opens a menu of the tab's skills, and Run type
     fs.rmSync(transcript, { force: true });
     tmux("kill-window", "-t", window);
   }
+});
+
+test("a restart edits the welcome back rather than posting another, unless it is old or the relay crashed", async () => {
+  const recent = `${Math.floor(Date.now() / 1000) - 3600}.000100`;
+  const state = { dm: { channel: "D1", user: "U1", team: "T1" }, threads: {}, alerts: {}, welcome: recent };
+
+  // Started again on purpose: the same message, now listening, read from now on.
+  const from = await relay.sayListening(state, relay.welcomeText(""), "");
+  assert.equal(posts.length, 0);
+  assert.equal(updates.at(-1).ts, recent);
+  assert.match(updates.at(-1).body, /^🤖 \*\*Relay listening\*\* since /);
+  assert.equal(state.welcome, recent);
+  assert.ok(Math.abs(Number(from) - Date.now() / 1000) < 5, "nothing before now is read again");
+
+  // After a crash, a new message: it's news.
+  await relay.sayListening(state, relay.welcomeText("exit code 1"), "exit code 1");
+  assert.match(posts.at(-1).body, /^🤖 \*\*Relay restarted\*\* after a crash/);
+  assert.equal(state.welcome, posts.at(-1).ts);
+
+  // A day-old welcome is too far up the DM to edit.
+  state.welcome = `${Math.floor(Date.now() / 1000) - 25 * 3600}.000100`;
+  const kickoff = await relay.sayListening(state, relay.welcomeText(""), "");
+  assert.equal(kickoff, posts.at(-1).ts);
+  assert.equal(state.welcome, kickoff);
+
+  // And one that can't be edited (deleted, say) is posted again.
+  state.welcome = recent;
+  answers["chat.update"] = () => {
+    throw new Error("chat.update: message_not_found");
+  };
+  const again = await relay.sayListening(state, relay.welcomeText(""), "");
+  assert.equal(again, posts.at(-1).ts);
+  assert.match(relay.stoppedText(), /^🤖 \*\*Relay stopped\*\* at \d{1,2}:\d\d/);
 });
 
 test("the welcome message offers Home first, then buttons for the commands, answered at the top level", async () => {
@@ -2657,12 +2916,107 @@ test("text that isn't an option at a prompt is refused with the options as butto
   tmux("set", "-p", "-t", window, "@agent_since", "1791500200");
   await new Promise((resolve) => setTimeout(resolve, 200));
   const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
+  const linked = `${Math.floor(Date.now() / 1000) - 30}.000500`;
+  state.alerts[linked] = { window, index: Number(index), name: "work" };
   try {
-    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000700`, text: `${index}: cancel that`, thread_ts: null });
+    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000700`, text: "cancel that", thread_ts: linked });
     const refusal = calls.filter((c) => c.method === "chat.postMessage").at(-1).params;
-    assert.match(refusal.text, /isn't one of its options, so I didn't type anything\. Tap one/);
+    assert.match(refusal.text, /isn't one of its options, so I didn't type anything\.[\s\S]*Tap an option/);
     assert.deepEqual(refusal.blocks[1].elements.map((b) => b.text.text), ["1. Yes", "2. No"]);
     assert.notEqual(tmux("capture-pane", "-p", "-t", window).split("\n").filter((line) => line.trim()).at(-1), "cancel that");
+  } finally {
+    tmux("kill-window", "-t", window);
+  }
+});
+
+test("optionsIn reads Claude's own questions: one at a time under their names, with several answers ticked, and a free answer", () => {
+  // As Claude Code draws AskUserQuestion with two questions, the first one up.
+  const first = [
+    "←  ☐ Color  ☐ Toppings  ✔ Submit  →",
+    "Color?",
+    "❯ 1. Red",
+    "     Choose red",
+    "  2. Blue",
+    "  3. Type something.",
+    "────────────────────",
+    "  4. Chat about this",
+    "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+  ].join("\n");
+  assert.deepEqual(relay.optionsIn(first), {
+    question: "Color?",
+    options: [{ n: 1, label: "Red" }, { n: 2, label: "Blue" }, { n: 3, label: "Type something." }, { n: 4, label: "Chat about this" }],
+    free: 3,
+    cursor: 1,
+  });
+  // The second takes several answers; one typed in the free option replaces its label.
+  const second = [
+    "←  ☒ Color  ☒ Toppings  ✔ Submit  →",
+    "Toppings?",
+    "  1. [✔] Cheese",
+    "         Add cheese",
+    "  2. [ ] Olives",
+    "  3. [✔] Ketchup",
+    "❯    Submit",
+    "────────────────────",
+    "  4. Chat about this",
+  ].join("\n");
+  const found = relay.optionsIn(second);
+  assert.deepEqual(found, {
+    question: "Toppings?",
+    options: [{ n: 1, label: "Cheese", checked: true }, { n: 2, label: "Olives", checked: false }, { n: 3, label: "Ketchup", checked: true }, { n: 4, label: "Chat about this" }],
+    multi: true,
+    free: 3,
+    cursor: "submit",
+  });
+  assert.match(relay.promptText(found), /^\*\*Toppings\?\*\*\n1\. ☑ Cheese\n2\. ☐ Olives\n3\. ☑ Ketchup\n4\. Chat about this\n_Tap options to tick or untick them, then Submit choices/);
+
+  assert.deepEqual(relay.answerFor(found, "done"), { kind: "submit" });
+  assert.deepEqual(relay.answerFor(found, "1, 2").options.map((o) => o.n), [1, 2]);
+  assert.deepEqual(relay.answerFor(found, "oli").options.map((o) => o.n), [2]);
+  assert.equal(relay.answerSaid(relay.answerFor(found, "1 2")), "Unticked 1. Cheese, ticked 2. Olives");
+  assert.deepEqual(relay.answerFor(found, "anchovies"), { kind: "free", text: "anchovies" });
+  assert.deepEqual(relay.answerFor(relay.optionsIn(first), "3"), { kind: "free", text: "3" }, "the free option takes text, not its number");
+  // A permission prompt has no free option, so other text is no answer.
+  assert.equal(relay.answerFor(relay.optionsIn("Allow it?\n❯ 1. Yes\n  2. No"), "maybe"), undefined);
+});
+
+test("answering one of several questions posts the next with its buttons; ticks, Submit and a free answer press the right keys", async () => {
+  const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const show = (lines) => lines.forEach((line) => {
+    tmux("send-keys", "-t", window, "-l", line);
+    tmux("send-keys", "-t", window, "Enter");
+  });
+  show(["←  ☐ Color  ☐ Toppings  ✔ Submit  →", "Color?", "❯ 1. Red", "  2. Blue", "  3. Type something.", "────────────", "  4. Chat about this"]);
+  tmux("set", "-p", "-t", window, "@agent_state", "waiting");
+  tmux("set", "-p", "-t", window, "@agent_since", "1791500300");
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
+  const posted = () => calls.filter((call) => call.method === "chat.postMessage").at(-1).params;
+  const linked = `${Math.floor(Date.now() / 1000) - 30}.000500`;
+  state.alerts[linked] = { window, index: Number(index), name: "work" };
+  try {
+    // Red is picked, and Claude Code shows the second question in the same
+    // wait. Drawn in one go, before the relay's first look after its settle.
+    setTimeout(() => show(["←  ☒ Color  ☐ Toppings  ✔ Submit  →", "Toppings?", "❯ 1. [ ] Cheese", "  2. [ ] Olives", "  3. [ ] Type something", "     Submit", "────────────", "  4. Chat about this"]), 50);
+    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000710`, text: "1", thread_ts: linked });
+    assert.match(posted().text, /^🤖 Chose 1\. Red in tab \d+, .*\. It's asking next:\n\n\*\*Toppings\?\*\*\n1\. ☐ Cheese/);
+    assert.deepEqual(posted().blocks[1].elements.map((b) => b.text.text), ["1. ☐ Cheese", "2. ☐ Olives", "4. Chat about this", "Submit choices"]);
+    assert.equal(state.following[window], undefined, "still waiting on you, so not followed yet");
+
+    // Two ticks at once, then your own answer typed into the free row, reached
+    // with the arrow keys from the first row, then Submit, three rows down.
+    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000711`, text: "1 2", thread_ts: linked });
+    assert.match(posted().text, /^🤖 Ticked 1\. Cheese, ticked 2\. Olives in tab/);
+    tmux("send-keys", "-t", window, "Enter");
+    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000712`, text: "anchovies", thread_ts: linked });
+    tmux("send-keys", "-t", window, "Enter");
+    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000713`, text: "submit", thread_ts: linked });
+    const typed = tmux("capture-pane", "-p", "-t", window).split("\n").filter((line) => line.trim());
+    assert.ok(typed.includes("12"), "both numbers pressed");
+    assert.ok(typed.includes("^[[B^[[Banchovies"), typed.slice(-6).join("\n"));
+    assert.ok(typed.some((line) => line.startsWith("^[[B^[[B^[[B")), "down to Submit, then Enter");
+    assert.match(posted().text, /^🤖 Submitted your choices in tab/);
   } finally {
     tmux("kill-window", "-t", window);
   }
@@ -2743,7 +3097,9 @@ test("a tab keeps the Claude pane it was first seen with, whatever is opened or 
     assert.equal(tab.pid, claudePid, "its process is Claude's, not the active pane's");
     assert.equal(relay.claudePane(window).pane, claude);
 
-    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000900`, text: `${index}: run the tests`, thread_ts: null });
+    const linked = `${Math.floor(Date.now() / 1000) - 30}.000901`;
+    state.alerts[linked] = { window, index: Number(index), name: "work" };
+    await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000900`, text: "run the tests", thread_ts: linked });
     await new Promise((resolve) => setTimeout(resolve, 600));
     assert.match(tmux("capture-pane", "-p", "-t", claude), /run the tests/, "typed into Claude");
     assert.match(relay.screen(window), /run the tests/, "and its screen is Claude's");
@@ -2816,24 +3172,6 @@ test("a closed tab's thread is deleted on request: the app's messages and files 
   assert.ok(views.length >= 1, "the Home tab drawn again");
 });
 
-test("close 3 asks with a Close button before closing anything", async () => {
-  const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
-
-  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000080`, text: `close ${index}`, thread_ts: null });
-
-  assert.ok(tmux("list-windows", "-F", "#{window_id}").split("\n").includes(window), "nothing closed yet");
-  assert.match(posts[0].body, new RegExp(`^🤖 Close \\*\\*tab ${index}, `));
-  const button = calls.find((c) => c.method === "chat.postMessage").params.blocks[1].elements[0];
-  assert.equal(button.text.text, "Close");
-  assert.ok(button.confirm, "Slack asks once more");
-
-  await relay.handlePress(state, { value: JSON.parse(button.value), message: { ts: posts[0].ts, text: posts[0].body } });
-  assert.ok(!tmux("list-windows", "-F", "#{window_id}").split("\n").includes(window));
-  assert.match(updates.find((u) => u.ts === posts[0].ts).body, new RegExp(`^🤖 Closed \\*\\*tab ${index}, `));
-});
-
 test("last activity is the last conversation entry, not Claude Code's bookkeeping", () => {
   const transcript = path.join(home, ".claude/projects/-work/bookkeeping.jsonl");
   const said = Date.now() - 11 * 60 * 60_000;
@@ -2869,7 +3207,9 @@ test("a multi-line message reaches the tab with its line breaks, as one paste", 
   await new Promise((resolve) => setTimeout(resolve, 300));
   const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
 
-  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000090`, text: `${index}: first line\nsecond line\n\n- a list item`, thread_ts: null });
+  const linked = `${Math.floor(Date.now() / 1000) - 30}.000500`;
+  state.alerts[linked] = { window, index: Number(index), name: "work" };
+  await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000090`, text: "first line\nsecond line\n\n- a list item", thread_ts: linked });
   await new Promise((resolve) => setTimeout(resolve, 300));
 
   const lines = tmux("capture-pane", "-p", "-t", window).split("\n");
@@ -2918,6 +3258,28 @@ test("an offline note stays scheduled ten minutes ahead, and is renewed, said ba
   assert.equal(state.offlineNote.id, "Q2");
   assert.deepEqual(calls.filter((c) => c.method === "chat.deleteScheduledMessage").map((c) => c.params.scheduled_message_id), ["Q1"]);
 
+  // Notes left behind by a delete that failed go too, but not the new one.
+  answers["chat.scheduledMessages.list"] = () => ({ ok: true, scheduled_messages: [{ id: "QSTRAY" }, { id: "Q3" }] });
+  await relay.renewOfflineNote(state);
+  assert.equal(state.offlineNote.id, "Q3");
+  assert.deepEqual(calls.filter((c) => c.method === "chat.deleteScheduledMessage").map((c) => c.params.scheduled_message_id), ["Q1", "Q2", "QSTRAY"]);
+
+  // Refused for too many scheduled: they are cleared, and it is scheduled again.
+  let refused = false;
+  answers["chat.scheduleMessage"] = () => {
+    if (!refused) {
+      refused = true;
+      throw new Error("chat.scheduleMessage: restricted_too_many");
+    }
+    return { ok: true, scheduled_message_id: "Q9" };
+  };
+  answers["chat.scheduledMessages.list"] = () => ({ ok: true, scheduled_messages: [{ id: "QSTRAY2" }] });
+  await relay.renewOfflineNote(state);
+  assert.equal(state.offlineNote.id, "Q9");
+  assert.ok(calls.some((c) => c.method === "chat.deleteScheduledMessage" && c.params.scheduled_message_id === "QSTRAY2"));
+  delete answers["chat.scheduleMessage"];
+  delete answers["chat.scheduledMessages.list"];
+
   // Back after a short gap: Slack never sent it, so nothing to say.
   await relay.sayBackOnline(state);
   assert.equal(posts.length, 0);
@@ -2928,7 +3290,7 @@ test("an offline note stays scheduled ten minutes ahead, and is renewed, said ba
 
   // A clean stop: cancelled.
   await relay.cancelOfflineNote(state);
-  assert.equal(calls.filter((c) => c.method === "chat.deleteScheduledMessage").at(-1).params.scheduled_message_id, "Q2");
+  assert.equal(calls.filter((c) => c.method === "chat.deleteScheduledMessage").at(-1).params.scheduled_message_id, "Q9");
   assert.equal(state.offlineNote, undefined);
 });
 
@@ -2983,7 +3345,7 @@ test("a request is matched when it was sent along with text left in the input bo
   assert.equal(relay.promptMatches(prompt, "run the tests"), false);
 });
 
-test("rename names a tab as M-n does, from the main DM or its thread, and clears it", async () => {
+test("rename in a tab's thread names it as M-n does, and clears it", async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));
   const alert = `${Math.floor(Date.now() / 1000) - 60}.000300`;
@@ -2991,20 +3353,17 @@ test("rename names a tab as M-n does, from the main DM or its thread, and clears
   const now = () => `${Math.floor(Date.now() / 1000)}.${String(Math.random()).slice(2, 8)}`;
   const tabName = () => tmux("show", "-wqv", "-t", window, "@tab_name");
 
-  await relay.handle(state, { ts: now(), text: `rename ${index} Billing   fix`, thread_ts: null });
+  await relay.handle(state, { ts: now(), text: "rename Billing   fix", thread_ts: alert });
   assert.equal(tabName(), "Billing fix");
   assert.match(posts.at(-1).body, new RegExp(`^🤖 Renamed \\*\\*tab ${index}\\*\\* to \\*\\*Billing fix\\*\\*\\.`));
-
-  await relay.handle(state, { ts: now(), text: `rename ${index}: Billing, part 2`, thread_ts: null });
-  assert.equal(tabName(), "Billing, part 2");
-
-  // In its thread, no number needed.
-  await relay.handle(state, { ts: now(), text: "rename Invoices", thread_ts: alert });
-  assert.equal(tabName(), "Invoices");
   assert.equal(posts.at(-1).thread, alert);
 
+  // Naming a tab by number does nothing to it.
+  await relay.handle(state, { ts: now(), text: `rename ${index} Elsewhere`, thread_ts: null });
+  assert.equal(tabName(), "Billing fix");
+
   // No name: back to its own.
-  await relay.handle(state, { ts: now(), text: `rename ${index}`, thread_ts: null });
+  await relay.handle(state, { ts: now(), text: "rename", thread_ts: alert });
   assert.equal(tabName(), "");
   assert.match(posts.at(-1).body, /has its own name again/);
   tmux("kill-window", "-t", window);

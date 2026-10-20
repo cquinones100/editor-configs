@@ -12,16 +12,14 @@
 //                        runs this in the new tab
 //
 // What you can send in the DM:
-//   a reply under a tab alert   typed into that tab's Claude
-//   3: <text> / ABC-214: <text> typed into that tab's Claude (by number or ticket)
-//   3: ? / ? under an alert     that tab's last turn: your prompt and its reply
+//   a reply in a tab's thread   typed into that tab's Claude (a tab is never
+//                               named in a message; the Home tab's screens and
+//                               the buttons reach the others)
+//   ? in a tab's thread         that tab's last turn: your prompt and its reply
 //   status                      every Claude tab and its state
-//   progress 3 / progress under an alert
-//                               what that tab is doing, summarized, without typing into it
-//   progress all / progress     every tab at once, most urgent first
-//   diff 3 / diff under an alert
-//                               that tab's branch and changes, the whole diff in a canvas
-//   esc 3 / esc under an alert  press Escape in that tab, to stop Claude mid-turn
+//   progress in a tab's thread  what that tab is doing, summarized, without typing into it
+//   progress                    every tab at once, most urgent first
+//   esc in a tab's thread       press Escape in that tab, to stop Claude mid-turn
 //   stop                        stop the relay
 //   new: <prompt>               starts a new Claude tab with that prompt
 //   new <place>: <prompt>       the same, in a repository, a worktree (by ticket
@@ -49,7 +47,7 @@
 //
 // The code is in lib/slack-relay/, one file per part: config and util, the
 // Slack app (slack), catching up and posting (read, post), the saved state,
-// tabs and their transcripts (tabs), the commands you send (commands, diffs,
+// tabs and their transcripts (tabs), the commands you send (commands,
 // summaries), what it reports on its own (followups, alerts, stuck,
 // milestones, homes, dashboard), and starting and stopping (cli,
 // lifecycle, run). This file only picks the command.
@@ -62,7 +60,6 @@ const parts = Object.assign({},
   require("../lib/slack-relay/commands"),
   require("../lib/slack-relay/config"),
   require("../lib/slack-relay/dashboard"),
-  require("../lib/slack-relay/diffs"),
   require("../lib/slack-relay/files"),
   require("../lib/slack-relay/followups"),
   require("../lib/slack-relay/homes"),
@@ -73,6 +70,7 @@ const parts = Object.assign({},
   require("../lib/slack-relay/post"),
   require("../lib/slack-relay/presence"),
   require("../lib/slack-relay/presses"),
+  require("../lib/slack-relay/quickreplies"),
   require("../lib/slack-relay/read"),
   require("../lib/slack-relay/run"),
   require("../lib/slack-relay/screens"),

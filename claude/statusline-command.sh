@@ -44,23 +44,23 @@ case $h_segment in
 esac
 (( r > 255 )) && r=255; (( g > 255 )) && g=255; (( b > 255 )) && b=255
 (( r < 0 )) && r=0; (( g < 0 )) && g=0; (( b < 0 )) && b=0
-accent="\033[38;2;${r};${g};${b}m"
-reset="\033[0m"
+accent=$'\033[38;2;'"${r};${g};${b}"m
+reset=$'\033[0m'
 
 # Context usage color gradient (independent of accent)
 ctx_color=""
 if [ -n "$used" ]; then
   used_int=$(printf "%.0f" "$used")
   if [ "$used_int" -lt 20 ]; then
-    ctx_color="\033[97m"
+    ctx_color=$'\033[97m'
   elif [ "$used_int" -lt 40 ]; then
-    ctx_color="\033[32m"
+    ctx_color=$'\033[32m'
   elif [ "$used_int" -lt 60 ]; then
-    ctx_color="\033[38;5;178m"
+    ctx_color=$'\033[38;5;178m'
   elif [ "$used_int" -lt 80 ]; then
-    ctx_color="\033[38;5;208m"
+    ctx_color=$'\033[38;5;208m'
   else
-    ctx_color="\033[38;5;160m"
+    ctx_color=$'\033[38;5;160m'
   fi
 fi
 
@@ -76,7 +76,7 @@ if [ -z "${TMUX:-}" ]; then
 fi
 
 if [ -n "$used" ]; then
-  printf "%b | Context: ${ctx_color}%.1f%% used${reset}" "$output" "$used"
+  printf '%s | Context: %s%.1f%% used%s' "$output" "$ctx_color" "$used" "$reset"
 else
-  printf "%b" "$output"
+  printf '%s' "$output"
 fi

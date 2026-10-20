@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const { execFileSync, spawnSync } = require('node:child_process');
-const { readdirSync, realpathSync, rmSync, statSync } = require('node:fs');
-const { join, relative } = require('node:path');
+const { existsSync, readdirSync, realpathSync, rmSync, statSync } = require('node:fs');
+const { basename, dirname, join, relative } = require('node:path');
 
 const USAGE = `Usage: wt-cleanup <worktree-subpath>
 
@@ -12,7 +12,8 @@ and untracked directories so disk state and git state can be reconciled.
 Status column:
   tracked   git-tracked worktree present on disk
   orphan    git-tracked worktree whose directory is gone (will be pruned)
-  untracked directory on disk that git does not know about (will be removed)
+  untracked directory on disk that git does not know about (will be removed,
+            unless it has a .git, which is never deleted this way)
 
 Example:
   wt-cleanup .claude/worktrees
@@ -44,8 +45,12 @@ function main() {
     die('not inside a git repository');
   }
 
-  const targetDir = join(repoRoot, subpath);
-  assertTargetWithinRepo(repoRoot, targetDir);
+  assertTargetWithinRepo(repoRoot, join(repoRoot, subpath));
+  // Every path is compared as the disk spells it. On a case-insensitive disk,
+  // `wt-cleanup .Claude/worktrees` lists the same directories git knows as
+  // .claude/worktrees, and compared as typed, none of git's would match, so
+  // every live worktree would look untracked and be deleted.
+  const targetDir = canonical(join(repoRoot, subpath));
   const targetPrefix = `${targetDir}/`;
 
   const porcelain = execFileSync(
@@ -53,13 +58,15 @@ function main() {
     ['-C', repoRoot, 'worktree', 'list', '--porcelain'],
     { encoding: 'utf8' },
   );
-  const tracked = parseWorktrees(porcelain).filter((w) => w.path.startsWith(targetPrefix));
+  const tracked = parseWorktrees(porcelain)
+    .map((w) => ({ ...w, path: canonical(w.path) }))
+    .filter((w) => w.path.startsWith(targetPrefix));
 
   let diskDirs = [];
   try {
     diskDirs = readdirSync(targetDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
-      .map((d) => join(targetDir, d.name));
+      .map((d) => canonical(join(targetDir, d.name)));
   } catch (err) {
     if (err.code !== 'ENOENT') throw err;
   }
@@ -117,6 +124,13 @@ function main() {
         break;
       }
       case 'untracked': {
+        // A directory with a .git in it is a worktree or a repository, never
+        // just a directory, whatever git's list says.
+        if (existsSync(join(full, '.git'))) {
+          process.stderr.write(`Not removing ${rel}: it has a .git, so it looks like a git worktree. Use 'git worktree repair' or 'git worktree remove' instead.\n`);
+          failed = 1;
+          break;
+        }
         process.stdout.write(`Removing untracked directory ${rel}...\n`);
         try {
           rmSync(full, { recursive: true, force: true });
@@ -150,6 +164,20 @@ try {
 function die(message) {
   process.stderr.write(`wt-cleanup: ${message}\n`);
   process.exit(1);
+}
+
+// A path as the disk spells it: its real path, or for one that is gone (an
+// orphan worktree), its parent's real path and its own name.
+function canonical(path) {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    try {
+      return join(realpathSync.native(dirname(path)), basename(path));
+    } catch {
+      return path;
+    }
+  }
 }
 
 function isDirectory(path) {
@@ -203,11 +231,13 @@ function parseWorktrees(porcelain) {
     .filter((w) => w.path);
 }
 
+// Each row is its entry's index, hidden, then what is shown, so fzf hands
+// back which entry was picked, and nothing in a directory's name (a tab, say)
+// can change which one is acted on.
 function selectViaFzf(entries, repoRoot) {
-  const lines = entries.map((entry) => {
-    const rel = relative(repoRoot, entry.path);
-    const display = `${entry.status.padEnd(9)}  ${rel.padEnd(60)}  ${entry.branch}`;
-    return [display, entry.status, entry.path, entry.branch].join('\t');
+  const lines = entries.map((entry, i) => {
+    const rel = relative(repoRoot, entry.path).replace(/[\t\n]/g, ' ');
+    return `${i}\t${entry.status.padEnd(9)}  ${rel.padEnd(60)}  ${entry.branch}`;
   });
 
   const result = spawnSync(
@@ -215,7 +245,7 @@ function selectViaFzf(entries, repoRoot) {
     [
       '--multi',
       '--delimiter=\t',
-      '--with-nth=1',
+      '--with-nth=2',
       '--nth=1',
       '--prompt=worktrees to remove > ',
       '--header=Tab: toggle  Enter: confirm  Esc: cancel',
@@ -234,9 +264,7 @@ function selectViaFzf(entries, repoRoot) {
   return result.stdout
     .split('\n')
     .filter((line) => line.length > 0)
-    .map((line) => {
-      const [, status, path, branch] = line.split('\t');
-      return { status, path, branch };
-    });
+    .map((line) => entries[Number(line.split('\t')[0])])
+    .filter(Boolean);
 }
 

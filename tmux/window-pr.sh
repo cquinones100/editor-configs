@@ -27,11 +27,15 @@ MISSING_TTL=1
 # wtpr bakes the number into the directory name, so that case is already
 # answered — no cache, no gh, no background anything.
 dir_name=$(basename "$path")
+# Only a number, though: pr-12abc isn't one, and is looked up like any other.
 case "$dir_name" in
   pr-[0-9]*)
     number=${dir_name#pr-}
-    printf '%s' "${number%%-*}"
-    exit 0
+    number=${number%%-*}
+    if [[ $number =~ ^[0-9]+$ ]]; then
+      printf '%s' "$number"
+      exit 0
+    fi
     ;;
 esac
 

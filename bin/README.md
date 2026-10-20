@@ -101,7 +101,10 @@ stays one stable line that never needs re-editing when the tool changes.
   `worktree-from-ticket .worktrees ABC-123`. A full Linear issue URL works in
   place of the identifier.
 - `wt-cleanup` is the companion for removing finished worktrees. Install it the
-  same way (`./sync.sh wt-cleanup`) if you want it.
+  same way (`./sync.sh wt-cleanup`) if you want it. It compares paths as the disk spells them, so a
+  differently-cased subpath (`.Claude/worktrees`) can't make a live worktree
+  look untracked, and it never deletes an "untracked" directory that has a
+  `.git` in it: it says so and suggests `git worktree repair` or `remove`.
 - `wt-batch` opens several tickets at once, one tmux window each, and
   `wt-jump` gets you back to any of those windows by ticket, PR, or branch.
 

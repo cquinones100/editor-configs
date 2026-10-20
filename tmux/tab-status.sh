@@ -62,7 +62,7 @@ fi
 
 # Last before the Claude summary, so in a Claude pane "claude" sits next to the
 # title and prompt it introduces.
-out="$out  #[fg=#$hex]$command"
+out="$out  #[fg=#$hex]${command//\#/##}"
 
 # What the Claude session is doing, as agent-state.sh records it from Claude
 # Code's hooks: the same states the tab's mark shows, in words.

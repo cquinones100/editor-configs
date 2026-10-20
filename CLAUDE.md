@@ -1,8 +1,10 @@
 # editor-configs
 
-Dotfiles for the tools listed by directory. `sync.sh` symlinks them into place.
+Dotfiles for the tools listed by directory. `sync.sh` symlinks them into place, always through its `put_link`, which moves a real file or directory already in the way to `<name>.bak.<time>` rather than overwriting or deleting it.
 
 The global `~/.gitconfig` isn't kept here: it holds a machine's git identity and paths, which don't belong in a public repo. `./sync.sh git` only sets this clone's `core.hooksPath`.
+
+Nothing here runs code that another repository supplies unless you have trusted that repository. Trusted directories are listed in `~/.config/editor-configs/trusted-dirs`, one absolute or `~/` path per line (blank lines and lines starting with `#` ignored), which is yours, never committed, and never written for you; a missing file trusts nothing. A directory counts only when its real path equals a listed one's exactly, so trusting `~/code` doesn't trust what is under it. Today only `tmux/workspace.sh` (prefix `W`) needs it, to run a directory's own `worktree` script, and it says which file to edit when it skips one. Any new script that would execute something from a repository checks this file the same way, inline.
 
 ## Pushing
 
@@ -18,6 +20,10 @@ hosts, usernames, personal paths, tokens.
 - Claude Code reads only four settings files: `~/.claude/settings.json`, the project's `.claude/settings.json` and `.claude/settings.local.json`, and managed settings. There is no user-level `settings.local.json`.
 - Anything that describes a specific organization's environment must not live in the tracked file. The auto mode environment profile (the `autoMode` key) belongs in that project's `.claude/settings.local.json`, which is gitignored there. If Claude Code writes `autoMode` back into `claude/settings.json`, move it again before committing. `.githooks/pre-commit` refuses a commit that stages `autoMode` in that file, or any change to its `model`, which Claude Code rewrites whenever `/model` is used; commit the rest of the file with `git add -p`. The hook only runs where `./sync.sh git` has pointed this clone's `core.hooksPath` at `.githooks`, so run that on every new machine. Claude itself can't get around it: `claude/hooks/enforce-git-hooks-run.sh` blocks `git commit --no-verify` (and `-n`) and any change to `core.hooksPath`. The worktree scripts in `bin/` symlink the project-local file into each worktree so it applies there too.
 
+## Neovim plugins
+
+`nvim/lazy-lock.json` is committed, so a new machine gets the same plugin commits (`:Lazy restore`), and `nvim/init.lua` clones lazy.nvim itself at the commit the lockfile records, not its `stable` branch; when lazy.nvim updates itself, bump that commit with the lockfile. The language servers Mason installs (`nvim/lua/plugins/lsp.lua`) are left unpinned, at whatever npm and PyPI hold: pinning them would mean chasing every release for little gain.
+
 ## Window names and accent colors
 
 `tmux/accent-color.sh` produces two different strings from the same directory.
@@ -29,7 +35,7 @@ only ever read, so it is free to change.
 
 `tmux/window-names.sh` owns the tab: the label from `tmux/tab-label.sh`, cut to
 30 characters, prefixed with `#<number>` when the branch has a pull request.
-`wt-jump` reads that prefix back to find PRs, so it stays at the front. The
+`wt-jump` reads that prefix back to find PRs, so it stays at the front. `rename-window` expands formats in the name it is given, so `window-names.sh` doubles every `#` in the name it sets (`##12` for the PR prefix, which tmux stores as `#12`); anything else that renames a window from a title, branch or directory must do the same. `@tab_label`, set with `setw`, is stored as given. The
 label is the name set with `M-n` (the window's `@tab_name`), else the Linear
 ticket and its title when the branch names one Linear confirms, else
 `accent-color.sh --name`. The same name uncut, PR prefix included, goes in

@@ -14,14 +14,29 @@ else
   LAZYGIT_DIR="$HOME/.config/lazygit"
 fi
 
+# Links $1 at $2, as ln -sfn does, but a real file or directory already at
+# $2 is moved aside to $2.bak.<time> first, and said so, rather than being
+# overwritten or deleted. A link already there is just replaced. A $2 ending
+# in / is a directory to link into, under $1's own name.
+put_link() {
+  local src=$1 dest=$2
+  [[ $dest == */ ]] && dest="$dest$(basename "$src")"
+  if [[ -e $dest && ! -L $dest ]]; then
+    local backup
+    backup="$dest.bak.$(date +%Y%m%d%H%M%S)"
+    mv "$dest" "$backup"
+    echo "  moved $dest aside to $backup"
+  fi
+  ln -sfn "$src" "$dest"
+}
+
 sync_lazygit() {
   mkdir -p "$LAZYGIT_DIR"
-  ln -sf ~/editor-configs/lazygit/config.yml "$LAZYGIT_DIR/config.yml"
+  put_link ~/editor-configs/lazygit/config.yml "$LAZYGIT_DIR/config.yml"
 }
 
 sync_neovim() {
-  rm -rf ~/.config/nvim
-  ln -sfn ~/editor-configs/nvim ~/.config/nvim
+  put_link ~/editor-configs/nvim ~/.config/nvim
 }
 
 # This clone's git setup only. The global ~/.gitconfig isn't managed here: it
@@ -35,11 +50,11 @@ sync_git() {
 
 sync_claude() {
   mkdir -p ~/.claude
-  ln -sf ~/editor-configs/claude/CLAUDE.md ~/.claude/CLAUDE.md
-  ln -sf ~/editor-configs/claude/settings.json ~/.claude/settings.json
-  ln -sf ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
-  ln -sf ~/editor-configs/claude/otel-headers.sh ~/.claude/otel-headers.sh
-  ln -sfn ~/editor-configs/claude/commands ~/.claude/commands
+  put_link ~/editor-configs/claude/CLAUDE.md ~/.claude/CLAUDE.md
+  put_link ~/editor-configs/claude/settings.json ~/.claude/settings.json
+  put_link ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
+  put_link ~/editor-configs/claude/otel-headers.sh ~/.claude/otel-headers.sh
+  put_link ~/editor-configs/claude/commands ~/.claude/commands
   # One link per skill rather than one for the directory: Claude Code keeps its
   # own synced/ folder in ~/.claude/skills, so that path has to stay real.
   mkdir -p ~/.claude/skills
@@ -53,22 +68,22 @@ sync_claude() {
       [ -L ~/.claude/skills/"$name" ] && rm ~/.claude/skills/"$name"
       continue
     fi
-    ln -sfn "${skill%/}" ~/.claude/skills/
+    put_link "${skill%/}" ~/.claude/skills/
   done
   mkdir -p ~/.claude/hooks
   for hook in ~/editor-configs/claude/hooks/*; do
-    ln -sf "$hook" ~/.claude/hooks/
+    put_link "$hook" ~/.claude/hooks/
   done
 }
 
 sync_iterm() {
   mkdir -p ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch
-  ln -sf ~/editor-configs/iterm/Scripts/AutoLaunch/session_title.py ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch/session_title.py
+  put_link ~/editor-configs/iterm/Scripts/AutoLaunch/session_title.py ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch/session_title.py
 }
 
 sync_karabiner() {
   mkdir -p ~/.config/karabiner
-  ln -sf ~/editor-configs/karabiner/karabiner.json ~/.config/karabiner/karabiner.json
+  put_link ~/editor-configs/karabiner/karabiner.json ~/.config/karabiner/karabiner.json
 }
 
 # Installs the tmux plugins listed in tmux/plugins.txt, each at its pinned
@@ -92,48 +107,48 @@ sync_tmux_plugins() {
 
 sync_tmux() {
   mkdir -p ~/.config/tmux
-  ln -sf ~/editor-configs/tmux/tmux.conf ~/.config/tmux/tmux.conf
+  put_link ~/editor-configs/tmux/tmux.conf ~/.config/tmux/tmux.conf
   sync_tmux_plugins
-  ln -sf ~/editor-configs/tmux/accent-color.sh ~/.config/tmux/accent-color.sh
-  ln -sf ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
-  ln -sf ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh
-  ln -sf ~/editor-configs/tmux/workspace.sh ~/.config/tmux/workspace.sh
-  ln -sf ~/editor-configs/tmux/toggle-shell-pane.sh ~/.config/tmux/toggle-shell-pane.sh
-  ln -sf ~/editor-configs/tmux/palette.sh ~/.config/tmux/palette.sh
-  ln -sf ~/editor-configs/tmux/pr-ready.sh ~/.config/tmux/pr-ready.sh
-  ln -sf ~/editor-configs/tmux/pr-open.zsh ~/.config/tmux/pr-open.zsh
-  ln -sf ~/editor-configs/tmux/ticket-open.zsh ~/.config/tmux/ticket-open.zsh
-  ln -sf ~/editor-configs/tmux/wt-open.zsh ~/.config/tmux/wt-open.zsh
-  ln -sf ~/editor-configs/tmux/slack-relay-open.sh ~/.config/tmux/slack-relay-open.sh
-  ln -sf ~/editor-configs/tmux/agent-state.sh ~/.config/tmux/agent-state.sh
-  ln -sf ~/editor-configs/tmux/claude-pane.sh ~/.config/tmux/claude-pane.sh
-  ln -sf ~/editor-configs/tmux/resurrect-tidy.sh ~/.config/tmux/resurrect-tidy.sh
+  put_link ~/editor-configs/tmux/accent-color.sh ~/.config/tmux/accent-color.sh
+  put_link ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
+  put_link ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh
+  put_link ~/editor-configs/tmux/workspace.sh ~/.config/tmux/workspace.sh
+  put_link ~/editor-configs/tmux/toggle-shell-pane.sh ~/.config/tmux/toggle-shell-pane.sh
+  put_link ~/editor-configs/tmux/palette.sh ~/.config/tmux/palette.sh
+  put_link ~/editor-configs/tmux/pr-ready.sh ~/.config/tmux/pr-ready.sh
+  put_link ~/editor-configs/tmux/pr-open.zsh ~/.config/tmux/pr-open.zsh
+  put_link ~/editor-configs/tmux/ticket-open.zsh ~/.config/tmux/ticket-open.zsh
+  put_link ~/editor-configs/tmux/wt-open.zsh ~/.config/tmux/wt-open.zsh
+  put_link ~/editor-configs/tmux/slack-relay-open.sh ~/.config/tmux/slack-relay-open.sh
+  put_link ~/editor-configs/tmux/agent-state.sh ~/.config/tmux/agent-state.sh
+  put_link ~/editor-configs/tmux/claude-pane.sh ~/.config/tmux/claude-pane.sh
+  put_link ~/editor-configs/tmux/resurrect-tidy.sh ~/.config/tmux/resurrect-tidy.sh
   # Saves made before resurrect's post-save hook ran the tidy-up are handled once here.
   ~/editor-configs/tmux/resurrect-tidy.sh
-  ln -sf ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
-  ln -sf ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
-  ln -sf ~/editor-configs/tmux/linear-project.sh ~/.config/tmux/linear-project.sh
-  ln -sf ~/editor-configs/tmux/merge-queue.sh ~/.config/tmux/merge-queue.sh
-  ln -sf ~/editor-configs/tmux/notes-open.sh ~/.config/tmux/notes-open.sh
-  ln -sf ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh
-  ln -sf ~/editor-configs/tmux/window-revive.sh ~/.config/tmux/window-revive.sh
-  ln -sf ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh
-  ln -sf ~/editor-configs/tmux/window-pr.sh ~/.config/tmux/window-pr.sh
-  ln -sf ~/editor-configs/tmux/tab-label.sh ~/.config/tmux/tab-label.sh
-  ln -sf ~/editor-configs/tmux/tab-goto.sh ~/.config/tmux/tab-goto.sh
-  ln -sf ~/editor-configs/tmux/path-facts.sh ~/.config/tmux/path-facts.sh
-  ln -sf ~/editor-configs/tmux/tab-status.sh ~/.config/tmux/tab-status.sh
-  ln -sf ~/editor-configs/tmux/tab-name.zsh ~/.config/tmux/tab-name.zsh
-  ln -sf ~/editor-configs/tmux/ticket-title.sh ~/.config/tmux/ticket-title.sh
+  put_link ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
+  put_link ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
+  put_link ~/editor-configs/tmux/linear-project.sh ~/.config/tmux/linear-project.sh
+  put_link ~/editor-configs/tmux/merge-queue.sh ~/.config/tmux/merge-queue.sh
+  put_link ~/editor-configs/tmux/notes-open.sh ~/.config/tmux/notes-open.sh
+  put_link ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh
+  put_link ~/editor-configs/tmux/window-revive.sh ~/.config/tmux/window-revive.sh
+  put_link ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh
+  put_link ~/editor-configs/tmux/window-pr.sh ~/.config/tmux/window-pr.sh
+  put_link ~/editor-configs/tmux/tab-label.sh ~/.config/tmux/tab-label.sh
+  put_link ~/editor-configs/tmux/tab-goto.sh ~/.config/tmux/tab-goto.sh
+  put_link ~/editor-configs/tmux/path-facts.sh ~/.config/tmux/path-facts.sh
+  put_link ~/editor-configs/tmux/tab-status.sh ~/.config/tmux/tab-status.sh
+  put_link ~/editor-configs/tmux/tab-name.zsh ~/.config/tmux/tab-name.zsh
+  put_link ~/editor-configs/tmux/ticket-title.sh ~/.config/tmux/ticket-title.sh
 }
 
 sync_ghostty() {
   mkdir -p ~/.config/ghostty
-  ln -sf ~/editor-configs/ghostty/config ~/.config/ghostty/config
+  put_link ~/editor-configs/ghostty/config ~/.config/ghostty/config
 }
 
 sync_pgcli() {
-  ln -sf ~/editor-configs/pgcli/config ~/.pgclirc
+  put_link ~/editor-configs/pgcli/config ~/.pgclirc
 }
 
 # What `./sync.sh` offers: iTerm and Karabiner only exist on macOS.
@@ -166,7 +181,7 @@ sync_bin() {
   # Executables only, so docs alongside the scripts don't get linked in.
   for script in ~/editor-configs/bin/*; do
     [[ -f "$script" && -x "$script" ]] || continue
-    ln -sf "$script" ~/.local/bin/"$(basename "$script")"
+    put_link "$script" ~/.local/bin/"$(basename "$script")"
   done
 }
 
@@ -183,7 +198,7 @@ sync_bin_script() {
     return 1
   fi
   mkdir -p ~/.local/bin
-  ln -sf "$REPO_DIR/bin/$name" ~/.local/bin/"$name"
+  put_link "$REPO_DIR/bin/$name" ~/.local/bin/"$name"
 }
 
 bin_scripts() {

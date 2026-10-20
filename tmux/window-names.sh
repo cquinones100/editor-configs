@@ -36,10 +36,17 @@ tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' |
     name=$("$script_dir/tab-label.sh" "${session}:${idx}" "$path" "$label")
     full=$name
     [ ${#name} -gt $MAX_LABEL ] && name="${name:0:$((MAX_LABEL - 3))}..."
+    # rename-window expands formats in the name it is given, so a # from a
+    # ticket title, branch or directory is doubled to stay a #: unescaped,
+    # "#{…}" or "#(…)" in one would be expanded, and ## would lose a #. After
+    # the cut, so the cut counts the characters shown. @tab_label is set with
+    # setw, which doesn't expand, so the full name keeps its # as they are.
+    name=${name//\#/##}
 
     # The PR number goes first because it is the short, stable half: the tab
-    # is scannable by number even when the branch name is cut off.
-    [ -n "$pr" ] && name="#${pr} ${name}" && full="#${pr} ${full}"
+    # is scannable by number even when the branch name is cut off. Written
+    # ##, tmux stores it as the #<number> wt-jump reads back.
+    [ -n "$pr" ] && name="##${pr} ${name}" && full="#${pr} ${full}"
 
     # One tmux call for all three, since this runs for every window on every
     # pane focus.

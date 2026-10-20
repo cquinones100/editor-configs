@@ -91,13 +91,14 @@ vim.filetype.add({
 })
 
 -- ── Bootstrap lazy.nvim ──────────────────────────────
+-- A new machine gets the lazy.nvim commit lazy-lock.json records, not
+-- whatever its stable branch holds that day; the plugins follow the lockfile
+-- with :Lazy restore.
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+local lazy_commit = "306a05526ada86a7b30af95c5cc81ffba93fef97"
 if not vim.uv.fs_stat(lazypath) then
-  vim.fn.system({
-    "git", "clone", "--filter=blob:none",
-    "https://github.com/folke/lazy.nvim.git",
-    "--branch=stable", lazypath,
-  })
+  vim.fn.system({ "git", "clone", "--filter=blob:none", "https://github.com/folke/lazy.nvim.git", lazypath })
+  vim.fn.system({ "git", "-C", lazypath, "checkout", "--quiet", lazy_commit })
 end
 vim.opt.rtp:prepend(lazypath)
 

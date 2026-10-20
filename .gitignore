@@ -1,1 +1,4 @@
 .claude/worktrees/
+
+# Packages a skill's scripts install with npm ci
+claude/skills/*/scripts/node_modules/

@@ -1,0 +1,10 @@
+{
+  "name": "diff-screenshots-scripts",
+  "private": true,
+  "description": "Helpers for the diff-screenshots skill",
+  "dependencies": {
+    "ansi-to-html": "0.7.2",
+    "playwright": "1.63.0",
+    "pngjs": "7.0.0"
+  }
+}

@@ -1,6 +1,7 @@
 ---
 name: wt
 description: Replace this Claude session with `wt <ticket>` in the same tmux pane, so the ticket's worktree opens in this tab with a fresh Claude session working on it. For the end of a ticket-shaping conversation.
+argument-hint: "[ticket ID or URL]"
 disable-model-invocation: true
 ---
 

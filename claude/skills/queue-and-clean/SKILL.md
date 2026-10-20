@@ -1,6 +1,7 @@
 ---
 name: queue-and-clean
 description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, fix what stops it merging (failing checks, conflicts, being dropped from the merge queue), and once it merges remove this worktree and its local branch.
+argument-hint: "[PR number]"
 disable-model-invocation: true
 ---
 

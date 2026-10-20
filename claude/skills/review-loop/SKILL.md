@@ -1,6 +1,7 @@
 ---
 name: review-loop
 description: Run the branch through repeated skeptical, read-only Codex reviews, fixing what each round finds, until two consecutive rounds come back clean. Use when the user says a branch or PR is ready for review, asks to "run the review loop", or asks for a Codex review of the branch.
+argument-hint: "[all]"
 ---
 
 # Review loop

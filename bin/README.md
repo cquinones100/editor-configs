@@ -134,7 +134,10 @@ from idea to PR.
 - Fetches first and warns when the local main is behind its upstream, because
   Claude reads the files on disk. It never pulls.
 - Inside tmux, names the tab "Shaping: <first words>" through the same
-  `@tab_name` option `M-n` sets. `/wt` clears that name, or one you set
+  `@tab_name` option `M-n` sets, and the skill names it again as
+  "Shaping <ID>: <title>" once there is a ticket (read, or just created). The
+  skill does this itself, so `/shape` typed into a session already running
+  names its tab too. `/wt` clears that name, or one you set
   yourself, when it takes the tab over, so the tab is named for the ticket
   like every other ticket tab.
 - The team to create tickets in comes from `linearTeam` in

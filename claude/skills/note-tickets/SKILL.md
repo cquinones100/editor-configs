@@ -1,6 +1,7 @@
 ---
 name: note-tickets
 description: Read the open checklist items in the notes the user names, check Linear for tickets that already cover each, and suggest tickets for the rest, creating only the ones the user picks.
+argument-hint: "[folder, note title or #tag]"
 disable-model-invocation: true
 ---
 

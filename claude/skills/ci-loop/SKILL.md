@@ -1,6 +1,7 @@
 ---
 name: ci-loop
 description: Watch the current branch's PR checks in the background and fix what fails, pushing each fix and watching again, until every check passes. Stops and asks when a fix isn't the branch's to make.
+argument-hint: "[PR number]"
 disable-model-invocation: true
 ---
 

@@ -1,0 +1,627 @@
+// Tests for notes/ (the notes app) and bin/notes. Run with: node --test test/*.test.js
+//
+// Nothing here touches your real notes or Neovim config. Each test gets a
+// notes directory of its own, HOME is a temporary directory, and Neovim runs
+// headless with no config at all (-u NONE), the notes plugin added to its
+// runtimepath. A test's Lua runs in that Neovim and prints its findings as
+// JSON, which the test then checks.
+
+const { test, after } = require("node:test");
+const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const plugin = path.join(__dirname, "../notes");
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "notes-test-")));
+const home = path.join(tmp, "home");
+fs.mkdirSync(home);
+after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+let dirs = 0;
+// Runs `code` in a headless Neovim with the plugin, in a fresh notes
+// directory (or `dir`), and returns what it printed as JSON.
+const lua = (code, dir = fs.mkdtempSync(path.join(tmp, `notes-${dirs++}-`))) => {
+  const out = execFileSync("nvim", ["--headless", "-u", "NONE", "-i", "NONE", "--cmd", `set rtp^=${plugin}`, "--cmd", "runtime plugin/notes.lua", "-l", "/dev/stdin"], {
+    input: code,
+    encoding: "utf8",
+    env: { ...process.env, HOME: home, NOTES_DIR: dir, XDG_CONFIG_HOME: path.join(home, ".config"), XDG_DATA_HOME: path.join(home, ".local/share"), XDG_STATE_HOME: path.join(home, ".local/state") },
+  });
+  return { result: JSON.parse(out.trim().split("\n").at(-1)), dir };
+};
+
+test("a note's title is its first line, its file is named for it, and renamed when it changes", () => {
+  const { result, dir } = lua(`
+    local s = require("notes.store")
+    local a = s.create("", "Grocery list")
+    local b = s.create("", "Grocery list")
+    local blank = s.create("", nil)
+    local f = io.open(a, "w"); f:write("# Weekend plans\\n\\nhike\\n"); f:close()
+    local renamed = s.rename_to_title(a)
+    local again = s.rename_to_title(renamed)
+    io.write(vim.json.encode({
+      a = s.relative(a), b = s.relative(b), blank = s.relative(blank), renamed = s.relative(renamed), again = s.relative(again),
+      blank_title = s.title_of(io.open(blank):read("*a")),
+      plain = s.title_of("\\n\\nJust words\\nmore"),
+      preview = s.preview_of("# Title\\n\\n- [ ] eggs\\n**milk** and ==bread==\\n"),
+    }))
+  `);
+  assert.equal(result.a, "Grocery list.md");
+  assert.equal(result.b, "Grocery list 2.md", "a second note with that title doesn't overwrite the first");
+  assert.equal(result.blank, "New Note.md");
+  assert.equal(result.blank_title, "New Note", "an empty title reads as New Note");
+  assert.equal(result.renamed, "Weekend plans.md");
+  assert.equal(result.again, "Weekend plans.md", "a name that fits is left alone");
+  assert.equal(result.plain, "Just words", "a first line without # is the title too");
+  assert.equal(result.preview, "eggs milk and bread");
+  assert.ok(fs.existsSync(path.join(dir, "Weekend plans.md")));
+  assert.ok(!fs.existsSync(path.join(dir, "Grocery list.md")));
+});
+
+test("notes list pinned first, then newest; folders nest; Recently Deleted keeps a note until it's deleted there", () => {
+  const { result, dir } = lua(`
+    local s = require("notes.store")
+    local old = s.create("", "Old")
+    local new = s.create("Work/Projects", "Launch")
+    local pinned = s.create("Work", "Pinned one")
+    vim.uv.fs_utime(old, os.time() - 500, os.time() - 500)
+    vim.uv.fs_utime(pinned, os.time() - 900, os.time() - 900)
+    s.set_pinned(s.relative(pinned), true)
+    local order = vim.tbl_map(function(n) return n.title end, s.notes())
+    local work = vim.tbl_map(function(n) return n.title end, s.notes("Work"))
+    local folders = vim.tbl_map(function(f) return { f.rel, f.depth, f.count } end, s.folders())
+    -- Moved, a pinned note stays pinned.
+    local moved = s.move(pinned, "")
+    local still = s.is_pinned(s.relative(moved))
+    local trashed = s.delete(new)
+    local listed = #s.notes()
+    local in_trash = vim.tbl_map(function(n) return n.rel end, s.notes(s.TRASH))
+    local restored = s.restore(trashed)
+    local gone = s.delete(s.delete(old))
+    io.write(vim.json.encode({ order = order, work = work, folders = folders, still = still, trashed = s.relative(trashed), listed = listed, in_trash = in_trash, restored = s.relative(restored), gone = gone == nil, left = #s.notes(s.TRASH) }))
+  `);
+  assert.deepEqual(result.order, ["Pinned one", "Launch", "Old"]);
+  assert.deepEqual(result.work, ["Pinned one", "Launch"], "a folder shows the notes in the folders under it too");
+  assert.deepEqual(result.folders, [["Work", 0, 1], ["Work/Projects", 1, 1]]);
+  assert.equal(result.still, true);
+  assert.equal(result.trashed, ".trash/Work/Projects/Launch.md", "it remembers the folder it came from");
+  assert.equal(result.listed, 2, "and is out of every other list");
+  assert.deepEqual(result.in_trash, [".trash/Work/Projects/Launch.md"]);
+  assert.equal(result.restored, "Work/Projects/Launch.md");
+  assert.equal(result.left, 0, "deleted from Recently Deleted, it is gone for good");
+  assert.ok(!fs.existsSync(path.join(dir, ".trash", "Old.md")));
+});
+
+test("a folder is renamed in place, keeping its notes' pins, and never out of the notes directory or out of sight", () => {
+  const { result, dir } = lua(`
+    local s = require("notes.store")
+    local note = s.create("Work", "Plan")
+    s.set_pinned("Work/Plan.md", true)
+    s.set_last("Work/Plan.md")
+    s.create_folder("Home")
+    local refused = {}
+    for _, name in ipairs({ "../Out", ".hidden", "a/b", "..", "  ", "Home" }) do
+      local to, why = s.rename_folder("Work", name)
+      table.insert(refused, to == nil and why ~= nil)
+    end
+    local to = s.rename_folder("Work", " Projects ")
+    io.write(vim.json.encode({ refused = refused, to = to, pinned = s.meta().pinned, last = s.meta().last }))
+  `);
+  assert.deepEqual(result.refused, [true, true, true, true, true, true], "out of the directory, hidden, nested, empty, or onto another folder");
+  assert.equal(result.to, "Projects");
+  assert.deepEqual(result.pinned, ["Projects/Plan.md"]);
+  assert.equal(result.last, "Projects/Plan.md");
+  assert.ok(fs.existsSync(path.join(dir, "Projects", "Plan.md")));
+  assert.ok(!fs.existsSync(path.join(path.dirname(dir), "Out")), "nothing moved out");
+});
+
+test("search finds notes with every word, tags come from #words outside code, links find notes by title", () => {
+  const { result } = lua(`
+    local s = require("notes.store")
+    local a = s.create("", "Trip")
+    local f = io.open(a, "w"); f:write("# Trip\\n\\nPack the #travel bag and #Camping gear\\n\\n\`#notatag\`\\n\`\`\`\\n#nope\\n\`\`\`\\nissue#3 is not a tag\\n"); f:close()
+    local b = s.create("Work", "Standup")
+    local g = io.open(b, "w"); g:write("# Standup\\n\\nTalked about the #travel budget\\n"); g:close()
+    io.write(vim.json.encode({
+      both = vim.tbl_map(function(n) return n.title end, s.search("TRAVEL bag")),
+      match = s.search("budget")[1].match,
+      none = #s.search("submarine"),
+      tags = s.tags(),
+      tagged = vim.tbl_map(function(n) return n.title end, s.tagged("camping")),
+      found = s.find_by_title("  standup ").rel,
+      missing = s.find_by_title("Nope") == nil,
+    }))
+  `);
+  assert.deepEqual(result.both, ["Trip"]);
+  assert.equal(result.match, "Talked about the #travel budget");
+  assert.equal(result.none, 0);
+  assert.deepEqual(result.tags, [{ name: "Camping", count: 1 }, { name: "travel", count: 2 }]);
+  assert.deepEqual(result.tagged, ["Trip"], "tags match without regard to case");
+  assert.equal(result.found, "Work/Standup.md");
+  assert.equal(result.missing, true);
+});
+
+test("each line's style is read from how it starts, and the first line is the title", () => {
+  const { result } = lua(`
+    local r = require("notes.render")
+    local lines = { "Shopping", "", "## Today", "### Later", "- [ ] eggs", "  - [x] milk", "* one", "- two", "1. three", "> quote", "\`\`\`", "# not a heading", "\`\`\`", "| a | b |", "plain" }
+    io.write(vim.json.encode(vim.tbl_map(function(k) return { k.kind, k.done, k.indent } end, r.kinds(lines))))
+  `);
+  assert.deepEqual(result.map((k) => k[0]), ["title", "body", "heading", "subheading", "check", "check", "bullet", "dash", "number", "quote", "fence", "code", "fence", "table", "body"]);
+  assert.equal(result[4][1], false);
+  assert.deepEqual(result[5].slice(1), [true, 2], "a ticked item, indented");
+});
+
+test("inline styles are found with their markup to hide, and code, snake_case and a#b are left alone", () => {
+  const { result } = lua(`
+    local r = require("notes.render")
+    local line = "**b** *i* <u>u</u> ~~s~~ ==h== \`**c**\` [[Trip]] [site](https://x.co) https://a.b/c. #tag snake_case _it_ a#b"
+    io.write(vim.json.encode(vim.tbl_map(function(s) return { s.hl, line:sub(s.s + 1, s.e), s.note or s.url or s.tag, vim.tbl_map(function(c) return line:sub(c[1] + 1, c[2]) end, s.conceal) } end, r.inline(line))))
+  `);
+  const by = Object.fromEntries(result.map(([hl, text, extra, hidden]) => [`${hl}:${text}`, { extra, hidden }]));
+  assert.deepEqual(by["NotesBold:b"].hidden, ["**", "**"]);
+  assert.deepEqual(by["NotesItalic:i"].hidden, ["*", "*"]);
+  assert.deepEqual(by["NotesUnderline:u"].hidden, ["<u>", "</u>"]);
+  assert.deepEqual(by["NotesStrike:s"].hidden, ["~~", "~~"]);
+  assert.deepEqual(by["NotesHighlight:h"].hidden, ["==", "=="]);
+  assert.deepEqual(by["NotesMono:**c**"].hidden, ["`", "`"], "nothing inside code is styled");
+  assert.ok(!by["NotesBold:c"]);
+  assert.equal(by["NotesNoteLink:Trip"].extra, "Trip");
+  assert.deepEqual(by["NotesLink:site"], { extra: "https://x.co", hidden: ["[", "](https://x.co)"] });
+  assert.equal(by["NotesLink:https://a.b/c"].extra, "https://a.b/c", "a full stop after a link isn't part of it");
+  assert.equal(by["NotesTag:#tag"].extra, "tag");
+  assert.ok(by["NotesItalic:it"], "_italic_ at word boundaries");
+  assert.equal(result.filter(([hl]) => hl === "NotesItalic").length, 2, "snake_case isn't italic");
+  assert.equal(result.filter(([hl]) => hl === "NotesTag").length, 1, "a#b isn't a tag");
+});
+
+test("paragraph styles replace a line's marker and toggle back to body; character styles wrap and unwrap", () => {
+  const { result } = lua(`
+    local f = require("notes.format")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(buf)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "  - [ ] eggs", "milk", "bread" })
+    local seen = {}
+    local function snap() table.insert(seen, vim.api.nvim_buf_get_lines(buf, 0, -1, false)) end
+    f.paragraph(buf, 1, 3, "number") snap()
+    f.paragraph(buf, 1, 3, "number") snap()
+    f.paragraph(buf, 2, 2, "heading") snap()
+    f.paragraph(buf, 3, 3, "quote") snap()
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "say hello world" })
+    vim.api.nvim_win_set_cursor(0, { 1, 5 })
+    f.character(buf, "bold", false) snap()
+    vim.api.nvim_win_set_cursor(0, { 1, 7 })
+    f.character(buf, "bold", false) snap()
+    f.wrap(buf, 1, 10, 15, "underline") snap()
+    f.monospaced(buf, 1, 1) snap()
+    f.monospaced(buf, 2, 2) snap()
+    io.write(vim.json.encode(seen))
+  `);
+  assert.deepEqual(result[0], ["  1. eggs", "2. milk", "3. bread"], "numbered from 1, indent kept");
+  assert.deepEqual(result[1], ["  eggs", "milk", "bread"], "the same style again is body text");
+  assert.deepEqual(result[2][1], "## milk");
+  assert.deepEqual(result[3][2], "> bread");
+  assert.equal(result[4][0], "say **hello** world", "the word under the cursor");
+  assert.equal(result[5][0], "say hello world", "and off again");
+  assert.equal(result[6][0], "say hello <u>world</u>");
+  assert.deepEqual(result[7], ["```", "say hello <u>world</u>", "```"]);
+  assert.deepEqual(result[8], ["say hello <u>world</u>"], "monospaced again takes the block out");
+});
+
+test("a character style works as in Notes: on a word, off in text that has it, and on what you type next anywhere else", () => {
+  const { result } = lua(`
+    local f = require("notes.format")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.virtualedit = "onemore"
+    local seen = {}
+    local function snap(label) table.insert(seen, { label, vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1], vim.api.nvim_win_get_cursor(0)[2], f.pending and f.pending.col or vim.NIL }) end
+    local function at(col, text) vim.api.nvim_buf_set_lines(buf, 0, -1, false, { text }) vim.api.nvim_win_set_cursor(0, { 1, col }) f.pending = nil end
+    at(6, "alpha beta gamma") f.character(buf, "bold") snap("word")
+    at(8, "alpha **beta** gamma") f.character(buf, "bold") snap("off")
+    at(7, "alpha **two words** x") f.character(buf, "bold") snap("off, the whole run")
+    at(8, "alpha **beta** gamma") f.character(buf, "italic") snap("italic on bold")
+    at(5, "alpha beta") f.character(buf, "strike") snap("on a space")
+    at(0, "") f.character(buf, "underline") snap("empty line")
+    f.drop_empty(buf) snap("left empty")
+    at(4, "type") f.character(buf, "highlight", false, 4) snap("just typed")
+    at(2, "type") f.character(buf, "code", false, 2) snap("typing inside a word")
+    io.write(vim.json.encode(seen))
+  `);
+  const [word, off, run, both, space, empty, dropped, typed, inside] = result;
+  assert.deepEqual(word.slice(1, 3), ["alpha **beta** gamma", 8]);
+  assert.deepEqual(off.slice(1, 3), ["alpha beta gamma", 6], "on bold text, Bold takes it off, the cursor staying on the word");
+  assert.equal(run[1], "alpha two words x", "for the whole run, not a word of it");
+  assert.equal(both[1], "alpha ***beta*** gamma", "italic on a bold word adds to it");
+  assert.deepEqual(space.slice(1), ["alpha ~~~~beta", 8, 6], "markers after the space, the cursor between them");
+  assert.deepEqual(empty.slice(1), ["<u></u>", 3, 0]);
+  assert.deepEqual(dropped.slice(1, 2), [""], "nothing typed in them: they go");
+  assert.deepEqual(typed.slice(1), ["type====", 6, 4], "right after a word you typed, it is for what you type next");
+  assert.deepEqual(inside.slice(1, 3), ["`type`", 3], "inside a word, the word, the cursor where it was in it");
+});
+
+test("typing starts after a line's marker: a new checklist item's cursor, and i, a and I on one", () => {
+  const { result } = lua(`
+    local f = require("notes.format")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(buf)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "", "milk" })
+    f.paragraph(buf, 1, 1, "check")
+    local empty = vim.api.nvim_win_get_cursor(0)
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    f.paragraph(buf, 2, 2, "check")
+    local with_text = vim.api.nvim_win_get_cursor(0)
+    local p = f.insert_point
+    io.write(vim.json.encode({
+      lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false), empty = empty, with_text = with_text,
+      a_on_box = p("- [ ] milk", 0, "a"), i_on_box = p("- [ ] milk", 2, "i"), I = p("  * milk", 5, "I"),
+      a_in_text = p("- [ ] milk", 7, "a") == nil, plain = p("milk", 0, "I") == nil, heading = p("## Plan", 0, "a"),
+    }))
+  `);
+  assert.deepEqual(result.lines, ["- [ ] ", "- [ ] milk"]);
+  assert.deepEqual(result.empty, [1, 5], "on the item's last character, so a starts typing at its end");
+  assert.deepEqual(result.with_text, [2, 6], "on its text");
+  assert.equal(result.a_on_box, 6, "a on the ☐ types after it");
+  assert.equal(result.i_on_box, 6);
+  assert.equal(result.I, 4, "I goes past the marker, not to the bullet");
+  assert.equal(result.a_in_text, true, "in the text, a is a as always");
+  assert.equal(result.plain, true, "and a line without a marker is left alone");
+  assert.equal(result.heading, 3);
+});
+
+test("checklists tick, move ticked items down, uncheck all and delete checked", () => {
+  const { result } = lua(`
+    local f = require("notes.format")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "# List", "- [ ] eggs", "- [ ] milk", "- [ ] bread", "", "after" })
+    local seen = {}
+    local function snap() table.insert(seen, vim.api.nvim_buf_get_lines(buf, 0, -1, false)) end
+    local not_item = f.toggle_check(buf, 1)
+    f.toggle_check(buf, 2) snap()
+    f.options.move_checked_to_bottom = true
+    f.toggle_check(buf, 3) snap()
+    f.uncheck_all(buf) snap()
+    f.toggle_check(buf, 2)
+    f.delete_checked(buf) snap()
+    io.write(vim.json.encode({ not_item = not_item, seen = seen }))
+  `);
+  assert.equal(result.not_item, false);
+  assert.deepEqual(result.seen[0].slice(1, 4), ["- [x] eggs", "- [ ] milk", "- [ ] bread"]);
+  assert.deepEqual(result.seen[1].slice(1, 4), ["- [ ] bread", "- [x] eggs", "- [x] milk"], "ticked items under the rest, in order");
+  assert.deepEqual(result.seen[2].slice(1, 4), ["- [ ] bread", "- [ ] eggs", "- [ ] milk"]);
+  assert.deepEqual(result.seen[3], ["# List", "- [ ] eggs", "- [ ] milk", "", "after"]);
+});
+
+test("Enter carries a list on and ends it on an empty item; Tab indents an item and renumbers", () => {
+  const { result } = lua(`
+    local f = require("notes.format")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(buf)
+    -- As in Insert mode, the cursor can be just past a line's end.
+    vim.o.virtualedit = "onemore"
+    -- Your config's indent, not Neovim's default of 8.
+    vim.o.shiftwidth = 2
+    local seen = {}
+    local function snap() table.insert(seen, { lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false), cursor = vim.api.nvim_win_get_cursor(0) }) end
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "- [x] eggs" })
+    vim.api.nvim_win_set_cursor(0, { 1, 10 })
+    local carried = f.enter(buf) snap()
+    f.enter(buf) snap()
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "1. one", "2. two" })
+    vim.api.nvim_win_set_cursor(0, { 1, 5 })
+    f.enter(buf) snap()
+    vim.api.nvim_win_set_cursor(0, { 2, 3 })
+    f.tab(buf, 1) snap()
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "plain" })
+    local plain = f.enter(buf)
+    io.write(vim.json.encode({ carried = carried, plain = plain, seen = seen }))
+  `);
+  assert.equal(result.carried, true);
+  assert.deepEqual(result.seen[0].lines, ["- [x] eggs", "- [ ] "], "a new item, unticked");
+  assert.deepEqual(result.seen[0].cursor, [2, 6]);
+  assert.deepEqual(result.seen[1].lines, ["- [x] eggs", ""], "Enter on an empty item ends the list");
+  assert.deepEqual(result.seen[2].lines, ["1. on", "2. e", "3. two"], "split at the cursor, and the rest renumbered");
+  assert.deepEqual(result.seen[3].lines, ["1. on", "  1. e", "2. two"], "indented, it starts its own numbering");
+  assert.equal(result.plain, false, "not a list: Enter does what it always does");
+});
+
+test("tables line up as they show, and Tab moves between cells, adding a row past the last", () => {
+  const { result } = lua(`
+    local t = require("notes.table")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(buf)
+    local aligned = t.aligned({ "| Item | Qty |", "|:-|-:|", "| **Eggs** | 12 |", "| a \\\\| b | 1 |" })
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "| A | B |", "| --- | --- |", "| x | y |" })
+    vim.api.nvim_win_set_cursor(0, { 1, 2 })
+    local cells = {}
+    for _ = 1, 4 do
+      t.jump(buf, 1)
+      table.insert(cells, vim.api.nvim_win_get_cursor(0))
+    end
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    vim.api.nvim_win_set_cursor(0, { 1, 2 })
+    t.add_column(buf)
+    local widened = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+    vim.api.nvim_win_set_cursor(0, { 1, 8 })
+    t.delete_column(buf)
+    io.write(vim.json.encode({ aligned = aligned, cells = cells, lines = lines, widened = widened, narrowed = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] }))
+  `);
+  assert.deepEqual(result.aligned, ["| Item   | Qty |", "| :----- | --: |", "| **Eggs**   | 12  |", "| a \\| b | 1   |"], "bold markup doesn't count toward a cell's width");
+  assert.deepEqual(result.cells, [[1, 8], [3, 2], [3, 8], [4, 2]], "next cell, over the separator, then a new row");
+  assert.equal(result.lines.length, 4);
+  assert.equal(result.widened, "| A   |     | B   |");
+  assert.equal(result.narrowed, "| A   | B   |");
+});
+
+test(":Notes opens the sidebar and the newest note, a welcome note at first; a new note is named once it has a title", () => {
+  const { result, dir } = lua(`
+    vim.cmd("Notes")
+    local n = require("notes")
+    local s = require("notes.sidebar")
+    local first = { wins = #vim.api.nvim_tabpage_list_wins(0), note = vim.fs.basename(n.current_path()), sidebar = vim.api.nvim_buf_get_lines(s.buf, 0, 12, false) }
+    s.new_note()
+    local buf = vim.api.nvim_get_current_buf()
+    local title_at = vim.api.nvim_win_get_cursor(0)
+    vim.cmd("stopinsert")
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "# Groceries", "", "- [ ] eggs #food" })
+    n.save(buf)
+    local after = vim.fs.basename(vim.api.nvim_buf_get_name(buf))
+    local rendered = #vim.api.nvim_buf_get_extmarks(buf, require("notes.render").ns, 0, -1, {})
+    local menu_key = vim.fn.maparg("<C-p>", "n", false, true)
+    local insert_key = vim.fn.maparg("<C-p>", "i", false, true)
+    -- What Enter and a click do: a click ticks only on the box itself.
+    local on_text = n.act(buf, 3, 9, true)
+    local on_box = n.act(buf, 3, 2, true)
+    local ticked = vim.api.nvim_buf_get_lines(buf, 2, 3, false)[1]
+    local folded = n.act(buf, 1, 0, false)
+    local closed = vim.fn.foldclosed(1)
+    s.show({ tag = "food" })
+    local tag_view = vim.tbl_filter(function(l) return l:match("Groceries") end, vim.api.nvim_buf_get_lines(s.buf, 0, -1, false))
+    io.write(vim.json.encode({ first = first, title_at = title_at, menu_key = { buffer = menu_key.buffer, desc = menu_key.desc }, insert_key = { buffer = insert_key.buffer, desc = insert_key.desc }, after = after, rendered = rendered, on_text = on_text, on_box = on_box, ticked = ticked, folded = folded, closed = closed, tag_view = tag_view, files = vim.fn.readdir(vim.env.NOTES_DIR) }))
+  `);
+  assert.equal(result.first.wins, 2);
+  assert.equal(result.first.note, "Welcome to Notes.md");
+  assert.ok(result.first.sidebar.some((line) => /All Notes\s+1$/.test(line)));
+  assert.deepEqual(result.title_at, [1, 2], "a new note starts with its title to type, after the #");
+  assert.equal(result.after, "Groceries.md");
+  assert.deepEqual(result.menu_key, { buffer: 1, desc: "Format menu" }, "Ctrl-P opens the Format menu, in a note only");
+  assert.deepEqual(result.insert_key, { buffer: 1, desc: "Format menu" }, "in Insert mode too, rather than vim's word completion");
+  assert.ok(result.rendered > 0);
+  assert.equal(result.on_text, false);
+  assert.equal(result.on_box, true);
+  assert.equal(result.ticked, "- [x] eggs #food");
+  assert.equal(result.folded, true);
+  assert.equal(result.closed, 1, "Enter on the title folds its section");
+  assert.equal(result.tag_view.length, 1, "a tag shows the notes that have it");
+  assert.deepEqual(result.files.filter((f) => f.endsWith(".md")).sort(), ["Groceries.md", "Welcome to Notes.md"]);
+  assert.ok(!fs.existsSync(path.join(dir, "New Note.md")));
+});
+
+test("Notes opens the note you had open last, through renames, and the newest once that one is deleted", () => {
+  const { result: first, dir } = lua(`
+    local s = require("notes.store")
+    s.create("", "Old")
+    vim.uv.fs_utime(s.absolute("Old.md"), os.time() - 600, os.time() - 600)
+    s.create("", "Newer")
+    s.set_pinned("Newer.md", true)
+    vim.cmd("Notes")
+    local n = require("notes")
+    local opened = vim.fs.basename(n.current_path())
+    -- Read, not changed, then renamed by its title.
+    n.open(s.absolute("Old.md"))
+    local buf = vim.api.nvim_get_current_buf()
+    vim.api.nvim_buf_set_lines(buf, 0, 1, false, { "# Old, renamed" })
+    n.save(buf)
+    io.write(vim.json.encode({ opened = opened, last = s.meta().last }))
+  `);
+  assert.equal(first.opened, "Newer.md", "at first, the top of the list: the pinned note");
+  assert.equal(first.last, "Old, renamed.md", "the one open last, under its new name");
+  const { result: again } = lua(`
+    vim.cmd("Notes")
+    local n = require("notes")
+    local reopened = vim.fs.basename(n.current_path())
+    local s = require("notes.store")
+    s.delete(s.absolute("Old, renamed.md"))
+    io.write(vim.json.encode({ reopened = reopened, last = s.meta().last or vim.NIL, fallback = vim.fs.basename(s.last() or "none") }))
+  `, dir);
+  assert.equal(again.reopened, "Old, renamed.md", "started again, it opens where you left off, though another note is pinned and newer");
+  assert.equal(again.last, null, "deleted, it is no longer the one to open");
+  assert.equal(again.fallback, "none");
+});
+
+test("two edits of a note merge line by line: next to each other both apply, on the same line both versions are kept, yours first", () => {
+  const { result } = lua(`
+    local merge = require("notes.sync").merge
+    local base = "# List\\n- [ ] one\\n- [ ] two\\n- [ ] three\\n"
+    local adjacent = { merge(base, "# List\\n- [ ] one, typed\\n- [ ] two\\n- [ ] three\\n", "# List\\n- [ ] one\\n- [ ] two (ABC-1)\\n- [ ] three\\n") }
+    local same = { merge(base, "# List\\n- [ ] one\\n- [ ] two, mine\\n- [ ] three\\n", "# List\\n- [ ] one\\n- [ ] two (ABC-1)\\n- [ ] three\\n") }
+    local alike = { merge(base, "# List\\n- [x] one\\n- [ ] two\\n- [ ] three\\n", "# List\\n- [x] one\\n- [ ] two\\n- [ ] three\\n") }
+    local added = { merge(base, base .. "- [ ] mine\\n", base .. "- [ ] theirs\\n") }
+    local removed = { merge(base, "# List\\n- [ ] two\\n- [ ] three\\n", "# List\\n- [ ] one\\n- [ ] two\\n- [ ] three\\n- [ ] four\\n") }
+    io.write(vim.json.encode({ adjacent = adjacent, same = same, alike = alike, added = added, removed = removed }))
+  `);
+  assert.deepEqual(result.adjacent, ["# List\n- [ ] one, typed\n- [ ] two (ABC-1)\n- [ ] three\n", 0]);
+  assert.deepEqual(result.same, ["# List\n- [ ] one\n- [ ] two, mine\n- [ ] two (ABC-1)\n- [ ] three\n", 1]);
+  assert.deepEqual(result.alike, ["# List\n- [x] one\n- [ ] two\n- [ ] three\n", 0], "the same change made on both sides appears once");
+  assert.deepEqual(result.added, ["# List\n- [ ] one\n- [ ] two\n- [ ] three\n- [ ] mine\n- [ ] theirs\n", 1]);
+  assert.deepEqual(result.removed, ["# List\n- [ ] two\n- [ ] three\n- [ ] four\n", 0]);
+});
+
+test("a note changed from outside while it is open shows the change, and a save keeps both it and what you typed", () => {
+  const { result, dir } = lua(`
+    local s = require("notes.store")
+    local path = s.create("", "Plan")
+    local f = io.open(path, "w"); f:write("# Plan\\n\\n- [ ] one\\n- [ ] two\\n- [ ] three\\n"); f:close()
+    vim.cmd("Notes")
+    local n = require("notes")
+    n.open(path)
+    local buf = vim.api.nvim_get_current_buf()
+    vim.api.nvim_win_set_cursor(0, { 5, 4 })
+    local function outside(text) local g = io.open(path, "w"); g:write(text); g:close() end
+    local function lines() return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\\n") end
+
+    -- Nothing unsaved: the change shows up on its own, the cursor where it was.
+    outside("# Plan\\n\\n- [ ] one (ABC-1)\\n- [ ] two\\n- [ ] three\\n")
+    local shown = vim.wait(3000, function() return lines():find("ABC%-1") ~= nil end, 20)
+    local after_shown = { lines = lines(), modified = vim.bo[buf].modified, cursor = vim.api.nvim_win_get_cursor(0) }
+
+    -- Typing not yet saved, and a change outside on the next line: the save
+    -- has both. Nothing waits here, so it is the save that brings it in.
+    vim.api.nvim_buf_set_lines(buf, 3, 4, false, { "- [ ] two, typed" })
+    outside("# Plan\\n\\n- [ ] one (ABC-1)\\n- [ ] two\\n- [ ] three (ABC-2)\\n")
+    n.save(buf)
+    local saved = io.open(path):read("*a")
+
+    -- The app's own save doesn't come back as a change.
+    local tick = vim.b[buf].changedtick
+    vim.wait(400)
+    local own = vim.b[buf].changedtick == tick
+
+    -- Deleted outside: what you type isn't written back under the old name.
+    os.remove(path)
+    vim.api.nvim_buf_set_lines(buf, 0, 1, false, { "# Plan, still" })
+    n.save(buf)
+    io.write(vim.json.encode({ shown = shown, after_shown = after_shown, saved = saved, own = own, recreated = vim.uv.fs_stat(path) ~= nil, kept = lines():find("Plan, still") ~= nil }))
+  `);
+  assert.equal(result.shown, true, "the open note took the outside change without a save or a keypress");
+  assert.equal(result.after_shown.lines, "# Plan\n\n- [ ] one (ABC-1)\n- [ ] two\n- [ ] three");
+  assert.equal(result.after_shown.modified, false, "and has nothing unsaved because of it");
+  assert.deepEqual(result.after_shown.cursor, [5, 4]);
+  assert.equal(result.saved, "# Plan\n\n- [ ] one (ABC-1)\n- [ ] two, typed\n- [ ] three (ABC-2)\n");
+  assert.equal(result.own, true);
+  assert.equal(result.recreated, false);
+  assert.equal(result.kept, true, "the text stays in the note window");
+  assert.ok(!fs.existsSync(path.join(dir, "Plan, still.md")));
+});
+
+test("the note window numbers its lines relative to the cursor, and the sidebar doesn't; the option turns them off", () => {
+  const { result } = lua(`
+    vim.cmd("Notes")
+    local n = require("notes")
+    local note = { number = vim.wo[n.note_win].number, relative = vim.wo[n.note_win].relativenumber }
+    local side = require("notes.sidebar").window()
+    local sidebar = { number = vim.wo[side].number, relative = vim.wo[side].relativenumber }
+    n.setup({ relative_line_numbers = false })
+    n.open(n.current_path())
+    io.write(vim.json.encode({ note = note, sidebar = sidebar, off = { number = vim.wo[n.note_win].number, relative = vim.wo[n.note_win].relativenumber } }))
+  `);
+  assert.deepEqual(result.note, { number: true, relative: true });
+  assert.deepEqual(result.sidebar, { number: false, relative: false });
+  assert.deepEqual(result.off, { number: false, relative: false });
+});
+
+test("completion and Copilot are off in every note, opened at the start or from the sidebar, before its type is set", () => {
+  const { result } = lua(`
+    -- A stand-in for nvim-cmp that records the buffer it was turned off in.
+    local off = {}
+    -- File types are detected, as in any real config (-u NONE leaves it off).
+    vim.cmd("filetype on")
+    -- What a plugin attaching on FileType, as Copilot does, would see.
+    local at_filetype = {}
+    vim.api.nvim_create_autocmd("FileType", { pattern = "markdown", callback = function(ev) table.insert(at_filetype, vim.b[ev.buf].copilot_enabled == false) end })
+    package.loaded.cmp = { setup = { buffer = function(config) if config.enabled == false then off[vim.api.nvim_get_current_buf()] = true end end } }
+    local s = require("notes.store")
+    s.create("", "First")
+    vim.uv.fs_utime(s.absolute("First.md"), os.time() - 60, os.time() - 60)
+    s.create("", "Second")
+    vim.cmd("Notes")
+    local n = require("notes")
+    local sb = require("notes.sidebar")
+    local at_start = vim.api.nvim_win_get_buf(n.note_win)
+    -- Opened from the sidebar, with the sidebar the current window.
+    vim.api.nvim_set_current_win(sb.window())
+    n.open(s.absolute("First.md"), { stay = true })
+    local from_sidebar = vim.api.nvim_win_get_buf(n.note_win)
+    io.write(vim.json.encode({
+      start = off[at_start] == true, sidebar = off[from_sidebar] == true, list = off[sb.buf] == true,
+      copilot = vim.b[from_sidebar].copilot_enabled,
+      at_filetype = at_filetype,
+      undofile = vim.bo[from_sidebar].undofile,
+    }))
+  `);
+  assert.deepEqual(result, { start: true, sidebar: true, list: false, copilot: false, at_filetype: [true, true], undofile: false });
+});
+
+test("Ctrl-F lists every note for fzf, newest first, and opens the one picked", () => {
+  // A stand-in fzf that keeps what it was given, and picks the second line.
+  const bin = fs.mkdtempSync(path.join(tmp, "fzf-bin-"));
+  const given = path.join(bin, "given.txt");
+  fs.writeFileSync(path.join(bin, "fzf"), `#!/bin/sh\necho "$@" > '${given}.args'\ntee '${given}' | sed -n 2p\n`, { mode: 0o755 });
+  const { result } = lua(`
+    vim.env.PATH = "${bin}:" .. vim.env.PATH
+    local s = require("notes.store")
+    s.create("Work", "Standup")
+    vim.uv.fs_utime(s.absolute("Work/Standup.md"), os.time() - 60, os.time() - 60)
+    s.create("", "Groceries")
+    s.delete(s.create("", "Gone"))
+    vim.cmd("Notes")
+    local n = require("notes")
+    local key = vim.fn.maparg("<C-f>", "n", false, true)
+    require("notes.finder").open()
+    vim.wait(3000, function() return n.current_path() and n.current_path():match("Standup") ~= nil end)
+    io.write(vim.json.encode({ opened = vim.fs.basename(n.current_path()), key = key.desc, wins = #vim.api.nvim_tabpage_list_wins(0) }))
+  `);
+  const lines = fs.readFileSync(given, "utf8").replace(/\n$/, "").split("\n");
+  assert.equal(lines.length, 2, "Recently Deleted isn't listed");
+  assert.match(lines[0], /^Groceries\.md\t  Groceries\s+Notes\s+$/);
+  assert.match(lines[1], /^Work\/Standup\.md\t  Standup\s+Work\s+$/);
+  assert.match(fs.readFileSync(`${given}.args`, "utf8"), /--with-nth=2 .*--preview=cat \{1\}/);
+  assert.deepEqual(result, { opened: "Standup.md", key: "Find a note", wins: 2 }, "the picked note opens, and the finder's window is gone");
+});
+
+test("only one Notes opens the notes at a time; a lock left by one that has gone is taken over, and quitting lets go", () => {
+  const dir = fs.mkdtempSync(path.join(tmp, "notes-lock-"));
+  // Held by a live process: this test's own.
+  fs.writeFileSync(path.join(dir, ".notes.lock"), String(process.pid));
+  const { result: refused } = lua(`
+    vim.cmd("Notes")
+    io.write(vim.json.encode({ wins = #vim.api.nvim_tabpage_list_wins(0), text = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\\n"), notes = #vim.fn.glob(vim.env.NOTES_DIR .. "/*.md", false, true) }))
+  `, dir);
+  assert.equal(refused.wins, 1, "no sidebar, no note");
+  assert.match(refused.text, new RegExp(`Notes is open already, in another Neovim \\(process ${process.pid}\\)`));
+  assert.equal(refused.notes, 0, "and not even the welcome note written");
+  assert.equal(fs.readFileSync(path.join(dir, ".notes.lock"), "utf8"), String(process.pid), "the lock is left to its holder");
+
+  // Left by a process that has gone: taken over, and let go on quitting.
+  fs.writeFileSync(path.join(dir, ".notes.lock"), "999999");
+  const { result: opened } = lua(`
+    vim.cmd("Notes")
+    local held = io.open(vim.env.NOTES_DIR .. "/.notes.lock"):read("*a")
+    io.write(vim.json.encode({ wins = #vim.api.nvim_tabpage_list_wins(0), held = held == tostring(vim.uv.os_getpid()) }))
+    vim.cmd("doautocmd VimLeavePre")
+  `, dir);
+  assert.deepEqual(opened, { wins: 2, held: true });
+  assert.ok(!fs.existsSync(path.join(dir, ".notes.lock")), "gone once it quits");
+  assert.ok(!fs.readdirSync(dir).some((name) => name.endsWith(".tmp")), "the pins were written whole, with nothing left beside them");
+});
+
+test("deleting the open note from the sidebar moves it to Recently Deleted and shows the next one", () => {
+  const { result } = lua(`
+    local s = require("notes.store")
+    s.create("", "Keep")
+    vim.uv.fs_utime(s.absolute("Keep.md"), os.time() - 60, os.time() - 60)
+    s.create("", "Drop")
+    vim.cmd("Notes")
+    local n = require("notes")
+    local sb = require("notes.sidebar")
+    local opened = vim.fs.basename(n.current_path())
+    vim.api.nvim_set_current_win(sb.window())
+    for row, item in pairs(sb.state.items) do
+      if item.note and item.note:match("Drop") then vim.api.nvim_win_set_cursor(0, { row, 0 }) break end
+    end
+    sb.delete()
+    io.write(vim.json.encode({ opened = opened, now = vim.fs.basename(n.current_path()), trash = vim.tbl_map(function(x) return x.title end, s.notes(s.TRASH)) }))
+  `);
+  assert.equal(result.opened, "Drop.md", "the newest note opens first");
+  assert.equal(result.now, "Keep.md");
+  assert.deepEqual(result.trash, ["Drop"]);
+});
+
+test("bin/notes adds the plugin after your config loads, which lazy.nvim's reset would otherwise drop, and keeps Copilot out", () => {
+  const script = fs.readFileSync(path.join(__dirname, "../bin/notes"), "utf8");
+  assert.match(script, /exec nvim --cmd "let g:notes_app = 1" -c/, "set before the config, so lazy.nvim sees it");
+  assert.match(fs.readFileSync(path.join(__dirname, "../nvim/lua/plugins/copilot.lua"), "utf8"), /cond = not vim\.g\.notes_app/);
+  assert.match(script, /-c "set rtp\^=\$here\/notes" -c "runtime plugin\/notes\.lua" -c "Notes"/);
+  assert.doesNotMatch(script, /--cmd "set rtp/);
+});

@@ -900,6 +900,151 @@ and stand-ins for Slack, so they never type into your tabs or post anything:
 node --test test/*.test.js
 ```
 
+## notes
+
+The macOS Notes app's notes, in the terminal, edited with vim.
+
+```
+notes
+```
+
+It opens Neovim with your own config, so your keys and colors work as they
+always do, plus the notes plugin in `notes/`, added for that run only, so your
+normal `nvim` is left as it is. On the left is a list of folders, tags and
+notes; on the right, the note you had open when you last quit, or the newest
+when that one is gone. A note is a Markdown file, drawn the way Notes
+shows it: markup is hidden (it shows only on the line you are typing in), a
+title stands out from headings and subheadings, list markers show as • and –,
+checklist items as ☐ and ☑, a quote with a bar, a table with box lines.
+
+Notes are kept in `$NOTES_DIR`, or `~/Notes`, one Markdown file each, in
+folders that are directories. A note's title is its first line, and its file
+is named for it and renamed when it changes. They save themselves a moment
+after each change. Pinned notes are listed in `.notes.json` there, and deleted
+notes go to `.trash/`, the Recently Deleted folder; deleting one from there
+removes it for good. While it runs, the app holds `.notes.lock` there, with its
+process ID: notes save themselves as you type, so a second app on the same
+notes would write over the first's, and instead it says the notes are open
+already and closes with `q`. A lock left by an app that has gone is taken over.
+Nothing else is stored, so any editor can open them, and
+they never leave the Mac: Copilot isn't loaded in the notes app at all, and
+completion and the undo file are off in a note.
+
+### Setup
+
+```
+./sync.sh notes
+```
+
+links `bin/notes` into `~/.local/bin`. It needs Neovim 0.10 or newer and a
+font with ☐, ☑ and the box-drawing characters, which every common one has.
+The first run makes `~/Notes` with a welcome note showing everything a note
+can do.
+
+In tmux, `M-N` (Alt-Shift-N) opens it in a tab of its own named Notes, or goes
+to that tab when it is open already, since two of them saving the same notes
+as you type would write over each other. It runs `tmux/notes-open.sh`, which
+`./sync.sh tmux` links, so the binding needs both that and `./sync.sh notes`.
+
+### In the list
+
+| Key | Does |
+| --- | --- |
+| Enter, or a click | open a note, or show a folder's or a tag's notes |
+| `n` / `N` | new note in the folder shown / new folder |
+| `dd` | delete (to Recently Deleted) |
+| `r` | restore, in Recently Deleted |
+| `p` | pin or unpin |
+| `m` | move to a folder |
+| `R` | rename a folder |
+| `/` | search every note, by every word you type |
+| `Ctrl-F` | find a note with fzf (in a note too) |
+| `x` | clear the search or tag |
+| `Tab` | go to the note |
+| `q` / `?` | quit / these keys |
+
+Notes are listed pinned first, then newest first, each with when it changed
+and how it starts (in All Notes, also which folder it is in).
+
+### In a note
+
+Ctrl-F, in a note or the list, finds a note with fzf: every note but those in
+Recently Deleted, pinned first and then newest, each as its title, its folder
+and how it starts, any of which you can type to match, with the note shown
+beside the list. Enter opens it. It takes the place of vim's Ctrl-F (page
+down) in notes only, and needs `fzf` (`brew install fzf`).
+
+Everything is in the Format menu, Ctrl-P, which acts on the selection when
+opened from Visual mode. In a note it takes the place of your config's
+Ctrl-P (Telescope's file finder), which works as before everywhere else.
+The common ones also have their own `<leader>` key, picked to stay clear of
+the ones your config uses:
+
+| Key | Style | Written as |
+| --- | --- | --- |
+| `1` `2` `3` `0` | Title, Heading, Subheading, Body | `# ` `## ` `### ` |
+| `m` | Monospaced block | between ```` ``` ```` fences |
+| `8` `-` `7` | Bulleted, dashed, numbered list | `* ` `- ` `1. ` |
+| `l` | Checklist | `- [ ] `, `- [x] ` once ticked |
+| `q` | Block quote | `> ` |
+| `b` `i` `U` `x` `h` | Bold, italic, underline, strikethrough, highlight | `**b**` `*i*` `<u>u</u>` `~~x~~` `==h==` |
+| `` ` `` | Monospaced text | `` `code` `` |
+| `k` | Link | `[text](https://…)` |
+| `t` | Table | rows of cells between bars |
+
+A line style applied again turns the line back to body text, as in Notes. A
+character style (bold, italic, underline, strikethrough, highlight,
+monospaced) works as it does in Notes too: on the selection; off again, for
+the whole run, in text that has it already; on the word under the cursor; and
+anywhere else (a space, an empty line, just after a word you typed) on what
+you type next, starting Insert mode between its markers, which go again if
+you type nothing. From Insert mode, with Ctrl-P, it goes by where you were
+typing and leaves you typing. The menu also has the
+checklist's Move Checked to Bottom, Uncheck All and Delete Checked Items, and
+a table's add and delete row and column.
+
+- **Checklists.** Click a ☐, or press Enter on its line, to tick it.
+  `require("notes").setup({ move_checked_to_bottom = true })` moves an item
+  under the rest when it is ticked, as Notes' setting of that name does.
+- **Line numbers.** The note window numbers its lines relative to the
+  cursor, with the cursor's line showing its own, as your Neovim does, for
+  jumps like `5j`. `require("notes").setup({ relative_line_numbers = false })`
+  leaves the note bare, as in Notes.
+- **Lists.** Enter in Insert mode carries a list on (a checklist item comes
+  unticked, a number counts up) and ends it on an empty item; Tab and
+  Shift-Tab indent and outdent an item.
+- **Tables.** In Insert mode, Tab moves to the next cell, past the last one
+  adding a row, and Shift-Tab back. A table lines up again whenever you leave
+  Insert mode or change it, measured as it shows, so bold markup doesn't throw
+  a column out.
+- **Collapsible sections.** Enter on a title, heading or subheading, or a
+  click on its ▾, folds what is under it; vim's own `z` commands work too.
+- **Links.** Enter, or a click, opens a web link in the browser, a
+  `[[Note title]]` link in the note with that title (made if there is none;
+  shown dimmed until then), and a `#tag` in the list. Typing `[[` offers every
+  note's title.
+- **Tags.** Any `#word` (after a space, not in code) is a tag; the list has a
+  Tags section with each one and how many notes have it.
+
+Formatting Markdown has no syntax for is written the way Markdown tools
+usually write it: `<u>` for underline, `==…==` for highlight. Attachments,
+locked notes, sharing and Notes' own database are left out on purpose; the
+notes are plain files instead.
+
+`/note-tickets <folder, note or #tag>` in Claude turns the open checklist
+items in those notes into Linear tickets: it checks Linear for tickets that
+already cover each, suggests tickets for the rest, and creates only the ones
+you pick. Afterwards it puts each ticket's ID at the end of its item, if you agree, so
+the next run skips it. It reads only the notes you name.
+
+A note changed from outside the app, by the skill, a script or another
+editor, shows the change while it is open, without a save or a keypress. If
+you have typed something not yet saved, the two are merged line by line, so
+changes to different lines, even next to each other, both stay; where both
+changed the same line, both versions are kept, yours first, and the app says
+so. A note deleted or moved outside the app while open isn't written back
+under its old name.
+
 ## codex-review
 
 Runs Codex as a skeptical, read-only static reviewer of the current branch and

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# notes: the macOS Notes app's notes, in Neovim.
+#
+# Opens Neovim with your own config and the notes plugin in notes/ added for
+# this run only, so your normal nvim is left as it is, and runs :Notes. The
+# plugin is added after your config has loaded (with -c, not --cmd), since
+# lazy.nvim resets the runtimepath while it starts. g:notes_app is set before
+# the config (with --cmd), so it can leave out what has no place in notes:
+# Copilot isn't loaded at all. Notes are Markdown files in
+# $NOTES_DIR, or ~/Notes. Anything after `notes` is passed to nvim.
+
+here="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+exec nvim --cmd "let g:notes_app = 1" -c "set rtp^=$here/notes" -c "runtime plugin/notes.lua" -c "Notes" "$@"

@@ -123,6 +123,7 @@ sync_tmux() {
   ln -sf ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
   ln -sf ~/editor-configs/tmux/linear-project.sh ~/.config/tmux/linear-project.sh
   ln -sf ~/editor-configs/tmux/merge-queue.sh ~/.config/tmux/merge-queue.sh
+  ln -sf ~/editor-configs/tmux/notes-open.sh ~/.config/tmux/notes-open.sh
   ln -sf ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh
   ln -sf ~/editor-configs/tmux/window-revive.sh ~/.config/tmux/window-revive.sh
   ln -sf ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh

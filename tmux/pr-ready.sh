@@ -17,18 +17,34 @@
 # lines under it explaining it. Checks are split into required and the rest,
 # because a failing optional check (a preview deploy, say) does not block the
 # merge and should not read as if it did.
+#
+# It has to be quick, so GitHub is asked as little as it can be. The PR comes
+# from one gh call, and its merge queue entry and its checks, counted by
+# outcome, from one GraphQL query; listing the checks themselves would take
+# a page per hundred, and a big repo has hundreds. Only the required checks
+# can't be counted that way: gh pr checks --required reads them one by one,
+# which takes seconds. It starts first, in the background, and is waited for
+# only when the verdict needs it: a PR GitHub calls ready has every required
+# check passing by definition.
 
 set -u
 
 wait=false
 [ "${1:-}" = --wait ] && { wait=true; shift; }
 
-# Every exit below goes through this, so the popup never closes before the
-# answer has been read.
-trap '$wait && { printf "\n  Press any key to close."; read -rsn 1; }' EXIT
-
 path="${1:-$PWD}"
 cd "$path" 2>/dev/null || { echo "No such directory: $path"; exit 1; }
+
+# The required checks, counted by outcome (see the top), into a file the
+# verdict reads if it needs them.
+required_file=$(mktemp -t pr-ready)
+gh pr checks --required --json bucket 2>/dev/null |
+  jq -r 'group_by(.bucket) | map("\(length) \(.[0].bucket)") | join(", ") | if . == "" then "none" else . end' >"$required_file" &
+required_pid=$!
+
+# Every exit below goes through this, so the popup never closes before the
+# answer has been read, and the background count stops with it.
+trap 'kill "$required_pid" 2>/dev/null; rm -f "$required_file"; $wait && { printf "\n  Press any key to close."; read -rsn 1; }' EXIT
 
 green=$'\033[32m' red=$'\033[31m' yellow=$'\033[33m' dim=$'\033[2m' bold=$'\033[1m' reset=$'\033[0m'
 
@@ -61,15 +77,28 @@ case "$(field .state)" in
 esac
 
 # gh pr view has no field for the merge queue, so the entry comes from GraphQL,
-# the same query queue-and-clean watches with. Owner, repo, and number are read
-# off the PR's URL rather than asked for again. A failed query reads as "not
-# queued", so the readiness check below still runs.
-progress "Checking the merge queue..."
+# as queue-and-clean reads it, along with the latest commit's checks counted by
+# outcome: gh's own buckets, so they read as gh pr checks would say them.
+# Owner, repo, and number are read off the PR's URL rather than asked for
+# again. A failed query reads as "not queued", so the readiness check below
+# still runs.
+progress "Checking the merge queue and checks..."
 IFS=/ read -r owner repo number < <(field .url | sed -E 's#^https://[^/]+/([^/]+)/([^/]+)/pull/([0-9]+).*#\1/\2/\3#')
-queue=$(gh api graphql -F owner="$owner" -F repo="$repo" -F number="$number" \
-  -f query='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { mergeQueueEntry { state position } } } }' \
-  --jq '.data.repository.pullRequest.mergeQueueEntry' 2>/dev/null) || queue=null
+extra=$(gh api graphql -F owner="$owner" -F repo="$repo" -F number="$number" \
+  -f query='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { mergeQueueEntry { state position } commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) { checkRunCountsByState { state count } statusContextCountsByState { state count } } } } } } } } }' \
+  --jq '.data.repository.pullRequest' 2>/dev/null) || extra=null
+queue=$(jq -c '.mergeQueueEntry' <<<"${extra:-null}" 2>/dev/null) || queue=null
 queue_state=$(jq -r '.state // empty' <<<"${queue:-null}" 2>/dev/null)
+all=$(jq -r '
+  def bucket: if IN("SUCCESS", "NEUTRAL", "COMPLETED") then "pass"
+    elif . == "SKIPPED" then "skipping"
+    elif . == "CANCELLED" then "cancel"
+    elif IN("IN_PROGRESS", "PENDING", "QUEUED", "WAITING", "EXPECTED") then "pending"
+    else "fail" end;
+  [.commits.nodes[0].commit.statusCheckRollup.contexts // {} | (.checkRunCountsByState // []) + (.statusContextCountsByState // []) | .[] | select(.count > 0) | {bucket: (.state | bucket), count}]
+  | group_by(.bucket) | map("\(map(.count) | add) \(.[0].bucket)")
+  | ["pass", "fail", "pending", "cancel", "skipping"] as $order | sort_by(split(" ")[1] as $b | $order | index($b))
+  | join(", ") | if . == "" then "none" else . end' <<<"${extra:-null}" 2>/dev/null) || all=unknown
 
 if [ -n "$queue_state" ]; then
   position=$(jq -r '.position' <<<"$queue")
@@ -93,15 +122,17 @@ for _ in 1 2 3; do
   pr=$(gh pr view --json "$fields" 2>/dev/null) || break
 done
 
-# Counts by outcome, e.g. "2 pass, 1 pending". gh exits non-zero whenever a
-# check is failing or pending, so its status is not an error here.
-counts() {
-  gh pr checks "$@" --json bucket 2>/dev/null |
-    jq -r 'group_by(.bucket) | map("\(length) \(.[0].bucket)") | join(", ") | if . == "" then "none" else . end'
-}
-progress "Reading the checks..."
-required=$(counts --required)
-all=$(counts)
+# Ready means every required check passes, so only a PR that isn't needs the
+# background count of them. gh exits non-zero whenever a check is failing or
+# pending, so its status is not an error there.
+case "$(field .mergeStateStatus)" in
+  CLEAN | HAS_HOOKS | UNSTABLE) required="${green}all passing${reset}" ;;
+  *)
+    progress "Reading the required checks..."
+    wait "$required_pid" 2>/dev/null
+    required=$(cat "$required_file")
+    ;;
+esac
 
 header
 

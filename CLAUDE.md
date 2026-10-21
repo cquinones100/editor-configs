@@ -127,7 +127,11 @@ one and presses its key. The list is read from tmux, not kept anywhere: a
 binding shows up when `tmux.conf` gives it a description with
 `bind -N "<what it does>"`, so every new custom binding needs one. In the
 prefix table only keys `tmux.conf` binds with `-N` are listed, since tmux's own
-prefix bindings carry descriptions too.
+prefix bindings carry descriptions too. A command that belongs in the palette
+but has no hotkey is bound with `-N` in the `palette` key table, which no key
+leads to, as the branch-copy commands (`tmux/branch-copy.sh`) are: the palette
+lists that table with no key shown, and the `M-p` binding switches the client
+to it before pressing the key.
 
 Every format inside a shell command (`run-shell`, `if-shell` without `-F`,
 `#(...)`) is written `#{q:...}`, never bare or in quotes. tmux pastes the value

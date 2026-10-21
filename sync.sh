@@ -127,6 +127,7 @@ sync_tmux() {
   ~/editor-configs/tmux/resurrect-tidy.sh
   put_link ~/editor-configs/tmux/confirm.sh ~/.config/tmux/confirm.sh
   put_link ~/editor-configs/tmux/linear-ticket.sh ~/.config/tmux/linear-ticket.sh
+  put_link ~/editor-configs/tmux/branch-copy.sh ~/.config/tmux/branch-copy.sh
   put_link ~/editor-configs/tmux/linear-project.sh ~/.config/tmux/linear-project.sh
   put_link ~/editor-configs/tmux/merge-queue.sh ~/.config/tmux/merge-queue.sh
   put_link ~/editor-configs/tmux/notes-open.sh ~/.config/tmux/notes-open.sh

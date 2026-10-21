@@ -9,7 +9,8 @@
 # description with `bind -N` shows up, so a new binding needs a note and
 # nothing else. The root table holds only bindings from tmux.conf; the prefix
 # table also holds tmux's own, which carry notes too, so from it only the keys
-# tmux.conf binds with -N are taken.
+# tmux.conf binds with -N are taken. The palette table holds commands with no
+# hotkey (see tmux.conf); they are shown with no key.
 #
 # The key cannot be pressed from inside the popup, which would swallow it. This
 # leaves it in @palette_choice, and the M-p binding presses it once the popup
@@ -69,6 +70,9 @@ bindings() {
     awk -F'\t' -v prefix="$prefix" -v ours="$ours" '
       BEGIN { n = split(ours, keys, " "); for (i = 1; i <= n; i++) wanted[keys[i]] = 1 }
       $1 in wanted { print prefix " " $1 "\t" $2 }'
+
+  # Pressed after switching to the table, which @palette tells the M-p binding.
+  tmux list-keys -N -T palette -P '' 2>/dev/null | awk "$split_note" | awk -F'\t' '{ print "@palette " $1 "\t" $2 }'
 }
 
 # tmux spells Shift+letter as the capital letter: Option+Shift+J is M-J and
@@ -77,6 +81,7 @@ bindings() {
 # the first field, which is what gets pressed, keeps tmux's own name.
 show_key='
   function shown(keys,   n, tokens, i, parts, m, out) {
+    if (keys ~ /^@palette /) return ""
     n = split(keys, tokens, " ")
     for (i = 1; i <= n; i++) {
       m = split(tokens[i], parts, "-")

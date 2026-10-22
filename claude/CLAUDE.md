@@ -54,6 +54,14 @@ Before responding to any request, always check the current branch's recent chang
 2. A pipeline or multi-step flow gets a diagram in the platform's native format: Mermaid in GitHub PRs, SVG where the platform renders it.
 3. Implementation details last, in as few words as possible. Link to the code on GitHub instead of describing it. In a Linear ticket, the implementation is always the final section, after acceptance criteria and what is out of scope, however the ticket is written (by `/shape`, a review loop's edits, or by hand) and whatever layout the team's other tickets use.
 
+Write a ticket so no sentence can be mistaken for how things work today:
+
+- Describe current behavior only under a "Today" heading or with "Today," / "Currently,".
+- Write every change the work makes as an instruction, starting with a verb: "Make Specific pass a concrete kind of facility without a named site", not "Specific passes…" or "Specific now passes…". Write what stays the same as an instruction too: "Keep the no-slur rule".
+- Write acceptance criteria as checks on the finished work: "A run against a fresh seed leaves the three new fixtures eligible at Strict".
+
+A PR describes work already done, so it can say what the code now does.
+
 A review loop's reviewer (Codex) never sees these rules. When a review loop covers a ticket or a PR description, check it against them yourself before calling a round clean, and keep its fixes within them rather than adding words.
 
 # Communication

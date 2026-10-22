@@ -54,6 +54,8 @@ Before responding to any request, always check the current branch's recent chang
 2. A pipeline or multi-step flow gets a diagram in the platform's native format: Mermaid in GitHub PRs, SVG where the platform renders it.
 3. Implementation details last, in as few words as possible. Link to the code on GitHub instead of describing it.
 
+A review loop's reviewer (Codex) never sees these rules. When a review loop covers a ticket or a PR description, check it against them yourself before calling a round clean, and keep its fixes within them rather than adding words.
+
 # Communication
 
 - Use as few words as possible. Lead with the answer; no preamble or recap.

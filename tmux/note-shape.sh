@@ -14,7 +14,7 @@
 # aren't checklist items are its details, and unticked checklist items at the
 # first level under it are its sub-items, each a ticket of its own, with
 # anything indented under them as their details. A ticked item, and all that
-# is under it, is done and left out. /shape gets the item on one line, with
+# is under it, is done and left out, and so is one struck through (~~...~~). /shape gets the item on one line, with
 # the note's title, its details and its sub-items labelled, and asks first
 # whether an item with sub-items should become a Linear project with them as
 # its issues.
@@ -63,8 +63,9 @@ items=$(awk -v title="$title" '
   {
     match($0, /^[[:space:]]*/); depth = RLENGTH
     checklist = ($0 ~ /^[[:space:]]*- \[[ xX]\]/)
-    ticked = ($0 ~ /^[[:space:]]*- \[[xX]\]/)
     text = $0; sub(/^[[:space:]]*(- \[[ xX]\]|[-*+]|[0-9]+\.)?[[:space:]]*/, "", text)
+    # Struck through (~~...~~ at the start) is dropped, the same as ticked.
+    ticked = ($0 ~ /^[[:space:]]*- \[[xX]\]/) || (checklist && text ~ /^~~/)
   }
   # A top-level line ends the item before it; an unticked checklist one starts the next.
   depth == 0 {

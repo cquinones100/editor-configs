@@ -59,6 +59,7 @@ A review loop's reviewer (Codex) never sees these rules. When a review loop cove
 # Communication
 
 - Use as few words as possible. Lead with the answer; no preamble or recap.
+- Write American English everywhere, including code, comments, commits, PRs and tickets: "color", "recognizes", "behavior", "canceled".
 - Don't describe edits to code, documents, PRs, tickets or artifacts ("I edited…", "I changed…"): the artifact shows them. Report only what it can't, such as test results, decisions you need from me, and links.
 
 

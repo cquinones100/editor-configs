@@ -45,8 +45,19 @@ Before responding to any request, always check the current branch's recent chang
 - Ask before force-pushing, and before a branch's first push unless the request already asks for it.
 
 ## Pull Request Descriptions
-- Keep the description clear and simple. Focus on the intent of the commit. Always consider the diff between the current branch and main or master. Don't use emojis, don't use bullet points. Only dig into technical implementation when there is some divergence from what is normal in the given repo.
+- Write them as "PRs and Linear tickets" below says. Always consider the diff between the current branch and main or master. Don't use emojis, don't use bullet points.
 - Never include a "Test plan" section. No checklists.
+
+# PRs and Linear tickets
+
+1. Lead with the business logic: what the unit of work does and why, for a teammate reading it months later. Answer the questions they would ask about how the feature works. The reasons for implementation choices go here.
+2. A pipeline or multi-step flow gets a diagram in the platform's native format: Mermaid in GitHub PRs, SVG where the platform renders it.
+3. Implementation details last, in as few words as possible. Link to the code on GitHub instead of describing it.
+
+# Communication
+
+- Use as few words as possible. Lead with the answer; no preamble or recap.
+- Don't describe edits to code, documents, PRs, tickets or artifacts ("I edited…", "I changed…"): the artifact shows them. Report only what it can't, such as test results, decisions you need from me, and links.
 
 
 # General

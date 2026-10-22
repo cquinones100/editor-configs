@@ -102,7 +102,8 @@ beforeEach(() => {
     if (method === "chat.scheduledMessages.list") return { ok: true, scheduled_messages: [] };
     if (method === "files.getUploadURLExternal") return { ok: true, upload_url: "https://files.example/upload", file_id: "F1" };
     if (method === "files.completeUploadExternal") {
-      uploads.at(-1).share = params;
+      // Shared together: each of the files the call names was the last uploaded.
+      uploads.slice(-params.files.length).forEach((upload) => (upload.share ??= params));
       return { ok: true };
     }
     throw new Error(`this test makes no ${method} call`);
@@ -1947,6 +1948,16 @@ test("a turn's new images are shared under it, and nothing else that only looks 
   assert.deepEqual(uploads.map((u) => u.share.thread_ts), ["1791500000.000700", "1791500000.000700"]);
   assert.deepEqual(calls.filter((c) => c.method === "files.getUploadURLExternal").map((c) => c.params.filename), ["shot.png", "chart.png"]);
   assert.equal(uploads[0].content.length, png.length);
+  assert.equal(calls.filter((c) => c.method === "files.completeUploadExternal").length, 1, "shared together, in one message");
+
+  // Many at once: up to MAX_SHARED, ten to a message.
+  const many = Array.from({ length: 13 }, (_, i) => path.join(work, `diff-${i + 1}.png`));
+  many.forEach((file) => fs.writeFileSync(file, png));
+  fs.appendFileSync(transcript, "\n" + JSON.stringify({ type: "assistant", cwd: work, message: { content: [{ type: "text", text: `The diff, in order: ${many.join(", ")}.` }] } }));
+  assert.equal(relay.turnMedia(transcript).length, 15);
+  calls.length = 0;
+  await relay.shareMedia(state, transcript, "1791500000.000700");
+  assert.deepEqual(calls.filter((c) => c.method === "files.completeUploadExternal").map((c) => c.params.files.length), [10, 5]);
 });
 
 test("a video you attach is typed into the tab by its path and then its stills, in order", { skip: !fs.existsSync("/opt/homebrew/bin/ffmpeg") && "needs ffmpeg" }, async () => {

@@ -60,7 +60,7 @@ Write a ticket so no sentence can be mistaken for how things work today:
 - Write every change the work makes as an instruction, starting with a verb: "Make Specific pass a concrete kind of facility without a named site", not "Specific passes…" or "Specific now passes…". Write what stays the same as an instruction too: "Keep the no-slur rule".
 - Write acceptance criteria as checks on the finished work: "A run against a fresh seed leaves the three new fixtures eligible at Strict".
 
-A PR describes work already done, so it can say what the code now does.
+Write a PR description the same way: behavior from before the PR only under a "Before" heading or after "Before this PR,", and each change as an instruction, as a commit subject is ("Make Specific pass…", not "Specific passes…" or "Specific now passes…").
 
 A review loop's reviewer (Codex) never sees these rules. When a review loop covers a ticket or a PR description, check it against them yourself before calling a round clean, and keep its fixes within them rather than adding words.
 

@@ -1053,6 +1053,18 @@ usually write it: `<u>` for underline, `==…==` for highlight. Attachments,
 locked notes, sharing and Notes' own database are left out on purpose; the
 notes are plain files instead.
 
+The M-p action **Shape a note's checklist items as Linear tickets**
+(`tmux/note-shape.sh`) picks a note, the one open in the app first, then its
+unticked checklist items, all selected to start with, and the repo they are
+for, and opens a tab per item running `/shape` through `shape-batch`.
+Everything indented under an item is part of its ticket; unticked checklist
+items under it are its sub-items, each a ticket of its own, and `/shape`
+asks first whether the item should become a Linear project with them as its
+issues, or a ticket with them as sub-issues. It checks Linear before reading
+any code, and when a ticket already covers an item, it shows you that ticket
+and asks whether to resume shaping it instead. Ticked items, and what is under
+them, are left out.
+
 `/note-tickets <folder, note or #tag>` in Claude turns the open checklist
 items in those notes into Linear tickets: it checks Linear for tickets that
 already cover each, suggests tickets for the rest, and creates only the ones

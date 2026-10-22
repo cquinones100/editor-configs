@@ -61,7 +61,7 @@ sync_claude() {
   # Skills kept here but not installed. review-loop is defined by the repos that
   # use it, and a personal copy beside theirs shows up as a second /review-loop.
   # A leftover link from before it was listed here is removed.
-  unlinked_skills=(review-loop)
+  unlinked_skills=(review-loop ci-loop)
   for skill in ~/editor-configs/claude/skills/*/; do
     name=$(basename "$skill")
     if [[ " ${unlinked_skills[*]} " == *" $name "* ]]; then

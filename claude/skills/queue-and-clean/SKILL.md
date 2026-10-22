@@ -163,7 +163,7 @@ When it exits:
 
 ## Fixing
 
-When the branch is why the PR can't merge (a required check failed, it has merge conflicts, or the merge queue dropped it for one of those), hand it to `/ci-loop`: read `~/.claude/skills/ci-loop/SKILL.md` and follow it for this PR, including its section "When queue-and-clean runs this". It finds the failure, fixes it in this worktree or reruns a failure the branch didn't cause, pushes without force, and watches until the PR's checks pass. Tell it what brought the PR there: the failing checks, the conflicts, or the merge queue's reason for dropping it.
+When the branch is why the PR can't merge (a required check failed, it has merge conflicts, or the merge queue dropped it for one of those), hand it to `/ci-loop`: read the repository's own `.claude/skills/ci-loop/SKILL.md` and follow it for this PR, or `~/editor-configs/claude/skills/ci-loop/SKILL.md` when the repository has none, and in either case follow the section "When queue-and-clean runs this" in `~/editor-configs/claude/skills/ci-loop/SKILL.md`, which a repository's copy leaves out. It finds the failure, fixes it in this worktree or reruns a failure the branch didn't cause, pushes without force, and watches until the PR's checks pass. Tell it what brought the PR there: the failing checks, the conflicts, or the merge queue's reason for dropping it.
 
 When it hands back:
 

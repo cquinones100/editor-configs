@@ -167,8 +167,11 @@ arguments, ideas are read from stdin, one per line, and blank lines are
 skipped. Repeats open once.
 
 The windows go at the end of the tab list, in the order given, so no open tab
-is renumbered, and focus stays where it is. Each idea is single-quoted before it is typed into its window's
-shell, so whatever it contains reaches `shape` as text and is never run. Like
+is renumbered, and focus stays where it is. Each window starts `shape` with
+the idea as its own argument, under an interactive zsh for your PATH, so
+whatever the idea contains reaches `shape` as text and is never run, nothing
+is typed into a shell that may not be ready, and the window becomes a shell
+when Claude exits. Like
 `wt-batch`, it must run inside tmux, from the repo the ideas belong to, and
 needs `shape` installed.
 

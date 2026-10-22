@@ -17,9 +17,12 @@
 // where it is. Each tab is named "Shaping: ..." by `shape` itself once it
 // starts, so /wt can later clear that name when it hands the tab over.
 //
-// `shape` is typed into each window's interactive shell rather than run as the
-// window's command, as wt-batch does with `wt`: the shell is what reads
-// ~/.zshrc and so has node on the PATH, and it is still there afterwards.
+// Each window's command is an interactive zsh running `shape <item>`: zsh -i
+// reads ~/.zshrc, so node and shape are on the PATH, and the item is its own
+// argument, never typed or parsed as shell. When Claude exits, the window
+// carries on as an ordinary shell. Typing the command into a new window's
+// shell instead raced the shell's start: a long command could land before the
+// prompt was ready and lose its Enter, leaving the tab at an unrun command.
 
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -52,10 +55,6 @@ const itemsFrom = (arg) => {
   return tokens.length && tokens.every((token) => TICKET.test(token)) ? tokens : [arg];
 };
 
-// What gets typed into the shell, so it is single-quoted, with any single
-// quote inside closed, escaped, and reopened. Newlines would end the command
-// early, so they become spaces.
-const quoted = (text) => `'${text.replace(/\s*\n\s*/g, " ").replace(/'/g, "'\\''")}'`;
 
 const tmux = (args) =>
   execFileSync("tmux", args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }).trim();
@@ -90,8 +89,14 @@ const main = () => {
       "-P",
       "-F",
       "#{window_id}",
+      "--",
+      "zsh",
+      "-i",
+      "-c",
+      'shape "$1"; exec zsh -i',
+      "shape",
+      item.replace(/\s*\n\s*/g, " "),
     ]);
-    tmux(["send-keys", "-t", windowId, `shape ${quoted(item)}`, "Enter"]);
     console.error(`Shaping ${item.length > 60 ? `${item.slice(0, 57)}...` : item} in window ${windowId}`);
   });
 };

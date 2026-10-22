@@ -466,6 +466,22 @@ holds the popup open when there is an error or nothing to reopen.
   included. A closed tab that shared its directory with other tabs is reopened
   by hand: a new tab there and `claude --resume` to pick the session.
 
+## claude-reply
+
+Prints the last reply Claude gave in a tmux tab, the final text of its last
+turn, read from the session's transcript the way `slack-relay` reads it.
+
+```
+claude-reply 3            # tab 3's last reply
+claude-reply --pane 3     # the pane to type into: its Claude pane
+```
+
+It is what the M-p action **Send Claude's last reply to another tab** runs
+(`tmux/reply-send.sh`): from a tab where Claude has replied, pick another tab,
+and the reply is pasted into its Claude's prompt, or its active pane when it
+runs no Claude, without pressing Enter, and that tab comes to the front so
+you can add to it before sending. The action has no hotkey.
+
 ## worktree-done
 
 Reads every worktree in the repo, asks Linear what state each one's ticket is

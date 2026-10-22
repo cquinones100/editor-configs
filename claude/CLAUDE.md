@@ -52,7 +52,7 @@ Before responding to any request, always check the current branch's recent chang
 
 1. Lead with the business logic: what the unit of work does and why, for a teammate reading it months later. Answer the questions they would ask about how the feature works. The reasons for implementation choices go here.
 2. A pipeline or multi-step flow gets a diagram in the platform's native format: Mermaid in GitHub PRs, SVG where the platform renders it.
-3. Implementation details last, in as few words as possible. Link to the code on GitHub instead of describing it.
+3. Implementation details last, in as few words as possible. Link to the code on GitHub instead of describing it. In a Linear ticket, the implementation is always the final section, after acceptance criteria and what is out of scope, however the ticket is written (by `/shape`, a review loop's edits, or by hand) and whatever layout the team's other tickets use.
 
 A review loop's reviewer (Codex) never sees these rules. When a review loop covers a ticket or a PR description, check it against them yourself before calling a round clean, and keep its fixes within them rather than adding words.
 

@@ -57,6 +57,7 @@ Before responding to any request, always check the current branch's recent chang
 - When reading files, always read from disk, not from IDE memory (e.g., in VS Code, use the Read tool to read the file on disk rather than relying on what the IDE provides)
 - Challenge my requests if you think there's a better implementation — suggest the alternative and explain why
 - When working within a project, update the local CLAUDE.md with project requirements as they evolve. If there isn't one, create it. Update the README in the same way and keep both files in sync.
+- "Notes" or "my note" means my terminal notes app (the Notes window in tmux, nvim with `editor-configs/notes`), never macOS Notes. Notes are Markdown files in `~/Notes/`, named after their title (e.g. `~/Notes/Weekend Plans.md`); strike through with `~~text~~`.
 
 # Slack
 

@@ -469,6 +469,142 @@ holds the popup open when there is an error or nothing to reopen.
   included. A closed tab that shared its directory with other tabs is reopened
   by hand: a new tab there and `claude --resume` to pick the session.
 
+## tmux-sidebar
+
+The tabs as a sidebar down the left of every tmux window, ordered by what needs
+you, and mission control, every tab at once with its latest Claude turn, full
+screen. tmux stays the control surface: the sidebar is a pane, mission control
+a popup, and every hotkey still works from both.
+
+```
+tmux-sidebar daemon   run the daemon (tmux starts it; a second one exits)
+tmux-sidebar stop     stop it; the sidebars wait for the next one
+tmux-sidebar status   whether it is running
+```
+
+The sidebar lists the session's tabs in groups: **Needs you** (a Claude
+session waiting on an answer, the longest-waiting first, then one that finished
+while you were elsewhere, the oldest first), **Working**, **In merge queue**
+(in queue order, each with its position), **Merged**, and **Idle**, the rest, by number.
+A tab's PR comes from its label, and whether it is queued or merged from one
+GitHub query for all the tabs' PRs a minute, through `gh`, so the sections can
+lag GitHub by up to a minute. A tab whose worktree is gone, as `queue-and-clean`
+leaves it once its PR merges, is found by the worktree's branch instead, and
+shows that PR again. A Claude tab whose turn ended with background tasks still running, such as a review loop's Codex runs or a CI watch, is listed under Working, with a slate spinner and "working in background · 2 tasks", not as finished: Claude carries on when they end. The tasks are counted from its transcript, those started since its process started that no task notification has reported ended. When what runs is a known loop, the tab says so instead, with a spinner of its own: "review loop · round 2" (violet) while `codex-review` runs, two to a round since `/review-loop` last began; "CI loop · round 3" (teal) while `/ci-loop` watches the checks, one watch a round, a new one after each fix; and "queue-and-clean · watching" (orange) while `/queue-and-clean` watches the merge queue. A tab can also be flagged by hand, from M-p's "Flag or unflag this tab as needing you" (or `tmux set -w @flagged 1` in it): it goes under Needs you with a yellow `⚑`, whatever Claude is doing there, and stays until it is unflagged the same way (`tmux set -wu @flagged`), since visiting it doesn't clear it. Needs you always wins: a tab whose Claude waits
+on you stays there even while its PR is queued, and its details say so. An
+idle tab whose PR is queued wears an orange `»` badge, and one whose PR
+merged a purple `◆`. Mission control splits them finer, into stages, packed side by side so the screen fills: each block of a stage's cards is boxed in a rounded border in the stage's color, titled on its top edge, a stage that doesn't fit in the room left on a row starts the next one, and one too big for a row is a single taller box with its cards in rows, and cards grow taller when the rows leave room. The stages are Needs you, Working, Review loop, CI loop, Queue-and-clean, In merge queue, Merged, then Idle. A tab whose PR is in the merge queue or merged is in that stage even while it runs a loop, such as `queue-and-clean` watching it; otherwise a tab running a loop is in that loop's stage; `j`/`k` move a row, keeping the column. A working tab also says what Claude is doing ("working 2m · Run the test suite", "editing render.js"), and a waiting one what it waits on ("permission: Bash git push", "asks: Which layout?"), as its hooks record them. A tab running a loop is that loop's from the moment you ask for it: while Claude works between rounds, triaging or fixing, it keeps the loop's badge and stage and says "working 2m · review loop · Fix the lint error". Each tab shows its state as a colored badge (a yellow `!` waiting, a
+green `✓` finished, a blue spinner turning while it works), its number for
+`M-1`…`M-9`, its name and PR as in the tab bar, and how long it has been in
+that state. The tab you are in is highlighted, and the status line drops its
+row of tabs to one line: the session, its counts, and the focused window in
+full. The states are the ones `tmux/agent-state.sh` keeps, so they mean what
+the tab badges meant.
+
+| Key | In the sidebar | In mission control |
+| --- | --- | --- |
+| `M-h` | move in, on the tab that needs you most, and back out | |
+| `M-Space` | open mission control | close it |
+| `j` `k` (arrows) | choose a tab | move down or up a row |
+| `h` `l` | back out / go to the tab | move left or right |
+| `Enter` | go to the chosen tab | go to the chosen tab, or open the item |
+| `1`–`9` | go to that tab | choose that tab |
+| `p` or `:` | the `M-p` palette, in the chosen tab | the same |
+| any bound Alt or Ctrl key | runs in the chosen tab | runs in the chosen tab |
+| `Tab` `S-Tab` | open mission control | the next or previous view |
+| `r` | | fetch the plugin's view again |
+| `Esc` `q` | back out | close |
+
+A click on a tab in the sidebar goes there, and the wheel scrolls it. Each
+mission control card shows a tab's state, PR and session name, your last
+prompt, the end of Claude's last reply, and, when it is waiting on a
+permission prompt or a question, what it is asking. The sidebar is turned off
+and on with "Turn the sidebar on or off" in `M-p` (the `@sidebar_on` option);
+`M-h` turns it back on.
+
+### Setup
+
+```sh
+./sync.sh tmux-sidebar
+./sync.sh tmux
+```
+
+then reload tmux. tmux starts the daemon through `tmux/sidebar.sh`, which puts
+node on the PATH as `window-jump.sh` does.
+
+### Plugins
+
+Anything with an API can be a view in mission control and, if it asks, a
+short list in the sidebar under the tabs: a plugin fetches a list of items,
+and Enter on one opens it. List the ones you want in
+`~/.config/tmux-sidebar/config.json`, with any options under each name:
+
+```json
+{
+  "width": 34,
+  "plugins": {
+    "github": { "query": "org:my-company", "sidebar": 3 }
+  }
+}
+```
+
+`github`, kept in `lib/sidebar/plugins/`, shows your open pull requests and the
+ones waiting on your review, through `gh`, marking the ones that need you:
+a review requested, checks failing, changes requested. A plugin of your own
+goes in `~/.config/tmux-sidebar/plugins/<name>.js`:
+
+```js
+module.exports = {
+  title: "Inbox",
+  intervalSeconds: 120,   // how often fetch runs (default 300)
+  sidebar: 3,             // items shown in the sidebar (default 0)
+  async fetch({ options, run, keychain, log }) {
+    const token = await keychain("inbox-token");   // from the macOS Keychain
+    const response = await fetch(options.url, { headers: { authorization: `Bearer ${token}` } });
+    return (await response.json()).map((m) => ({
+      id: m.id, title: m.subject, detail: m.from,
+      state: m.unread ? "attention" : "idle",   // or "active"
+      url: m.link, time: Date.parse(m.date),
+    }));
+  },
+  // optional; without it Enter opens item.url in the browser
+  async open(item, { options, run }) {},
+};
+```
+
+`run(command, args)` runs a program without a shell and returns its output;
+`keychain(service)` reads a secret stored with
+`security add-generic-password -s <service> -a "$USER" -w`, so no token sits in
+the config. A fetch that fails keeps its last items and shows the error. The
+config is read again whenever it changes.
+
+### Notes
+
+- One daemon draws everything. tmux has no sidebar of its own, so each window
+  gets a narrow pane marked `@sidebar`, running `tmux/sidebar-pane.zsh`: a
+  zsh client built from zsh's socket and select modules, so a sidebar is one
+  small process that starts no others. It shows what the daemon sends over
+  the Unix socket in `~/.local/state/tmux-sidebar/` (readable only by you) and
+  sends back the keys pressed in it. A sidebar whose daemon goes away
+  reconnects to the next one, starting it if need be.
+- The daemon reads tmux with one `list-panes` when told something changed:
+  `agent-state.sh` and `window-names.sh` append to
+  `~/.local/state/tmux-sidebar/nudge` with a shell builtin, and a few tmux
+  hooks do the same. Otherwise it looks every five seconds. Claude's sessions
+  and transcripts are read from `~/.claude` as files; nothing on the drawing
+  path starts a process or waits on the network.
+- The sidebar keeps its width and its place on the left. A tab whose last other
+  pane closes closes too, as it would have without the sidebar. Windows
+  narrower than 90 columns and zoomed panes are left alone.
+- Bindings that act on "the pane" (splits, close, zoom, search, resize, the
+  lazygit, nvim and shell panes) start with `leave-sidebar`, which hands
+  focus back to your pane first when the sidebar has it.
+- tmux-resurrect saves the sidebars as panes; they come back as shells with
+  the sidebar's title and are given their client again. While a restore runs
+  (`@sidebar_hold`), no sidebar is added.
+- `wt-jump` leaves sidebar panes out.
+- The log is `~/.local/state/tmux-sidebar/daemon.log`.
+
 ## claude-reply
 
 Prints the last reply Claude gave in a tmux tab, the final text of its last

@@ -54,3 +54,8 @@ tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' |
       rename-window -t "${session}:${idx}" "$name" \; \
       setw -t "${session}:${idx}" @tab_label "$full"
   done
+
+# bin/tmux-sidebar shows the same names, and redraws when told (see
+# tmux/sidebar.sh).
+[ -d ~/.local/state/tmux-sidebar ] && echo >>~/.local/state/tmux-sidebar/nudge
+exit 0

@@ -72,15 +72,18 @@ const PANE_FIELDS = [
   "pane_current_command",
   "pane_tty",
   "@agent",
+  "@sidebar",
 ];
 
 const listPanes = () =>
   tmux(["list-panes", "-a", "-F", PANE_FIELDS.map((f) => `#{${f}}`).join("\t")])
     .split("\n")
     .filter(Boolean)
-    .map((line) => {
-      const [windowId, paneId, session, index, windowName, active, panePath, command, tty, agent] =
-        line.split("\t");
+    .map((line) => line.split("\t"))
+    // A tmux-sidebar pane belongs to no worktree; it only shows the tabs.
+    .filter((fields) => fields[10] !== "1")
+    .map((fields) => {
+      const [windowId, paneId, session, index, windowName, active, panePath, command, tty, agent] = fields;
       return {
         windowId,
         paneId,

@@ -66,6 +66,12 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "bash ~/.config/tmux/agent-state.sh set working" }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {

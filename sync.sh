@@ -143,6 +143,8 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/tab-status.sh ~/.config/tmux/tab-status.sh
   put_link ~/editor-configs/tmux/tab-name.zsh ~/.config/tmux/tab-name.zsh
   put_link ~/editor-configs/tmux/ticket-title.sh ~/.config/tmux/ticket-title.sh
+  put_link ~/editor-configs/tmux/sidebar.sh ~/.config/tmux/sidebar.sh
+  put_link ~/editor-configs/tmux/sidebar-pane.zsh ~/.config/tmux/sidebar-pane.zsh
 }
 
 sync_ghostty() {

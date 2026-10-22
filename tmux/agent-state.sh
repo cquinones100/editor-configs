@@ -4,7 +4,7 @@
 # which ones are waiting on you, which have finished, and which are working.
 #
 # Usage:
-#   agent-state.sh set <working|waiting|done|clear>   from Claude Code hooks, for $TMUX_PANE
+#   agent-state.sh set <working|waiting|done|clear>   from Claude Code hooks, for $TMUX_PANE; reads their JSON
 #   agent-state.sh notification               from the Notification hook; reads its JSON
 #   agent-state.sh seen <window_id>           from the pane-focus-in hook
 #   agent-state.sh next                       from M-a: go to the tab most in need of you
@@ -13,6 +13,17 @@
 # @agent_since (when it got there). Its window carries @agent, the most urgent
 # state among its panes (waiting, then done, then working), which the
 # @agent_marker format in tmux.conf turns into the mark in the tab.
+#
+# A pane also carries what Claude is doing, from the hook's JSON, for the
+# sidebar (lib/sidebar) to show: @agent_activity, its tool call in a few
+# words ("Run the test suite", "editing render.js"), set as each tool starts
+# (PreToolUse) and kept until the next, and @agent_wait, what it waits on
+# ("permission: Bash git push", "asks: Which layout?"), while it waits. An
+# AskUserQuestion call is a wait from the moment it starts. @agent_loop names
+# the loop a session is running (review, ci or queue) from the moment its
+# skill is asked for, typed as /review-loop, /ci-loop or /queue-and-clean or
+# run by the Skill tool, until a new prompt or session: the turns between a
+# loop's rounds are the loop's too.
 #
 # "done" means finished and not yet looked at: focusing the tab clears it, and
 # a session that finishes in the tab you are already looking at never gets it.
@@ -56,11 +67,14 @@ case "${1:-}:${2:-}" in
     ;;
   set:working)
     # UserPromptSubmit and the tool hooks both say "working"; only the first
-    # is a prompt being taken.
+    # is a prompt being taken. Read either way, for what Claude is doing.
+    payload=$(cat 2>/dev/null)
     if [ -f "$RELAY_EVENTS" ]; then
-      payload=$(cat 2>/dev/null)
       [ "$(jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null)" = UserPromptSubmit ] && relay_event prompt
     fi
+    ;;
+  set:*)
+    payload=$(cat 2>/dev/null)
     ;;
   notification:*)
     payload=$(cat 2>/dev/null)
@@ -161,9 +175,74 @@ set_state() {
   refresh "$window"
 }
 
+# The hook's event and tool, and in a few words what the tool call does and,
+# for a permission request or a question, what Claude waits on. One jq, its
+# fields separated by \x1f so an empty one stays in place.
+DETAILS='
+  def base: split("/") | last;
+  def short(n): if length > n then .[0:n - 1] + "…" else . end;
+  (.tool_input // {}) as $in
+  | (.tool_name // "") as $tool
+  | [ (.hook_event_name // ""), $tool,
+      ( if $tool == "" then ""
+        elif $tool == "Bash" then ($in.description // ($in.command // "" | split("\n")[0]))
+        elif ($tool | IN("Edit", "Write", "MultiEdit", "NotebookEdit")) then "editing " + (($in.file_path // $in.notebook_path // "") | base)
+        elif $tool == "Read" then "reading " + (($in.file_path // "") | base)
+        elif ($tool | IN("Grep", "Glob")) then "searching " + ($in.pattern // "")
+        elif ($tool | IN("WebSearch", "WebFetch")) then "searching the web"
+        elif ($tool | IN("Agent", "Task")) then "agent: " + ($in.description // "")
+        elif $tool == "Skill" then "/" + ($in.skill // "")
+        elif $tool == "TodoWrite" then "planning"
+        elif ($tool | startswith("mcp__")) then ($tool | sub("^mcp__(claude_ai_)?"; "") | sub("__"; ": ") | gsub("_"; " "))
+        else $tool end | short(60)),
+      ( if .hook_event_name == "PermissionRequest" then "permission: " + $tool + (if $in.command then " " + ($in.command | split("\n")[0]) else "" end) | short(80)
+        elif $tool == "AskUserQuestion" then "asks: " + ((($in.questions // [])[0].question) // "") | short(80)
+        else "" end),
+      ( {"review-loop": "review", "ci-loop": "ci", "queue-and-clean": "queue"}[
+          if .hook_event_name == "UserPromptSubmit" then ((.prompt // "") | capture("^\\s*/(?<s>[a-z-]+)")?.s // "")
+          elif $tool == "Skill" then ($in.skill // "")
+          else "" end ] // "") ]
+  | map(gsub("[\t\n\u001f]"; " ")) | join("\u001f")'
+
+# Keeps a pane's @agent_activity and @agent_wait in step with its state: a
+# new prompt or a finished turn clears both, work clears the wait and records
+# the tool call, and a wait records what it is for.
+details() {
+  local pane=$1 state=$2 event=$3 activity=$4 wait=$5 loop=$6
+  # A loop asked for marks the pane; any other prompt, or a new session, ends it.
+  if [ -n "$loop" ]; then
+    tmux set -p -t "$pane" @agent_loop "$loop"
+  elif [ "$event" = UserPromptSubmit ] || [ "$event" = SessionStart ] || [ "$event" = SessionEnd ]; then
+    tmux set -pu -t "$pane" @agent_loop 2>/dev/null
+  fi
+  case $state in
+    clear | done)
+      tmux set -pu -t "$pane" @agent_activity 2>/dev/null
+      tmux set -pu -t "$pane" @agent_wait 2>/dev/null
+      ;;
+    working)
+      tmux set -pu -t "$pane" @agent_wait 2>/dev/null
+      if [ "$event" = UserPromptSubmit ]; then
+        tmux set -pu -t "$pane" @agent_activity 2>/dev/null
+      elif [ "$event" = PreToolUse ] && [ -n "$activity" ]; then
+        tmux set -p -t "$pane" @agent_activity "$activity"
+      fi
+      ;;
+    waiting)
+      [ -n "$wait" ] && tmux set -p -t "$pane" @agent_wait "$wait"
+      ;;
+  esac
+}
+
 case "${1:-}" in
   set)
-    [ -n "${TMUX_PANE:-}" ] && set_state "$TMUX_PANE" "${2:-clear}"
+    [ -n "${TMUX_PANE:-}" ] || exit 0
+    IFS=$'\x1f' read -r event tool activity wait loop < <(jq -r "$DETAILS" <<<"${payload:-{\}}" 2>/dev/null)
+    state=${2:-clear}
+    # A question to you is a wait from the moment it is asked.
+    [ "${event:-}:${tool:-}" = PreToolUse:AskUserQuestion ] && state=waiting
+    set_state "$TMUX_PANE" "$state"
+    details "$TMUX_PANE" "$state" "${event:-}" "${activity:-}" "${wait:-}" "${loop:-}"
     ;;
 
   notification)
@@ -247,4 +326,7 @@ case "${1:-}" in
     [ "$session" != "$(tmux display -p '#{session_name}')" ] && tmux switch-client -t "$session"
     ;;
 esac
+# bin/tmux-sidebar's sidebars redraw as soon as a state changes, rather than at
+# the daemon's next look; a shell builtin, so no process (see tmux/sidebar.sh).
+[ -d ~/.local/state/tmux-sidebar ] && echo >>~/.local/state/tmux-sidebar/nudge
 exit 0

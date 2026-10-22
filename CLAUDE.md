@@ -73,7 +73,16 @@ Claude Code's hooks in `claude/settings.json`: `UserPromptSubmit`,
 `Notification` hook also sends the macOS banner, titled with the tmux window.
 The state lives on the pane (`@agent_state`, `@agent_since`) and is rolled up
 into the window's `@agent`, most urgent first (waiting, done, working), which
-the `@agent_marker` format in `tmux.conf` shows in the tab. Every
+the `@agent_marker` format in `tmux.conf` shows in the tab. From the same hooks' JSON
+the pane also carries `@agent_activity`, the tool call in a few words, set by
+a `PreToolUse` hook as each tool starts, and `@agent_wait`, what a permission
+request or an `AskUserQuestion` waits on (a question is a wait from the moment
+it is asked); and `@agent_loop`, the loop the session runs (review, ci or queue) from the
+moment `/review-loop`, `/ci-loop` or `/queue-and-clean` is asked for, typed
+or through the Skill tool, until a new prompt or session. The sidebar shows
+all three. One `jq` reads them, as the relay's event already does. No hook
+fires when a background task ends, so the sidebar still counts running tasks
+from the transcript. Every
 window-status format in `tmux.conf`, `theme.sh`, `update-colors.sh`, and
 `window-names.sh` expands that marker, so a new one has to as well.
 
@@ -107,6 +116,43 @@ append an event naming the session's transcript (and, for a prompt, its text) to
 which the relay creates and removes only when stopped on purpose, so a crashed
 relay picks up where it left off. That is how the relay knows a request
 it typed into a tab has been answered, even by a session outside tmux.
+
+## The sidebar and mission control
+
+`bin/tmux-sidebar` (code in `lib/sidebar/`) is one daemon that draws a sidebar
+pane on the left of every window and the mission control popup (`M-h`,
+`M-Space`). Every sidebar pane and the popup run `tmux/sidebar-pane.zsh`, which
+uses only zsh builtins so a sidebar starts no processes however long it runs;
+keep it that way. The daemon reads tmux in one `list-panes` per refresh and
+`~/.claude` as files, so its drawing path starts no process and never waits on
+the network either; only plugins (`lib/sidebar/plugins.js`) may, and they run
+off it. It refreshes when something appends to
+`~/.local/state/tmux-sidebar/nudge`: `agent-state.sh` and `window-names.sh` do
+with a shell builtin, and anything else that changes what a tab shows should
+too.
+
+It shows what the tab bar shows, from the same places: the label from
+`@tab_label` (PR prefix included) and the accent color parsed out of the
+`window-status-format` `window-names.sh` sets, so a change to either shape
+belongs in `lib/sidebar/model.js` too. States are `@agent`, `@agent_state`
+and `@agent_since` from `agent-state.sh`. It finds a pane's Claude session from
+the `tmux` field (`main:@27.%28`) in `~/.claude/sessions/<pid>.json`, not from
+`claude-pane.sh`.
+
+Sidebar panes carry the `@sidebar` pane option. Anything that walks every pane
+to find a worktree, a Claude session or a pane to type into skips them, as
+`wt-jump` does. A binding that acts on the current pane starts with
+`leave-sidebar` (a command alias in `tmux.conf`), so it acts on your pane
+rather than the sidebar when the sidebar has focus. tmux-resurrect restores
+sidebars as shells titled `tmux-sidebar`, and the daemon gives them their
+client back; its restore hooks set `@sidebar_hold` so nothing is added while
+it lays windows out.
+
+Plugins load only when named in `~/.config/tmux-sidebar/config.json`, from
+`~/.config/tmux-sidebar/plugins/` (yours) or `lib/sidebar/plugins/`. Its tests,
+`test/tmux-sidebar.test.js`, run against a throwaway tmux server and a
+temporary HOME under `/tmp`, since a Unix socket's path can't be over 104 bytes
+on macOS. Document it in `bin/README.md`.
 
 ## tmux plugins
 

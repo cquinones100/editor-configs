@@ -565,6 +565,13 @@ test("the daemon draws the tabs in each sidebar and moves between them with the 
   client.write("mission none 120 30\n");
   assert.ok(await until(() => plain(received).includes("MISSION CONTROL") && plain(received).includes("alpha")));
   assert.ok(plain(received).indexOf("bravo") < plain(received).indexOf("alpha"));
+  // ? shows the keys over it; the next key only puts it back, the cursor where it was.
+  received = "";
+  client.write("?");
+  assert.ok(await until(() => plain(received).includes("choose a card")), "the keys are shown");
+  received = "";
+  client.write("x");
+  assert.ok(await until(() => plain(received).includes("MISSION CONTROL")), "and put away");
   client.write("l\r");
   assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{window_id}") === first), true);
   client.write("q");

@@ -514,6 +514,7 @@ the tab badges meant.
 | `Tab` `S-Tab` | open mission control | the next or previous view |
 | `r` | | fetch the plugin's view again |
 | `Esc` `q` | back out | close |
+| `?` | these keys, until the next key | the same |
 
 A click on a tab in the sidebar goes there, and the wheel scrolls it. Each
 mission control card shows a tab's state, PR and session name, your last

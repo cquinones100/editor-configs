@@ -301,8 +301,22 @@ test("the status line is about the tab's own pane, not its sidebar, while the si
   assert.match(line(), /^status-elsewhere /, "without the flag, the pane it was given");
 });
 
+test("tabs with no Claude in them, such as the Slack relay or Notes, are Other, under Idle", () => {
+  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined };
+  const tabs = [
+    { ...base, id: "@1", index: 1, name: "Notes", state: "idle", command: "nvim" },
+    { ...base, id: "@2", index: 2, name: "resting", state: "idle", command: "claude", claude: { sessionId: "s" } },
+    { ...base, id: "@3", index: 3, name: "Slack relay", state: "idle", command: "node" },
+  ];
+  assert.deepEqual(sidebar.grouped(tabs).map((g) => [g.title, g.tabs.map((x) => x.name)]), [
+    ["Idle", ["resting"]],
+    ["Other", ["Notes", "Slack relay"]],
+  ]);
+  assert.deepEqual(sidebar.staged(tabs).map((g) => g.title), ["Idle", "Other"]);
+});
+
 test("a frozen layout keeps each tab in its group and place while states change", () => {
-  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh" };
+  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh", claude: { sessionId: "s" } };
   const before = [
     { ...base, id: "@1", index: 1, name: "one", state: "idle" },
     { ...base, id: "@2", index: 2, name: "two", state: "done", since: 10 },
@@ -331,7 +345,7 @@ test("a frozen layout keeps each tab in its group and place while states change"
 });
 
 test("tabs whose PR is in the merge queue or merged get sections of their own, after the ones that need you", () => {
-  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh" };
+  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh", claude: { sessionId: "s" } };
   const tabs = [
     { ...base, id: "@1", index: 1, name: "idle one", state: "idle" },
     { ...base, id: "@2", index: 2, name: "queued third", state: "idle", pr: "12", merge: "queued", position: 3 },
@@ -505,7 +519,7 @@ test("a loop running in the background reads as that loop, with its round: revie
 });
 
 test("mission control packs its stages side by side, each block under its own header", () => {
-  const base = { session: "$1", panes: [], sidebars: [], command: "zsh" };
+  const base = { session: "$1", panes: [], sidebars: [], command: "zsh", claude: { sessionId: "s" } };
   const tab = (index, name, extra) => ({ ...base, id: `@${index}`, index, name, state: "idle", ...extra });
   const tabs = [
     tab(1, "plain", {}),
@@ -591,7 +605,7 @@ test("a tab flagged by hand needs you, whatever Claude is doing in it, until it 
     assert.match(sidebar.sidebarLines({ tabs: [tab], sections: [], cols: 40, rows: 10, view: { focused: false, cursor: window, frame: 0, here: window } }).lines.join(""), /⚑/);
     tmux("setw", "-u", "-t", window, "@flagged");
     tab = sidebar.tabsFrom(await sidebar.snapshot()).find((x) => x.id === window);
-    assert.deepEqual(sidebar.grouped([tab]).map((g) => g.title), ["Idle"]);
+    assert.deepEqual(sidebar.grouped([tab]).map((g) => g.title), ["Other"], "a shell, with no Claude");
   } finally {
     tmux("kill-window", "-t", window);
   }

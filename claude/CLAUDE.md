@@ -53,6 +53,7 @@ Before responding to any request, always check the current branch's recent chang
 1. Lead with the business logic: what the unit of work does and why, for a teammate reading it months later. Answer the questions they would ask about how the feature works. The reasons for implementation choices go here.
 2. A pipeline or multi-step flow gets a diagram in the platform's native format: Mermaid in GitHub PRs, SVG where the platform renders it.
 3. Implementation details last, in as few words as possible. Link to the code on GitHub instead of describing it. In a Linear ticket, the implementation is always the final section, after acceptance criteria and what is out of scope, however the ticket is written (by `/shape`, a review loop's edits, or by hand) and whatever layout the team's other tickets use.
+4. Link every other PR or Linear ticket you mention: a PR as a link to it on GitHub, a ticket as a link to it in Linear, never a bare `#123` or `ABC-123` that a reader has to look up.
 
 Write a ticket so no sentence can be mistaken for how things work today:
 

@@ -20,10 +20,25 @@
 set -u
 
 # The pane marked @notes_pane, else the first pane of a tab marked @notes, as
-# a tab opened before panes were marked is.
+# a tab opened before panes were marked is, else the pane whose terminal runs
+# the Neovim holding the notes lock (store.lua's .notes.lock), found up its
+# parents, since that one has no terminal of its own: a pane tmux-resurrect
+# brought back has lost its marks. A pane found from the lock is marked again.
+notes_dir=${NOTES_DIR:-$HOME/Notes}
 notes_pane() {
-  tmux list-panes -a -F '#{pane_id} #{@notes_pane} #{@notes}' 2>/dev/null |
-    awk '$2 == "1" { print $1; found = 1; exit } $3 == "1" && !old { old = $1 } END { if (!found && old) print old }'
+  local found pid tty hops=0
+  found=$(tmux list-panes -a -F '#{pane_id} #{@notes_pane} #{@notes}' 2>/dev/null |
+    awk '$2 == "1" { print $1; found = 1; exit } $3 == "1" && !old { old = $1 } END { if (!found && old) print old }')
+  if [ -z "$found" ] && pid=$(cat "$notes_dir/.notes.lock" 2>/dev/null) && [ -n "$pid" ]; then
+    while [ -n "$pid" ] && [ "$pid" != 1 ] && (( hops++ < 6 )); do
+      tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+      [ -n "$tty" ] && [ "$tty" != "??" ] && break
+      pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    done
+    [ -n "$tty" ] && [ "$tty" != "??" ] && found=$(tmux list-panes -a -F '#{pane_id} #{pane_tty}' | awk -v t="/dev/$tty" '$2 == t { print $1; exit }')
+    [ -n "$found" ] && tmux set-option -p -t "$found" @notes_pane 1
+  fi
+  echo "$found"
 }
 
 # What runs notes; the tests put a stand-in here.

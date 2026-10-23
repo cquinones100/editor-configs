@@ -648,6 +648,20 @@ test("M-e opens Notes to the right of the pane, moves the one Notes there from e
   }
 });
 
+test("M-e finds a Notes that lost its marks from the notes lock, rather than starting another", (t) => {
+  const notesDir = fs.mkdtempSync(path.join(tmp, "notes-"));
+  // A Notes tmux-resurrect brought back: no @notes or @notes_pane, but the
+  // lock names its process.
+  const restored = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", "cat");
+  const pane = tmux("display", "-p", "-t", restored, "#{pane_id}");
+  fs.writeFileSync(path.join(notesDir, ".notes.lock"), tmux("display", "-p", "-t", pane, "#{pane_pid}"));
+  const here = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  t.after(() => [restored, here].forEach((w) => { try { tmux("kill-window", "-t", w); } catch {} }));
+  execFileSync("bash", [path.join(__dirname, "../tmux/notes-open.sh"), "side", "none", tmux("display", "-p", "-t", here, "#{pane_id}")], { env: { ...process.env, NOTES_DIR: notesDir, NOTES_OPEN_COMMAND: "false" } });
+  assert.equal(tmux("display", "-p", "-t", pane, "#{window_id}"), here, "the same Notes, moved beside you");
+  assert.equal(tmux("display", "-p", "-t", pane, "#{@notes_pane}"), "1", "and marked again");
+});
+
 test("M-w on a tool in a pane's place closes the tool and brings the pane back, keeping the tab", () => {
   const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
   const own = tmux("display", "-p", "-t", window, "#{pane_id}");

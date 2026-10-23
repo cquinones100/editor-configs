@@ -24,6 +24,7 @@
 
 const { execFileSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const DEFAULT_WORKTREE_DIR = ".claude/worktrees";
@@ -113,12 +114,54 @@ const gitRun = (args, options = {}) =>
 
 // --git-common-dir rather than --show-toplevel: inside an existing worktree the
 // latter returns that worktree, and new worktrees belong beside the main repo.
-const repoRoot = () => {
+// Undefined outside a repository.
+const repoRoot = (cwd) => {
   try {
-    return path.resolve(gitOutput(["rev-parse", "--git-common-dir"]), "..");
+    return path.resolve(cwd ?? process.cwd(), gitOutput(["rev-parse", "--git-common-dir"], { cwd, stdio: ["ignore", "pipe", "ignore"] }), "..");
   } catch {
-    fail("not inside a git repository");
+    return undefined;
   }
+};
+
+// The GitHub owner/name a clone's remote points at, or undefined.
+const remoteRepo = (root) => {
+  try {
+    // Not defaultRemote, which ends the run when a repository has none.
+    const remotes = gitOutput(["remote"], { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).split("\n").filter(Boolean);
+    const remote = remotes.includes("origin") ? "origin" : remotes[0];
+    if (!remote) return undefined;
+    // As configured, before any insteadOf rewrite: the name it stands for.
+    const url = gitOutput(["config", "--get", `remote.${remote}.url`], { cwd: root, stdio: ["ignore", "pipe", "ignore"] });
+    const m = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
+    return m ? `${m[1]}/${m[2]}` : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// A clone of owner/name among the repositories you work in: every open tmux
+// pane's, every one a Claude session ran in lately (as wt-revive's cache has
+// them), and the directories right under your home. Its main clone, not a
+// worktree of it.
+const findClone = (repo) => {
+  const home = os.homedir();
+  const dirs = new Set();
+  try {
+    execFileSync("tmux", ["list-panes", "-a", "-F", "#{pane_current_path}"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\n").forEach((d) => d && dirs.add(d));
+  } catch {}
+  try {
+    Object.values(JSON.parse(fs.readFileSync(path.join(home, ".cache/wt-revive/index.json"), "utf8")).transcripts ?? {}).forEach((t) => t.cwd && dirs.add(t.cwd));
+  } catch {}
+  try {
+    fs.readdirSync(home, { withFileTypes: true }).filter((e) => e.isDirectory() && fs.existsSync(path.join(home, e.name, ".git"))).forEach((e) => dirs.add(path.join(home, e.name)));
+  } catch {}
+  // A worktree under .claude/worktrees is its main clone's; others are asked.
+  const roots = new Set([...dirs].map((d) => d.replace(/\/\.claude\/worktrees\/.*$/, "")).filter((d) => fs.existsSync(d)));
+  for (const dir of roots) {
+    const root = repoRoot(dir);
+    if (root && remoteRepo(root)?.toLowerCase() === repo.toLowerCase()) return root;
+  }
+  return undefined;
 };
 
 const fetchPullRequest = (ref, cwd) => {
@@ -344,24 +387,20 @@ const main = async () => {
       : [positional[0], positional[1]];
   if (!prInput || !looksLikePr(prInput)) usage();
 
-  const root = repoRoot();
+  // The worktree is made in a clone of the PR's repository, from its remote:
+  // the one you are in, or, for a URL naming another repository (or given
+  // from outside any), a clone of that one found among those you work in
+  // (findClone), which the `wtpr` function then cd's into. A bare number is
+  // a PR of the repository you are in.
   const { ref, repo } = parsePr(prInput);
-  // The worktree is made in this clone, from this clone's remote, so a URL for
-  // a PR in another repository would fetch this one's branch, or its PR of the
-  // same number. Refused rather than guessed.
-  if (repo) {
-    const url = (() => {
-      try {
-        return gitOutput(["remote", "get-url", defaultRemote(root)], { cwd: root });
-      } catch {
-        return "";
-      }
-    })();
-    const here = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
-    if (here && `${here[1]}/${here[2]}`.toLowerCase() !== repo.toLowerCase()) {
-      fail(`That PR is in ${repo}, and this clone's remote is ${here[1]}/${here[2]}.\nRun wtpr from a clone of ${repo}.`);
-    }
+  const here = repoRoot();
+  let root = here;
+  if (repo && (!here || remoteRepo(here)?.toLowerCase() !== repo.toLowerCase())) {
+    root = findClone(repo);
+    if (!root) fail(`That PR is in ${repo}, and no clone of it was found among your tabs, recent Claude sessions or the directories in your home.\nClone it, then run wtpr again.`);
+    console.error(`Repo:     ${root}`);
   }
+  if (!root) fail("not inside a git repository: give the PR's URL, or run this from its repository");
   const pr = fetchPullRequest(ref, root);
 
   // Fork branches do not live on this repo's remote, so there is nothing to

@@ -256,6 +256,13 @@ The M-p palette's "Start work on a PR in a new tab (wtpr)" (`tmux/wtpr-open.zsh`
 asks for a PR number or URL, the clipboard filled in when it holds one, and runs
 `wtpr` with it in a new tab.
 
+From anywhere, for a URL: when the PR is in another repository than the one
+you are in, or you are in none, it finds a clone of that repository among the
+ones you work in (every open tab's, every one a Claude session ran in lately,
+and the directories right under your home), makes the worktree there and cd's
+you into it; with no clone, it says so. A bare number is a PR of the
+repository you are in.
+
 Any PR, whatever its state. A merged or closed one whose branch the remote has
 deleted, as GitHub does after a merge, opens from the commits GitHub keeps for
 it (`refs/pull/<n>/head`), on a local branch of the PR's name with no upstream,

@@ -53,23 +53,46 @@ test("a merged PR whose branch the remote deleted opens from the commits GitHub 
   }
 });
 
-test("a PR URL from another repository is refused, rather than opening this one's PR of that number", () => {
+test("a PR URL from another repository opens in a clone of that one found among yours, or is refused when there is none", () => {
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "wtpr-test-")));
-  const env = { ...process.env, HOME: tmp, GIT_CONFIG_GLOBAL: "/dev/null", PATH: `${path.join(tmp, "bin")}:${process.env.PATH}` };
-  try {
-    const clone = path.join(tmp, "clone");
-    execFileSync("git", ["init", "-q", clone], { env });
-    execFileSync("git", ["-C", clone, "remote", "add", "origin", "git@github.com:acme/widgets.git"], { env });
-    fs.mkdirSync(path.join(tmp, "bin"));
-    fs.writeFileSync(path.join(tmp, "bin/gh"), `#!/bin/sh\necho '${JSON.stringify({ number: 5, title: "Elsewhere", author: { login: "t" }, headRefName: "x", isCrossRepository: false, state: "OPEN", url: "https://github.com/other/thing/pull/5" })}'\n`, { mode: 0o755 });
-    let error = "";
+  // TMUX_TMPDIR here, so looking for a clone asks no real tmux server.
+  const env = { ...process.env, HOME: tmp, TMUX: "", TMUX_TMPDIR: tmp, GIT_CONFIG_GLOBAL: path.join(tmp, "gitconfig"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e", PATH: `${path.join(tmp, "bin")}:${process.env.PATH}` };
+  const git = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  const run = (cwd, url, cdFile) => {
     try {
-      execFileSync(process.execPath, [script, "--no-claude", "https://github.com/other/thing/pull/5"], { cwd: clone, env, encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] });
+      execFileSync(process.execPath, [script, "--no-claude", "--cd-file", cdFile, url], { cwd, env, encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] });
+      return "";
     } catch (err) {
-      error = err.stderr;
+      return err.stderr;
     }
-    assert.match(error, /That PR is in other\/thing, and this clone's remote is acme\/widgets/);
-    assert.equal(fs.existsSync(path.join(clone, ".claude/worktrees")), false, "and nothing was made");
+  };
+  try {
+    // Where you are: a clone of acme/widgets, away from your home's top level.
+    const here = path.join(tmp, "work", "widgets");
+    fs.mkdirSync(here, { recursive: true });
+    git(here, "init", "-q");
+    git(here, "remote", "add", "origin", "git@github.com:acme/widgets.git");
+    // Right under your home: a clone of other/thing. Its GitHub is a bare
+    // repository holding the PR's branch, reached through insteadOf, so the
+    // clone's remote still reads as other/thing.
+    const origin = path.join(tmp, "thing-origin.git");
+    const thing = path.join(tmp, "thing");
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin], { env });
+    fs.writeFileSync(path.join(tmp, "gitconfig"), `[url "${origin}"]\n\tinsteadOf = git@github.com:other/thing.git\n`);
+    execFileSync("git", ["clone", "-q", origin, thing], { env, stdio: "ignore" });
+    git(thing, "commit", "-q", "--allow-empty", "-m", "start");
+    git(thing, "push", "-q", "origin", "main", "main:fix");
+    git(thing, "remote", "set-url", "origin", "git@github.com:other/thing.git");
+    fs.mkdirSync(path.join(tmp, "bin"));
+    fs.writeFileSync(path.join(tmp, "bin/gh"), `#!/bin/sh\necho '${JSON.stringify({ number: 5, title: "Fix", author: { login: "t" }, headRefName: "fix", isCrossRepository: false, state: "OPEN", url: "https://github.com/other/thing/pull/5" })}'\n`, { mode: 0o755 });
+
+    const cdFile = path.join(tmp, "cd");
+    assert.equal(run(here, "https://github.com/other/thing/pull/5", cdFile), "");
+    assert.equal(fs.readFileSync(cdFile, "utf8").trim(), path.join(thing, ".claude/worktrees/pr-5-fix"), "made in the clone of other/thing, for wtpr to cd into");
+    assert.equal(fs.existsSync(path.join(here, ".claude/worktrees")), false, "not in the one you were in");
+
+    // No clone of it anywhere: refused, nothing made.
+    assert.match(run(here, "https://github.com/nobody/nothing/pull/5", path.join(tmp, "cd2")), /That PR is in nobody\/nothing, and no clone of it was found/);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

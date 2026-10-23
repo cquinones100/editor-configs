@@ -100,11 +100,8 @@ stays one stable line that never needs re-editing when the tool changes.
 - Pass a different parent directory as a first argument:
   `worktree-from-ticket .worktrees ABC-123`. A full Linear issue URL works in
   place of the identifier.
-- `wt-cleanup` is the companion for removing finished worktrees. Install it the
-  same way (`./sync.sh wt-cleanup`) if you want it. It compares paths as the disk spells them, so a
-  differently-cased subpath (`.Claude/worktrees`) can't make a live worktree
-  look untracked, and it never deletes an "untracked" directory that has a
-  `.git` in it: it says so and suggests `git worktree repair` or `remove`.
+- `worktree-done` removes the worktrees whose tickets are finished, and
+  mission control's `X` the merged tabs' worktrees.
 - `wt-batch` opens several tickets at once, one tmux window each, and
   `wt-jump` gets you back to any of those windows by ticket, PR, or branch.
 
@@ -354,7 +351,6 @@ that worktree, and selects it.
 wt-jump ABC-123      the ticket's window
 wt-jump 123          the PR's window
 wt-jump theme-slot   any window whose branch or name contains that
-wt-jump              fzf picker over every window
 wt-jump --list       print the windows, jump to none of them
 ```
 
@@ -402,16 +398,9 @@ child process can ask tmux to do that.
 
 ### Notes
 
-- `M-j` in the tmux config no longer opens this picker: it opens mission control's
-  Work map showing only open tabs, a filter typing (see tmux-sidebar). From a shell, `wt-jump` with no argument opens
-  it: a list of every window labelled by repository, PR number,
-  and branch, type a few letters, Enter. fzf searches the whole row, so a PR
-  number finds its window there as well as on the command line. The column is
-  left out when no window has a number to show. It goes through `tmux/window-jump.sh`, which exists
-  because the tmux server has no node: its environment is whatever it started
-  with, and nvm is set up in `~/.zshrc`, which only interactive shells read.
-  That wrapper finds node the cheap way, through nvm's default alias, and holds
-  the popup open on an error instead of letting it close too fast to read.
+- To pick a window by looking, `M-j` opens mission control's Work map showing
+  only open tabs, a filter typing (see tmux-sidebar). `wt-jump` itself has no
+  picker: give it a ticket, PR or branch, or `--list` to print every window.
 - Every pane is considered, not just each window's active one, and the pane
   that matched is the pane you land on — so a window holding claude beside a
   shell in the worktree puts you in the right half of it.
@@ -432,14 +421,14 @@ child process can ask tmux to do that.
 
 ## wt-revive
 
-The way back to a worktree whose tab you closed. Lists the worktrees no tmux
-pane has open, and opens a tab in the one you pick, resuming its Claude with
-`claude-here`, as `wtr` does.
+The way back to a worktree whose tab you closed: lists the worktrees no tmux
+pane has open, for mission control's Work map, where `M-o` shows them and Enter
+opens a tab in one, resuming its Claude with `claude-here`, as `wtr` does.
 
 ```
-wt-revive          fzf picker, from the current directory's repository
+wt-revive          print the rows, from the current directory's repository
 wt-revive <dir>    the same, starting from <dir>'s repository
-wt-revive --list   print the rows, open nothing
+wt-revive --json   each row as a line of JSON, for the Work map
 ```
 
 The repositories are the one you are in, every open pane's, and every one a
@@ -465,9 +454,7 @@ version that read the end of every transcript each time took.
 
 `M-o` in the tmux config opens mission control's Work map showing only these
 worktrees, a filter typing, read from `wt-revive --json`, which prints each row as
-a line of JSON. `tmux/window-revive.sh` still opens this picker from a shell,
-putting node on the PATH (the tmux server has none) and holding the popup open
-when there is an error or nothing to reopen.
+a line of JSON; Enter there reopens one. `wt-revive` itself only prints the rows.
 
 ### Notes
 
@@ -548,7 +535,7 @@ and on with "Turn the sidebar on or off" in `M-p` (the `@sidebar_on` option).
 ```
 
 then reload tmux. tmux starts the daemon through `tmux/sidebar.sh`, which puts
-node on the PATH as `window-jump.sh` does.
+node on the PATH from nvm's default alias.
 
 ### Plugins
 
@@ -654,7 +641,7 @@ worktree-done --all     print every worktree grouped by ticket state
 worktree-done --paths   print only the finished worktrees' paths, for pipes
 ```
 
-Keys in the picker are `wt-cleanup`'s, plus one: Tab toggles, `C-a` takes
+Keys in the picker: Tab toggles, `C-a` takes
 everything, Enter removes what is selected, Esc cancels. Taking the whole list
 at once asks for a `y` first — every other selection was made row by row and
 speaks for itself.
@@ -664,8 +651,8 @@ typing `abc-6` and hitting it takes those and not all forty. It
 costs fzf's default `C-a` (beginning-of-line) inside the query, which is a short
 field here.
 
-`wt-cleanup` is still the tool for the worktrees this one will not touch — the
-ones with no ticket, or whose ticket is still open.
+The worktrees this one will not touch, the ones with no ticket or whose ticket
+is still open, are removed by hand with `git worktree remove <path>`.
 
 ### Setup
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// wt-jump [<ticket-or-pr-or-branch>]
+// wt-jump <ticket-or-pr-or-branch>
 //
 // Selects the tmux window whose worktree matches a Linear ticket, a GitHub pull
 // request, or part of a branch name. The way back to a window you already have
@@ -9,11 +9,11 @@
 //   wt-jump ABC-123      the ticket's window
 //   wt-jump 123          the PR's window
 //   wt-jump theme-slot   any window whose branch or name contains that
-//   wt-jump              fzf picker over every window, no argument needed
 //   wt-jump --list       print the windows instead of jumping
 //
-// Rows show each window's second tmux status line (tmux/tab-status.sh), so the
-// picker searches what the bar shows.
+// To pick one by looking, M-j opens mission control's Work map, which lists
+// the tabs. Rows here show each window's second tmux status line
+// (tmux/tab-status.sh), so a list reads as the bar does.
 //
 // Windows are matched on what is already on disk — the worktree directory and
 // the branch checked out in it — rather than on the window name, which the
@@ -24,7 +24,7 @@
 // what branch the PR is on, so a ticket worktree that later opened a PR is
 // still reachable by its number.
 
-const { execFile, execFileSync, spawnSync } = require("node:child_process");
+const { execFile, execFileSync } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline");
@@ -32,12 +32,11 @@ const { promisify } = require("node:util");
 
 const usage = () => {
   console.error(
-    "Usage: wt-jump [<ticket-or-pr-or-branch>]\n\n" +
+    "Usage: wt-jump <ticket-or-pr-or-branch>\n\n" +
       "Examples:\n" +
       "  wt-jump ABC-123\n" +
       "  wt-jump 123\n" +
       "  wt-jump theme-slot\n" +
-      "  wt-jump            picker over every window\n" +
       "  wt-jump --list     print the windows, jump to none of them",
   );
   process.exit(1);
@@ -171,7 +170,7 @@ const resolvePr = (number, roots) =>
 
 // The PR number is read back off what is already on screen or on disk — the
 // `#<n>` window-names.sh puts at the front of the tab, or a `pr-<n>` directory
-// — so the picker stays instant. A window with no number here is a window
+// — so listing stays instant. A window with no number here is a window
 // whose tab has none either, which is the honest thing to show.
 const prNumberFor = (pane, dir) =>
   pane.windowName.match(/^#(\d+) /)?.[1] ?? dir.match(/^pr-(\d+)-/)?.[1];
@@ -271,9 +270,8 @@ const matchesFor = (target, panes) => {
 };
 
 // Each row is the second tmux status line for that pane, from the same script
-// tmux runs, so the picker describes a window exactly as the bar under it does
-// and fzf searches what you have been reading there: the label, the PR, the
-// program, and Claude's session title and last prompt. Linked by
+// tmux runs, so a row describes a window exactly as the bar under it does: the
+// label, the PR, the program, and Claude's session title and last prompt. Linked by
 // `./sync.sh tmux`; without it a row falls back to its repository and branch.
 const STATUS_SCRIPT = path.join(os.homedir(), ".config/tmux/tab-status.sh");
 
@@ -297,25 +295,6 @@ const statusLineFor = async (pane) => {
 // being read as the start of a style.
 const TMUX_STYLE = /##|#\[([^\]]*)\]/g;
 
-const ansiFor = (style) =>
-  style
-    .split(",")
-    .map((attr) => {
-      const colour = attr.match(/^fg=colour(\d+)$/)?.[1];
-      if (colour) return `\x1b[38;5;${colour}m`;
-      const hex = attr.match(/^fg=#([0-9a-f]{6})$/i)?.[1];
-      if (hex) {
-        const [r, g, b] = [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16));
-        return `\x1b[38;2;${r};${g};${b}m`;
-      }
-      return { bold: "\x1b[1m", nobold: "\x1b[22m", "fg=default": "\x1b[39m" }[attr] ?? "";
-    })
-    .join("");
-
-const styled = (status) =>
-  status.replace(TMUX_STYLE, (match, style) => (match === "##" ? "#" : ansiFor(style))) +
-  "\x1b[0m";
-
 const plain = (status) =>
   status.replace(TMUX_STYLE, (match) => (match === "##" ? "#" : ""));
 
@@ -333,53 +312,17 @@ const rowFor = async (pane, currentWindow) => {
     pane,
     where: `${pane.session}:${pane.index}`,
     plain: (status ? plain(status) : fallbackFor(pane)) + here,
-    styled: (status ? styled(status) : fallbackFor(pane)) + here,
   };
 };
 
-// Colour only for fzf, which is told to expect it. Printed lists and the
-// numbered prompt get plain text, since they may not be going to a terminal.
-const render = (rows, { colour = false } = {}) => {
+// Plain text, since a list or the prompt may not be going to a terminal.
+const render = (rows) => {
   const whereWidth = Math.max(...rows.map((row) => row.where.length));
-  return rows.map(
-    (row) => `${row.where.padEnd(whereWidth)}  ${colour ? row.styled : row.plain}`,
-  );
+  return rows.map((row) => `${row.where.padEnd(whereWidth)}  ${row.plain}`);
 };
 
-// fzf rather than a numbered prompt for the no-argument case: the whole point
-// of that mode is scanning a dozen windows, which is what fzf is for. The
-// ambiguous-argument case below stays a plain prompt, since it is two or three
-// rows and often arrives in a shell with no popup around it.
-const pickWithFzf = (rows) => {
-  const lines = render(rows, { colour: true });
-  const input = rows.map((row, i) => `${i}\t${lines[i]}`).join("\n");
-
-  const picked = spawnSync(
-    "fzf",
-    [
-      "--ansi",
-      "--delimiter=\t",
-      "--with-nth=2..",
-      "--prompt=window> ",
-      "--layout=reverse",
-      "--border=rounded",
-      "--height=100%",
-    ],
-    { input, encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] },
-  );
-
-  if (picked.error?.code === "ENOENT") {
-    fail(
-      "fzf not found on PATH, and the picker needs it. Install it with\n" +
-        "  brew install fzf\n" +
-        "or pass a ticket, PR number, or branch fragment to jump directly.",
-    );
-  }
-  const choice = picked.stdout.trim();
-  if (!choice) return null;
-  return rows[Number(choice.split("\t")[0])].pane;
-};
-
+// A numbered prompt when several windows match: two or three rows, often in a
+// shell with no popup around it.
 const chooseFromPrompt = async (rows) => {
   const lines = render(rows);
   console.error(`${rows.length} windows match — pick one:`);
@@ -426,7 +369,7 @@ const main = async () => {
 
   const listOnly = argv.includes("--list");
   const positional = argv.filter((arg) => arg !== "--list");
-  if (positional.length > 1) usage();
+  if (positional.length > 1 || (!positional.length && !listOnly)) usage();
 
   if (!process.env.TMUX && !listOnly) fail("not inside a tmux session");
 
@@ -463,14 +406,8 @@ const main = async () => {
     return;
   }
 
-  // One match jumps outright; the picker only appears when the answer is
-  // genuinely unclear, or when no argument was given and browsing is the point.
-  const chosen =
-    rows.length === 1 && target
-      ? rows[0].pane
-      : target
-        ? await chooseFromPrompt(rows)
-        : pickWithFzf(rows);
+  // One match jumps outright; several are asked about.
+  const chosen = rows.length === 1 ? rows[0].pane : await chooseFromPrompt(rows);
 
   if (!chosen) return;
   jumpTo(chosen, currentSession);

@@ -110,7 +110,7 @@ repo=$(
 [ -n "$repo" ] || exit 0
 
 # shape-batch is node, and the tmux server has no node on its PATH (see
-# window-revive.sh).
+# sidebar.sh's start).
 if ! command -v node >/dev/null 2>&1; then
   NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
   default=$(cat "$NVM_DIR/alias/default" 2>/dev/null)

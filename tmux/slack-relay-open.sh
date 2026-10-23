@@ -8,7 +8,7 @@
 # The tmux server keeps the environment it was started with, which has no
 # node (nvm is set up in ~/.zshrc, which only interactive shells read), so a
 # node script run straight from a binding dies on `env: node: No such file or
-# directory`. The default Node is put on the PATH first, as window-jump.sh does.
+# directory`. The default Node is put on the PATH first, as sidebar.sh does.
 # The relay's own tab runs an interactive zsh, so it has node either way.
 
 set -u

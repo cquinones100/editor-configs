@@ -220,9 +220,9 @@ comes from `bin/wt-revive --json`, which the sidebar daemon runs in the
 background (`refreshRevived` in `lib/sidebar/views.js`), so a change to the
 rows it prints belongs there too. Enter on one reopens it with `claude-here`,
 the same handoff `wtr` makes, so a change to how `claude-here` resumes a
-directory reaches both. `wt-revive`'s own picker and `wt-jump`'s, through
-`tmux/window-revive.sh` and `tmux/window-jump.sh`, are no longer bound to a
-key but still work from a shell. It finds a worktree's last
+directory reaches both. Neither `wt-revive` nor `wt-jump` has a picker of its
+own any more: `wt-revive` prints the rows, and `wt-jump` takes a ticket, PR or
+branch to jump to. It finds a worktree's last
 session from the `cwd` in Claude Code's transcripts, and keeps what each
 transcript says in `~/.cache/wt-revive/index.json` against its size and
 modified time, so a press reads only the transcripts that changed. Reading the

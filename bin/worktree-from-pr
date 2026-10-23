@@ -147,7 +147,7 @@ const fetchPullRequest = (ref, cwd) => {
 
 // Flat and PR-numbered rather than mirroring the branch name: head branches
 // often contain slashes, which would nest worktrees inside shared parent
-// directories and confuse anything listing them (wt-cleanup included).
+// directories and confuse anything listing them (worktree-done included).
 const worktreeNameFor = (pr) => `pr-${pr.number}-${slugify(pr.headRefName)}`;
 
 const worktreeHoldingBranch = (branch, cwd) => {

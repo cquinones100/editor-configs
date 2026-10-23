@@ -14,7 +14,7 @@
 #
 # The daemon is a node script, and the tmux server keeps the environment it
 # was started with, where nvm (set up in ~/.zshrc) put no node: so node is
-# found here from nvm's default alias, as window-jump.sh does.
+# found here from nvm's default alias, the cheap way, without loading nvm.
 
 set -u
 

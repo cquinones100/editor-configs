@@ -8,7 +8,7 @@
 // multi-select that removes what you pick. The answer to "which of these forty
 // directories can I delete", and the deleting.
 //
-// Removal is `git worktree remove` without --force, same as wt-cleanup, so a
+// Removal is `git worktree remove` without --force, so a
 // worktree holding uncommitted work refuses to go rather than losing it. The
 // branch always survives; only the checkout is removed.
 //
@@ -253,15 +253,6 @@ const printGroup = (title, entries, root) => {
   });
 };
 
-// Only ever suggested when every finished worktree sits under one directory,
-// since that is the single argument wt-cleanup takes.
-const commonParent = (entries, root) => {
-  const parents = new Set(
-    entries.map((entry) => path.dirname(path.relative(root, entry.worktree.path))),
-  );
-  return parents.size === 1 ? [...parents][0] : undefined;
-};
-
 const hasFzf = () => {
   try {
     execFileSync("fzf", ["--version"], { stdio: "ignore" });
@@ -273,7 +264,7 @@ const hasFzf = () => {
 
 // Tab-delimited with --with-nth=1 so the path travels alongside each row
 // without being displayed or searched: the visible column is what the eye
-// needs, the hidden one is what git needs. Same shape wt-cleanup uses.
+// needs, the hidden one is what git needs.
 const selectViaFzf = (entries, root) => {
   const idWidth = Math.max(...entries.map((e) => e.issue.identifier.length));
   const stateWidth = Math.max(...entries.map((e) => e.issue.state.name.length));
@@ -492,10 +483,6 @@ const main = async () => {
       summarise();
     }
 
-    const parent = commonParent(done, root);
-    if (parent && !listOnly) {
-      status(`\nRemove them with:\n  wt-cleanup ${parent}`);
-    }
     return;
   }
 

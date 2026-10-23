@@ -8,7 +8,7 @@
 # Usage: reply-send.sh   (from a popup: the tab is the one it was opened over)
 #
 # The reply is read by bin/claude-reply, a node script. The tmux server has no
-# node on its PATH (see window-revive.sh), so nvm's default is added here.
+# node on its PATH (see sidebar.sh's start), so nvm's default is added here.
 #
 # It goes in as a bracketed paste, so its line breaks stay in the text rather
 # than each pressing Enter.

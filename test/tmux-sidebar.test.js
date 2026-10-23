@@ -790,6 +790,33 @@ test("the activity feed records what changed across the tabs, newest first, and 
   assert.deepEqual(feed([]), expected);
 });
 
+test("the Closed view lists closed tabs newest first, one per directory, to reopen with their Claude resumed", (t) => {
+  fs.rmSync(path.join(sidebar.STATE_DIR, "activity.jsonl"), { force: true });
+  sidebar.resetActivity();
+  const realNow = Date.now;
+  t.after(() => (Date.now = realNow));
+  const claude = { id: "@80", index: 3, name: "ABC-1: Feat", state: "idle", path: "/work/abc-1", claude: { sessionId: "1234-abcd" } };
+  const shell = { id: "@81", index: 4, name: "scratch", state: "idle", path: "/work/scratch" };
+  const again = { id: "@82", index: 5, name: "ABC-1 older", state: "idle", path: "/work/abc-1", claude: { sessionId: "9999" } };
+  const tool = { id: "@83", index: 6, name: "lazygit", state: "idle", path: "/work/tool" };
+  // Seen a minute ago, so none closed within seconds of opening but the tool.
+  Date.now = () => realNow() - 60_000;
+  sidebar.record([]);
+  sidebar.record([claude, shell, again]);
+  Date.now = realNow;
+  sidebar.record([claude, shell, again, tool]);
+  sidebar.record([claude, shell]);
+  sidebar.record([shell]);
+  sidebar.record([]);
+  const items = sidebar.closedItems([]);
+  assert.deepEqual(items.map((i) => [i.title, i.detail, i.dir, i.command, i.shell]), [
+    ["scratch", "closed <1m ago · a shell · /work/scratch", "/work/scratch", undefined, true],
+    ["ABC-1: Feat", "closed <1m ago · resumes its Claude · /work/abc-1", "/work/abc-1", "zsh -i -c 'claude --resume 1234-abcd; exec zsh -i'", false],
+  ], "the newest per directory, and not the tool's window");
+  assert.deepEqual(sidebar.closedItems([{ path: "/work/scratch" }]).map((i) => i.title), ["ABC-1: Feat"], "not a directory open again");
+  assert.ok(sidebar.builtInViews(sidebar.state).some((v) => v.title === "Closed"));
+});
+
 test("the PR board puts each PR in the column for where it stands, and h and l move between columns", async () => {
   const pr = (number, extra) => ({ number, title: `PR ${number}`, url: `https://github.com/acme/w/pull/${number}`, isDraft: false, state: "OPEN", reviewDecision: null, mergedAt: null, repository: { nameWithOwner: "acme/w" }, mergeQueueEntry: null, commits: { nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }] }, ...extra });
   const columns = sidebar.boardFrom([

@@ -440,6 +440,28 @@ test("a tab whose turn ended with background tasks still running reads as workin
   ], "not one that needs you");
 });
 
+test("a Monitor watch runs through its events until it expires, and a tab only watching is in Monitoring", () => {
+  const file = path.join(home, ".claude/projects/-work/watch.jsonl");
+  const now = Date.now();
+  const at = (ms) => new Date(now - ms).toISOString();
+  const event = { type: "user", timestamp: at(1_000), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>m1</task-id>\n<summary>Monitor event: \"CI\"</summary>\n<event>checks=pending</event>\n</task-notification>" } };
+  const entries = [
+    { type: "assistant", timestamp: at(5_000), message: { content: [{ type: "tool_use", id: "w1", name: "Monitor", input: { description: "CI on #12", command: "gh pr checks 12", timeout_ms: 1800000 } }] } },
+    { type: "user", timestamp: at(5_000), message: { content: [{ type: "tool_result", tool_use_id: "w1", content: "Monitor started (task m1, expires in 30m unless the source ends first; you get one notice at expiry)" }] } },
+    event,
+  ];
+  fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1, monitors: ["CI on #12"] }, "an event doesn't end it");
+
+  const tab = { id: "@9", index: 9, name: "watcher", state: "background", background: 1, monitors: ["CI on #12"], session: "$1", panes: [], sidebars: [] };
+  assert.deepEqual(sidebar.grouped([tab]).map((g) => g.title), ["Monitoring"]);
+  assert.equal(sidebar.stateWords(tab), "monitoring · CI on #12");
+  assert.deepEqual(sidebar.grouped([{ ...tab, background: 2 }]).map((g) => g.title), ["Working"], "other work as well is working");
+
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: at(0), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>m1</task-id>\n<summary>Monitor expired after 30m with no events delivered.</summary>\n</task-notification>" } }) + "\n");
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 0, monitors: [] }, "its expiry ends it");
+});
+
 test("a loop running in the background reads as that loop, with its round: review, CI, queue-and-clean", () => {
   const file = path.join(home, ".claude/projects/-work/review.jsonl");
   const now = Date.now();
@@ -457,7 +479,7 @@ test("a loop running in the background reads as that loop, with its round: revie
     ...run("u3", "r2a", review, 4_000), ...run("u4", "r2b", review, 4_000),
   ];
   fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n");
-  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 2, loop: { kind: "review", round: 2 } });
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 2, loop: { kind: "review", round: 2 }, monitors: [] });
 
   // A CI loop next: its watch, started again after a fix, counts one a round.
   const ci = "info=$(gh pr view 12 --json state); checks=$(gh pr checks 12 --json name,bucket)";
@@ -466,13 +488,13 @@ test("a loop running in the background reads as that loop, with its round: revie
     { type: "user", timestamp: at(3_000), message: { content: "<command-name>/ci-loop</command-name>" } },
     ...run("u5", "ci1", ci, 2_500), ended("ci1"), ...run("u6", "ci2", ci, 1_000),
   ].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
-  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1, loop: { kind: "ci", round: 2 } });
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1, loop: { kind: "ci", round: 2 }, monitors: [] });
   // queue-and-clean's watch reads the checks too, but is the queue's.
   fs.appendFileSync(file, [ended("ci2"), ...run("u7", "q1", "gh api graphql -f query='{ pullRequest { mergeQueueEntry { state } } }'; gh pr checks 12 --required", 500)].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
-  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1, loop: { kind: "queue", round: 1 } });
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1, loop: { kind: "queue", round: 1 }, monitors: [] });
   // Anything else is plain background work.
   fs.appendFileSync(file, [ended("q1"), ...run("u8", "x1", "sleep 100", 100)].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
-  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1 });
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1, monitors: [] });
 
   const tab = { id: "@9", index: 9, name: "review", state: "background", background: 2, loop: { kind: "review", round: 2 }, session: "$1", panes: [], sidebars: [] };
   assert.equal(sidebar.stateWords({ ...tab, loop: { kind: "ci", round: 3 } }), "CI loop · round 3");

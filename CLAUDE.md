@@ -174,7 +174,11 @@ means reading what changed and putting the new commit in `plugins.txt`.
 right: `glow` draws the Markdown and `mermaid-ascii` each Mermaid diagram as
 text, a diagram it can't draw (only flowcharts and sequence diagrams) kept as
 its source. `mermaid-ascii` is pinned the same way, by version and checksum in
-`sync.sh` (`sync_mermaid_ascii`), which `./sync.sh tmux` installs.
+`sync.sh` (`sync_mermaid_ascii`), which `./sync.sh tmux` installs. A trial beside it, `M-p`'s "View the branch's PR
+description as an image" (`tmux/pr-image.sh`, `tmux/pr-image.js`), draws the
+description as GitHub does (its `body_html`, read with a GET, GitHub's
+stylesheet, Mermaid in mermaid-cli's headless Chrome) and shows it a page at a
+time as images, through tmux's passthrough for that pane alone.
 
 ## The notes app
 

@@ -88,7 +88,9 @@ const MARKS = [
   0xAAB8, 0xAABE, 0xAABF, 0xAAC1, 0xFE20, 0xFE21, 0xFE22, 0xFE23, 0xFE24, 0xFE25, 0xFE26, 0x10A0F, 0x10A38, 0x1D185, 0x1D186, 0x1D187,
   0x1D188, 0x1D189, 0x1D1AA, 0x1D1AB, 0x1D1AC, 0x1D1AD, 0x1D242, 0x1D243, 0x1D244,
 ];
-const IMAGE = 7;
+// Its ID, which the placeholders carry as their 256-colour foreground: above
+// 15, since tmux rewrites colours 0 to 15 as the basic ones, which carry no ID.
+const IMAGE = 222;
 
 // A kitty graphics image, shown through Unicode placeholders, which is what
 // works inside tmux: the image is sent once (passed through tmux to the

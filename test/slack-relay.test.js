@@ -1189,6 +1189,11 @@ test("a test run is no milestone, and a command that never ran isn't a failure",
   const blocked = "PreToolUse:Bash hook error: [bash ~/.claude/hooks/enforce-git-hooks-run.sh]: Do not skip git hooks";
   assert.equal(line("commit", blocked, true, "git commit -n -m x"), undefined);
   assert.equal(line("push", "The user doesn't want to proceed with this tool use.", true, "git push"), undefined);
+  // A push into a local repository, or a quiet one that says nothing of where
+  // it went, is no news; one to GitHub is.
+  assert.equal(line("push", "To /tmp/test/origin.git\n * [new branch]      main -> main", false, "git push origin main"), undefined);
+  assert.equal(line("push", "", false, "git -C clone push -q origin main"), undefined);
+  assert.equal(line("push", "To github.com:o/r.git\n   abc..def  main -> main", false, "git push"), "pushed `main`");
   assert.equal(line("commit", "(eval):14: unmatched `", true, "node -e '...' && git commit -m x"), undefined);
   // A commit git itself refused is still one that failed.
   assert.equal(line("commit", "pre-commit: autoMode is staged\nerror: the hook refused", true, "git commit -m x"), "a commit failed: error: the hook refused");

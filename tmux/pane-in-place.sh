@@ -6,6 +6,8 @@
 # Usage:
 #   pane-in-place.sh open <lazygit|diffview> <pane> <dir>   start the tool in <dir> in <pane>'s place
 #   pane-in-place.sh back <pane>                            from the tool's pane as it exits: swap <pane> back
+#   pane-in-place.sh popup <lazygit|diffview> <dir> <client> the tool in <dir> in a popup on <client>, for a
+#                                                           worktree no tab is in (the sidebar's d and L)
 #
 # The tool starts in a window of its own, and swap-pane trades places: the
 # tool goes where the pane was, and the pane waits in that window, marked
@@ -20,31 +22,43 @@
 
 set -u
 
+# The command that runs <tool> in <dir>, or nothing.
+tool_command() {
+  local tool=$1 dir=$2 base
+  case $tool in
+    lazygit) echo lazygit ;;
+    # GitHub's comparison: everything since the branch left origin's
+    # default branch (main where origin doesn't say), uncommitted changes
+    # included. It does not fetch: it compares with what was last fetched.
+    diffview)
+      if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
+        tmux display-message "Not in a git repository: ${dir//\#/##}"
+        exit 0
+      fi
+      base=$(git -C "$dir" rev-parse --abbrev-ref origin/HEAD 2>/dev/null) || base=main
+      echo "nvim --cmd 'let g:diff_pane = 1' -c 'DiffviewOpen $base --merge-base'"
+      ;;
+  esac
+}
+
 case "${1:-}" in
   open)
     tool=$2 pane=$3 dir=$4
-    back="~/.config/tmux/pane-in-place.sh back $pane"
-    case $tool in
-      lazygit) command="lazygit; $back" ;;
-      # GitHub's comparison: everything since the branch left origin's
-      # default branch (main where origin doesn't say), uncommitted changes
-      # included. It does not fetch: it compares with what was last fetched.
-      diffview)
-        if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
-          tmux display-message "Not in a git repository: ${dir//\#/##}"
-          exit 0
-        fi
-        base=$(git -C "$dir" rev-parse --abbrev-ref origin/HEAD 2>/dev/null) || base=main
-        command="nvim --cmd 'let g:diff_pane = 1' -c 'DiffviewOpen $base --merge-base'; $back"
-        ;;
-      *) exit 0 ;;
-    esac
+    command=$(tool_command "$tool" "$dir")
+    [ -n "$command" ] || exit 0
+    command="$command; ~/.config/tmux/pane-in-place.sh back $pane"
     tool_pane=$(tmux new-window -d -P -F '#{pane_id}' -c "$dir" "$command") || exit 0
     tmux set -w -t "$tool_pane" @pane_parked 1
     tmux set -p -t "$tool_pane" @parked_pane "$pane"
     tmux set -p -t "$tool_pane" @in_place "$tool"
     tmux swap-pane -d -s "$tool_pane" -t "$pane"
     tmux select-pane -t "$tool_pane"
+    ;;
+  popup)
+    tool=$2 dir=$3 client=$4
+    command=$(tool_command "$tool" "$dir")
+    [ -n "$command" ] || exit 0
+    tmux display-popup -c "$client" -E -w 95% -h 90% -d "$dir" -T " $tool " "$command"
     ;;
   back)
     pane=$2

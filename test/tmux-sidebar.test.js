@@ -663,6 +663,38 @@ test("the work map lists every worktree in the tabs' repositories, with its tab 
   }
 });
 
+test("the activity feed records what changed across the tabs, newest first, and keeps it across a restart", () => {
+  fs.rmSync(path.join(sidebar.STATE_DIR, "activity.jsonl"), { force: true });
+  sidebar.resetActivity();
+  const tab = (extra) => ({ id: "@70", index: 7, name: "feed tab", state: "idle", ...extra });
+  sidebar.record([tab({})]);
+  assert.deepEqual(sidebar.activityItems([]), [], "the first look only takes note");
+  sidebar.record([tab({ state: "working", activity: "Run the test suite" })]);
+  sidebar.record([tab({ state: "waiting", wait: "asks: Ship it?" })]);
+  sidebar.record([tab({ state: "done" })]);
+  sidebar.record([tab({ state: "background", pr: "12", checks: { pass: 3, fail: 2, pending: 0 } })]);
+  sidebar.record([tab({ state: "idle", pr: "12", merge: "merged" })]);
+  sidebar.record([tab({ state: "idle", pr: "12", merge: "merged" }), { id: "@71", index: 8, name: "new tab", state: "idle" }]);
+  sidebar.record([{ id: "@71", index: 8, name: "new tab", state: "idle" }]);
+  const feed = (tabs) => sidebar.activityItems(tabs).map((i) => [i.title.replace(/\s+/g, " "), i.detail, i.state]);
+  const expected = [
+    ["closed 7 feed tab", "", "idle"],
+    ["opened 8 new tab", "", "idle"],
+    ["merged 7 feed tab", "#12", "idle"],
+    ["checks failing 7 feed tab", "✗2 on #12", "attention"],
+    ["started working 7 feed tab", "", "active"],
+    ["finished 7 feed tab", "", "attention"],
+    ["waiting on you 7 feed tab", "asks: Ship it?", "attention"],
+    ["started working 7 feed tab", "Run the test suite", "active"],
+  ];
+  assert.deepEqual(feed([]), expected);
+  assert.equal(sidebar.activityItems([{ id: "@71" }])[1].tab?.id, "@71", "an open tab's event goes to it with Enter");
+  // A restart reads them back, and its first look reports nothing new.
+  sidebar.resetActivity();
+  sidebar.record([{ id: "@71", index: 8, name: "new tab", state: "idle" }]);
+  assert.deepEqual(feed([]), expected);
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

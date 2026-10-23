@@ -131,6 +131,7 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/reply-send.sh ~/.config/tmux/reply-send.sh
   put_link ~/editor-configs/tmux/note-shape.sh ~/.config/tmux/note-shape.sh
   put_link ~/editor-configs/tmux/pane-in-place.sh ~/.config/tmux/pane-in-place.sh
+  put_link ~/editor-configs/tmux/health.sh ~/.config/tmux/health.sh
   put_link ~/editor-configs/tmux/linear-project.sh ~/.config/tmux/linear-project.sh
   put_link ~/editor-configs/tmux/merge-queue.sh ~/.config/tmux/merge-queue.sh
   put_link ~/editor-configs/tmux/notes-open.sh ~/.config/tmux/notes-open.sh

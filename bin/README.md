@@ -235,6 +235,10 @@ wtpr 123
 wtpr https://github.com/owner/repo/pull/123
 ```
 
+The M-p palette's "Start work on a PR in a new tab (wtpr)" (`tmux/wtpr-open.zsh`)
+asks for a PR number or URL, the clipboard filled in when it holds one, and runs
+`wtpr` with it in a new tab.
+
 That creates `.claude/worktrees/pr-123-the-head-branch` off the repo root. The
 directory is named after the PR rather than the branch because head branches
 often contain slashes, which would nest worktrees inside shared parent

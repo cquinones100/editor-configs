@@ -1119,7 +1119,8 @@ as you type would write over each other. It runs `tmux/notes-open.sh`, which
 `./sync.sh tmux` links, so the binding needs both that and `./sync.sh notes`. `M-e` puts the same
 Notes in a pane to the right of the one you are in, moving it from wherever it
 is, or starting it there; pressed again in that tab, or `M-w` on it, it goes back to a
-tab of its own.
+tab of its own. While it is beside a tab's pane, that tab says "✎ Notes here" in the
+sidebar and on its mission control card.
 
 ### In the list
 

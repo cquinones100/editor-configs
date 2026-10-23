@@ -695,6 +695,45 @@ test("the activity feed records what changed across the tabs, newest first, and 
   assert.deepEqual(feed([]), expected);
 });
 
+test("the PR board puts each PR in the column for where it stands, and h and l move between columns", async () => {
+  const pr = (number, extra) => ({ number, title: `PR ${number}`, url: `https://github.com/acme/w/pull/${number}`, isDraft: false, state: "OPEN", reviewDecision: null, mergedAt: null, repository: { nameWithOwner: "acme/w" }, mergeQueueEntry: null, commits: { nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }] }, ...extra });
+  const columns = sidebar.boardFrom([
+    pr(1, { isDraft: true }),
+    pr(2, { commits: { nodes: [{ commit: { statusCheckRollup: { state: "FAILURE" } } }] } }),
+    pr(3, { reviewDecision: "CHANGES_REQUESTED" }),
+    pr(4, { reviewDecision: "APPROVED" }),
+    pr(5, { reviewDecision: "APPROVED", mergeQueueEntry: { position: 2 } }),
+    pr(6, { state: "MERGED", mergedAt: "2026-10-20T10:00:00Z" }),
+    pr(7, { state: "MERGED", mergedAt: "2026-10-21T10:00:00Z" }),
+    pr(2, {}),
+  ]);
+  assert.deepEqual(columns.map((c) => [c.title, c.items.map((i) => i.title)]), [
+    ["Draft", ["#1 PR 1"]],
+    ["In review", ["#2 PR 2", "#3 PR 3"]],
+    ["Approved", ["#4 PR 4"]],
+    ["In merge queue", ["#5 PR 5"]],
+    ["Merged", ["#7 PR 7", "#6 PR 6"]],
+  ], "a PR listed twice once, merged ones newest first");
+  assert.deepEqual(columns[1].items.map((i) => [i.detail, i.state]), [["w · ✗ checks", "attention"], ["w · ✓ checks · changes requested", "attention"]]);
+
+  sidebar.board.columns = columns;
+  sidebar.board.loaded = true;
+  const views = sidebar.builtInViews(sidebar.state);
+  const at = views.findIndex((v) => v.board) + 1;
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: at, cursor: 0 }, cols: 150, rows: 20, tmuxClient: "none" };
+  sidebar.draw(client);
+  assert.match(plain(sent.at(-1)), /DRAFT 1 +IN REVIEW 2 +APPROVED 1 +IN MERGE QUEUE 1 +MERGED 2/);
+  // j down a column, l across at the same row as far as it reaches, h back.
+  await sidebar.missionKey(client, { key: "l" });
+  await sidebar.missionKey(client, { key: "j" });
+  assert.equal(views[at - 1].items[client.view.cursor].title, "#3 PR 3");
+  await sidebar.missionKey(client, { key: "l" });
+  assert.equal(views[at - 1].items[client.view.cursor].title, "#4 PR 4");
+  await sidebar.missionKey(client, { key: "h" });
+  assert.equal(views[at - 1].items[client.view.cursor].title, "#2 PR 2");
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

@@ -86,8 +86,18 @@ local function rename_buffer(buf, to)
   end
 end
 
--- A note changed from outside, now in its buffer (see sync.lua).
-local function redraw(buf) render.draw(buf) end
+-- A note changed from outside, now in its buffer (see sync.lua). An item
+-- ticked there, by a script or Claude, moves under the ones left to do, as
+-- ticking it here does, and the note is saved that way.
+local function redraw(buf, rows)
+  if format.options.move_checked_to_bottom and rows and #rows > 0 then
+    local tick = vim.api.nvim_buf_get_changedtick(buf)
+    table.sort(rows, function(a, b) return a > b end)
+    for _, row in ipairs(rows) do format.sort_checked(buf, row) end
+    if vim.api.nvim_buf_get_changedtick(buf) ~= tick then vim.schedule(function() M.save(buf) end) end
+  end
+  render.draw(buf)
+end
 
 -- Saves a note, and renames its file if its title changed. A change made to
 -- its file from outside is brought in first, so it isn't written over.

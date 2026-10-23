@@ -126,7 +126,8 @@ function M.written(buf)
   vim.b[buf].notes_gone = nil
 end
 
--- Brings in a change made outside, if there is one. Returns false when the
+-- Brings in a change made outside, if there is one, and calls `changed` with
+-- the buffer and the rows (1-based) the change wrote. Returns false when the
 -- note's file has gone (deleted or moved outside the app), so the caller
 -- doesn't write it back under its old name; it says so once.
 function M.check(buf, changed)
@@ -141,6 +142,7 @@ function M.check(buf, changed)
   end
   vim.b[buf].notes_gone = nil
   if base[buf] == nil or disk == base[buf] then return true end
+  local before = text_of(buf)
   if not vim.bo[buf].modified then
     put(buf, disk)
     vim.bo[buf].modified = false
@@ -152,7 +154,11 @@ function M.check(buf, changed)
     end
   end
   base[buf] = disk
-  if changed then changed(buf) end
+  local rows = {}
+  for _, h in ipairs(vim.diff(before, text_of(buf), { result_type = "indices" })) do
+    for row = h[3], h[3] + h[4] - 1 do table.insert(rows, row) end
+  end
+  if changed then changed(buf, rows) end
   return true
 end
 

@@ -475,6 +475,25 @@ test("two edits of a note merge line by line: next to each other both apply, on 
   assert.deepEqual(result.removed, ["# List\n- [ ] two\n- [ ] three\n- [ ] four\n", 0]);
 });
 
+test("an item ticked from outside moves under the ones left to do, and the note is saved that way", () => {
+  const { result } = lua(`
+    local s = require("notes.store")
+    local path = s.create("", "Errands")
+    local f = io.open(path, "w"); f:write("# Errands\\n\\n- [ ] milk\\n- [ ] eggs\\n- [ ] bread\\n"); f:close()
+    vim.cmd("Notes")
+    local n = require("notes")
+    n.open(path)
+    local buf = vim.api.nvim_get_current_buf()
+    local function lines() return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\\n") end
+    local g = io.open(path, "w"); g:write("# Errands\\n\\n- [x] milk\\n- [ ] eggs\\n- [ ] bread\\n"); g:close()
+    local moved = vim.wait(3000, function() return lines():find("bread\\n%- %[x%] milk") ~= nil end, 20)
+    local saved = vim.wait(3000, function() return io.open(path):read("*a"):find("bread\\n%- %[x%] milk") ~= nil end, 20)
+    io.write(vim.json.encode({ moved = moved, saved = saved, text = io.open(path):read("*a") }))
+  `);
+  assert.equal(result.moved, true, "ticked from outside, it moved down in the open note");
+  assert.equal(result.saved, true, `and the file says so: ${result.text}`);
+});
+
 test("a note changed from outside while it is open shows the change, and a save keeps both it and what you typed", () => {
   const { result, dir } = lua(`
     local s = require("notes.store")

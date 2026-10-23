@@ -90,8 +90,25 @@ local function blend(fg, bg, amount)
   return mix
 end
 
+-- Syntax groups that paint a background of their own, as tokyonight does for
+-- a Markdown heading or inline code: in a diff those read as more
+-- highlighting, so there each is drawn by a copy without its background,
+-- keeping its colour. Found again with every colourscheme.
+local unpainted = {}
+
 local function minimal_highlights()
-  local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg or 0x1e1e2e
+  -- tokyonight is transparent, with no Normal background, so its storm one.
+  local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg or 0x24283b
+  unpainted = {}
+  for name in pairs(vim.api.nvim_get_hl(0, {})) do
+    local hl = vim.api.nvim_get_hl(0, { name = name, link = false })
+    if hl.bg and name:match("^@") and not name:match("^@diff") then
+      local copy = "DiffviewMinimalNoBg" .. name:gsub("[^%w]", "_")
+      hl.bg = nil
+      vim.api.nvim_set_hl(0, copy, hl)
+      table.insert(unpainted, name .. ":" .. copy)
+    end
+  end
   local function faint(name)
     local bg = vim.api.nvim_get_hl(0, { name = name, link = false }).bg
     return bg and { bg = blend(bg, normal, 0.25) } or {}
@@ -112,6 +129,7 @@ local function minimal_for(side)
     "DiffDelete:DiffviewMinimalFiller",
     "DiffChange:DiffviewMinimalChange",
     "DiffText:DiffviewMinimalText",
+    unpack(unpainted),
   }, ",")
 end
 

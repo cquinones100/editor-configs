@@ -108,7 +108,8 @@ const show = (png, cols, rows) => {
   let out = "\x1b[H\x1b[2J" + tmux(`\x1b_Ga=d,d=I,i=${IMAGE},q=2\x1b\\`);
   chunks.forEach((chunk, i) => {
     const more = i < chunks.length - 1 ? 1 : 0;
-    const head = i === 0 ? `a=T,U=1,f=100,i=${IMAGE},c=${cols},r=${rows},q=2,m=${more}` : `m=${more}`;
+    // Not quiet (q=1: errors only), so the footer can say why a page failed.
+    const head = i === 0 ? `a=T,U=1,f=100,i=${IMAGE},c=${cols},r=${rows},q=1,m=${more}` : `m=${more}`;
     out += tmux(`\x1b_G${head};${chunk}\x1b\\`);
   });
   const cell = String.fromCodePoint(0x10eeee);
@@ -168,13 +169,22 @@ const main = async () => {
   }
 
   let at = 0;
+  // The terminal's last word on a page: kitty graphics answer an error as
+  // ESC _G i=<id>;<message> ESC \.
+  let said = "";
   const draw = () => {
     show(shots[at], cols, rows);
-    process.stdout.write(`\x1b[${rows + 1};1H\x1b[38;5;244m page ${at + 1}/${pages}   j k space b: page   r: redraw   q: close\x1b[0m`);
+    process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   j k space b: page   r: redraw   q: close${said ? `   \x1b[31m${said}` : ""}\x1b[0m`);
   };
   process.stdin.setRawMode(true);
   process.stdin.on("data", (key) => {
     const k = key.toString();
+    const reply = /\x1b_G([^\x1b]*)\x1b\\/.exec(k);
+    if (reply) {
+      said = reply[1];
+      process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   \x1b[31m${said}\x1b[0m`);
+      return;
+    }
     if (k === "q" || k === "\x03" || k === "\x1b") {
       process.stdout.write("\x1b[2J");
       process.exit(0);

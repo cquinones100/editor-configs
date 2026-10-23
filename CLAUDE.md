@@ -175,7 +175,11 @@ means reading what changed and putting the new commit in `plugins.txt`.
 `M-v` (`tmux/pr-view.sh`) shows the branch's PR description in a pane to the
 right: `glow` draws the Markdown and `mermaid-ascii` each Mermaid diagram as
 text, a diagram it can't draw (only flowcharts and sequence diagrams) kept as
-its source. `mermaid-ascii` is pinned the same way, by version and checksum in
+its source. `M-i` (`tmux/ticket-view.sh`) does the same for the Linear ticket the
+branch or tab name gives, read from Linear's API with worktree-from-ticket's
+key and laid out by `pr-view.js ticket`: the facts from its side panel, the
+description, sub-issues, related tickets, links, and the comments with their
+replies. `mermaid-ascii` is pinned the same way, by version and checksum in
 `sync.sh` (`sync_mermaid_ascii`), which `./sync.sh tmux` installs. A trial beside it, `M-p`'s "View the branch's PR
 description as an image" (`tmux/pr-image.sh`, `tmux/pr-image.js`), draws the
 description as GitHub does (its `body_html`, read with a GET, GitHub's

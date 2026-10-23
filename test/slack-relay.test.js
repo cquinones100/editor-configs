@@ -816,14 +816,13 @@ test("milestones ping a tab's thread on a commit, a push and failing tests", asy
     const name = tmux("display", "-p", "-t", window, "#{window_name}");
     assert.deepEqual(posts.slice(1).map((p) => p.body), [
       `🤖 tab ${index}, ${name}: committed \`abc1234\` Add two on \`feature\``,
-      `🤖 tab ${index}, ${name}: tests failed: \`pnpm test\`, ending "Tests: 1 failed, 4 passed"`,
       `🤖 tab ${index}, ${name}: pushed \`feature\``,
-    ]);
+    ], "a failing test run isn't news");
     // In the tab's home thread, which the first of them started.
     const homeThread = state.homes[window].ts;
     assert.match(posts[0].body, /This is its thread/);
     posts.slice(1).forEach((p) => assert.equal(p.thread, homeThread));
-    assert.deepEqual(posts.slice(1).map((p) => p.broadcast), [false, true, false]);
+    assert.deepEqual(posts.slice(1).map((p) => p.broadcast), [false, false]);
   } finally {
     fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`));
     tmux("kill-window", "-t", window);
@@ -1182,19 +1181,15 @@ test("agent-state.sh gives the relay a finished turn's final message", () => {
   fs.rmSync(relay.EVENTS_FILE);
 });
 
-test("a failed test run is told by the runner's summary, and a command that never ran isn't a failure", () => {
+test("a test run is no milestone, and a command that never ran isn't a failure", () => {
   const line = relay.milestoneLine;
-  // Piped into grep, the run exits 0, but its summary says two failed.
-  assert.equal(line("test", "# tests 9\n# pass 7\n# fail 2", false, "node --test test/*.test.js | grep '^#'"), 'tests failed: `node --test test/*.test.js | grep \'^#\'`, ending "# fail 2"');
-  assert.equal(line("test", "# pass 9\n# fail 0", false, "node --test"), undefined);
-  assert.match(line("test", "--- FAIL: TestSum (0.00s)\nFAIL\texample.com/sum", true, "go test ./..."), /ending "FAIL\texample\.com\/sum"$/);
-  // A sed before the tests failed: the tests didn't.
-  assert.equal(line("test", "sed: 1: \"s/a/b\": unterminated substitute pattern", true, "sed -i '' 's/a/b' x && node --test"), undefined);
+  assert.deepEqual(relay.milestoneKinds("pnpm test"), []);
+  assert.deepEqual(relay.milestoneKinds("node --test test/*.test.js | grep '^#'"), []);
   // Blocked by a hook, declined, or not even parsed: nothing ran.
   const blocked = "PreToolUse:Bash hook error: [bash ~/.claude/hooks/enforce-git-hooks-run.sh]: Do not skip git hooks";
   assert.equal(line("commit", blocked, true, "git commit -n -m x"), undefined);
   assert.equal(line("push", "The user doesn't want to proceed with this tool use.", true, "git push"), undefined);
-  assert.equal(line("test", "(eval):14: unmatched `", true, "node -e '...' && node --test"), undefined);
+  assert.equal(line("commit", "(eval):14: unmatched `", true, "node -e '...' && git commit -m x"), undefined);
   // A commit git itself refused is still one that failed.
   assert.equal(line("commit", "pre-commit: autoMode is staged\nerror: the hook refused", true, "git commit -m x"), "a commit failed: error: the hook refused");
 });

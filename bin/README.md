@@ -986,10 +986,8 @@ usually tells the two apart. Each stall is noted once.
 
 It follows every Claude tab's transcript and posts one line in the tab's
 latest thread (or at the top level) when a session commits, pushes, opens a
-pull request, or runs tests that fail. A test run counts as failed when the
-runner's own summary says so (`# fail 2`, `not ok`, `3 failed`, `FAIL`), not
-by how the command exited, so a run piped into `grep` is still caught and a
-command that failed before its tests is not taken for them. A command that
+or opens a pull request. Test runs are not reported, failing or not: one
+failing is routine while Claude works. A command that
 never ran (blocked by a Claude Code hook, declined, or one the shell couldn't
 parse) is never a failure. It doesn't watch CI: GitHub already notifies about
 checks.

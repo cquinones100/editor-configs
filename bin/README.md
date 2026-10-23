@@ -239,6 +239,11 @@ The M-p palette's "Start work on a PR in a new tab (wtpr)" (`tmux/wtpr-open.zsh`
 asks for a PR number or URL, the clipboard filled in when it holds one, and runs
 `wtpr` with it in a new tab.
 
+Any PR, whatever its state. A merged or closed one whose branch the remote has
+deleted, as GitHub does after a merge, opens from the commits GitHub keeps for
+it (`refs/pull/<n>/head`), on a local branch of the PR's name with no upstream,
+since there is nothing left to push to.
+
 That creates `.claude/worktrees/pr-123-the-head-branch` off the repo root. The
 directory is named after the PR rather than the branch because head branches
 often contain slashes, which would nest worktrees inside shared parent

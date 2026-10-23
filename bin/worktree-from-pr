@@ -7,7 +7,10 @@
 // repo root so this works from inside an existing worktree.
 //
 // Only PRs whose branch lives on this repo's remote — fork PRs are `gh pr
-// checkout` territory and are rejected up front.
+// checkout` territory and are rejected up front. A PR's state doesn't matter:
+// a merged or closed one whose branch the remote has since deleted is opened
+// from the commits GitHub keeps for it (refs/pull/<n>/head), on a local branch
+// of the same name with no upstream.
 //
 // Needs the gh CLI, authenticated (https://cli.github.com), to turn a PR into
 // a branch name. Everything after that is plain git.
@@ -212,7 +215,7 @@ const ensureRefspecCovers = (branch, remote, root) => {
 
 // An explicit refspec rather than a bare `git fetch <remote> <branch>` so the
 // remote-tracking ref is always written, whatever the remote's configured
-// refspec happens to be.
+// refspec happens to be. Returns whether the remote has the branch.
 const fetchBranch = (branch, remote, root) => {
   try {
     // git's stdout to fd 2 so it can't pollute anything a caller parses.
@@ -222,11 +225,25 @@ const fetchBranch = (branch, remote, root) => {
         remote,
         `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
       ],
-      { cwd: root, stdio: ["inherit", 2, "inherit"] },
+      { cwd: root, stdio: ["inherit", 2, "ignore"] },
     );
+    return true;
   } catch {
-    fail(`could not fetch ${branch} from ${remote} (see output above)`);
+    return false;
   }
+};
+
+// A PR's last commit, which GitHub keeps under refs/pull/<n>/head for as long
+// as the PR exists, after its branch is deleted. Returns the ref it is fetched
+// to.
+const fetchPullHead = (number, remote, root) => {
+  const ref = `refs/remotes/${remote}/pr/${number}`;
+  try {
+    gitRun(["fetch", remote, `+refs/pull/${number}/head:${ref}`], { cwd: root, stdio: ["inherit", 2, "inherit"] });
+  } catch {
+    fail(`could not fetch PR #${number} from ${remote}: neither its branch nor refs/pull/${number}/head (see output above)`);
+  }
+  return ref;
 };
 
 // Written by hand rather than via `worktree add --track`: --track insists the
@@ -251,16 +268,22 @@ const linkLocalSettings = (root, worktreePath) => {
   fs.symlinkSync(source, target);
 };
 
-const createWorktree = (worktreePath, branch, remote, root) => {
-  ensureRefspecCovers(branch, remote, root);
-  fetchBranch(branch, remote, root);
+const createWorktree = (worktreePath, branch, remote, root, number) => {
+  const onRemote = fetchBranch(branch, remote, root);
+  // Widened only for a branch the remote has: a refspec naming one it doesn't
+  // would fail every later fetch.
+  if (onRemote) ensureRefspecCovers(branch, remote, root);
+  const start = onRemote ? `${remote}/${branch}` : fetchPullHead(number, remote, root);
+  if (!onRemote) {
+    console.error(`${branch} is gone from ${remote}, so the worktree starts at the PR's last commit, with no upstream.`);
+  }
 
   // A branch that already exists locally keeps its own commits; -b would refuse
   // to reuse it. Anything it is missing from the remote is picked up below.
   const existingBranch = branchExists(branch, root);
   const args = existingBranch
     ? ["worktree", "add", worktreePath, branch]
-    : ["worktree", "add", "-b", branch, worktreePath, `${remote}/${branch}`];
+    : ["worktree", "add", ...(onRemote ? [] : ["--no-track"]), "-b", branch, worktreePath, start];
 
   try {
     gitRun(args, { cwd: root, stdio: ["inherit", 2, "inherit"] });
@@ -269,9 +292,10 @@ const createWorktree = (worktreePath, branch, remote, root) => {
   }
 
   if (!existingBranch) {
-    setUpstream(branch, remote, root);
+    if (onRemote) setUpstream(branch, remote, root);
     return;
   }
+  if (!onRemote) return;
 
   // Catches up a local branch left behind by an earlier run. --ff-only so a
   // branch carrying your own unpushed commits is reported, never rewritten.
@@ -369,7 +393,7 @@ const main = async () => {
   const finalPath = existing ?? worktreePath;
   console.error(`Worktree: ${finalPath}`);
 
-  if (!existing) createWorktree(worktreePath, branch, defaultRemote(root), root);
+  if (!existing) createWorktree(worktreePath, branch, defaultRemote(root), root, pr.number);
   linkLocalSettings(root, finalPath);
 
   // Read by the `wtpr` shell function.

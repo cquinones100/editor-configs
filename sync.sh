@@ -134,6 +134,8 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/health.sh ~/.config/tmux/health.sh
   put_link ~/editor-configs/tmux/linear-project.sh ~/.config/tmux/linear-project.sh
   put_link ~/editor-configs/tmux/merge-queue.sh ~/.config/tmux/merge-queue.sh
+  put_link ~/editor-configs/tmux/aws-login.sh ~/.config/tmux/aws-login.sh
+  put_link ~/editor-configs/tmux/chrome-profile.sh ~/.config/tmux/chrome-profile.sh
   put_link ~/editor-configs/tmux/notes-open.sh ~/.config/tmux/notes-open.sh
   put_link ~/editor-configs/tmux/window-jump.sh ~/.config/tmux/window-jump.sh
   put_link ~/editor-configs/tmux/window-revive.sh ~/.config/tmux/window-revive.sh

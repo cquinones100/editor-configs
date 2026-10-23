@@ -100,8 +100,7 @@ const IMAGE = 222;
 // terminal, wrapped as tmux wants), with a virtual placement the size of the
 // pane, and then drawn by printing placeholder characters, U+10EEEE with a
 // row mark and a column mark, coloured with the image's ID. To tmux those are
-// text, so they sit in this pane and move and redraw with it. After a row's
-// first cell, the terminal counts the columns on.
+// text, so they sit in this pane and move and redraw with it.
 // `file`, when given, is the page saved on disk: sent as its path (t=f) the
 // terminal reads it itself, a few dozen bytes through tmux rather than the
 // whole image, which tmux relays slowly. Without one, the image itself.
@@ -121,8 +120,14 @@ const show = (png, cols, rows, file) => {
   });
   const cell = String.fromCodePoint(0x10eeee);
   out += `\x1b[38;5;${IMAGE}m`;
+  // Every cell carries its own row and column, none worked out from the cell
+  // before it: tmux redraws a changed screen a cell at a time, jumping about,
+  // and a cell worked out from its neighbour then takes the wrong one's place.
+  const across = Math.min(cols, MARKS.length);
   for (let r = 0; r < Math.min(rows, MARKS.length); r++) {
-    out += `\x1b[${r + 1};1H${cell}${String.fromCodePoint(MARKS[r])}${String.fromCodePoint(MARKS[0])}${cell.repeat(cols - 1)}`;
+    const row = String.fromCodePoint(MARKS[r]);
+    out += `\x1b[${r + 1};1H`;
+    for (let c = 0; c < across; c++) out += `${cell}${row}${String.fromCodePoint(MARKS[c])}`;
   }
   process.stdout.write(`${out}\x1b[39m`);
 };

@@ -168,7 +168,7 @@ means reading what changed and putting the new commit in `plugins.txt`.
 
 ## Key bindings and the M-p palette
 
-`C-l` puts lazygit in the pane's place without touching the rest of the window (`tmux/lazygit-pane.sh`): lazygit starts in a window of its own and `swap-pane` trades places, the pane waiting in that window, marked `@pane_parked` so the sidebar gives it no sidebar and lists it as no tab, and lazygit's pane naming it in `@parked_pane`. lazygit's command swaps it back when it exits, and `confirm.sh` swaps back any `@parked_pane` before it kills a pane, so closing lazygit's pane with `M-w` never strands it (`C-l` in lazygit quits it, as `C-c` does). Anything else that stands one pane in for another should do the same.
+`C-l` (lazygit) and `M-d` (diffview.nvim, `nvim/lua/plugins/diffview.lua`, showing the branch against origin's default branch as GitHub does) put a tool in the pane's place without touching the rest of the window (`tmux/pane-in-place.sh`): the tool starts in a window of its own and `swap-pane` trades places, the pane waiting in that window, marked `@pane_parked` so the sidebar gives it no sidebar and lists it as no tab, and the tool's pane naming it in `@parked_pane` and itself in `@in_place`, which the key uses to quit its own tool, since the tool's pane reads as the shell that runs it. The shell swaps the pane back when the tool exits, and `confirm.sh` swaps back any `@parked_pane` before it kills a pane, so closing the tool's pane with `M-w` never strands it. Another tool in place goes in `pane-in-place.sh`'s list.
 
 `M-p` opens `tmux/palette.sh`, an fzf list of the custom bindings that picks
 one and presses its key. The list is read from tmux, not kept anywhere: a

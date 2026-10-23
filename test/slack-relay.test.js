@@ -1960,6 +1960,59 @@ test("a turn's new images are shared under it, and nothing else that only looks 
   assert.deepEqual(calls.filter((c) => c.method === "files.completeUploadExternal").map((c) => c.params.files.length), [10, 5]);
 });
 
+test("a tall image is shared as slices about as tall as it is wide, in order, its pixels kept", async () => {
+  const zlib = require("node:zlib");
+  // A 10x35 RGBA image, each row stored with one of PNG's five filters in turn,
+  // as Chrome mixes them, written by hand so the slicer's reading is checked.
+  const width = 10;
+  const height = 35;
+  const pixel = (x, y) => [(x * 25) & 255, (y * 7) & 255, (x * y) & 255, 255];
+  const rows = Array.from({ length: height }, (_, y) => Buffer.from(Array.from({ length: width }, (_, x) => pixel(x, y)).flat()));
+  const filtered = rows.map((row, y) => {
+    const filter = y % 5;
+    const above = y ? rows[y - 1] : Buffer.alloc(row.length);
+    const out = Buffer.alloc(row.length);
+    for (let i = 0; i < row.length; i++) {
+      const a = i >= 4 ? row[i - 4] : 0;
+      const b = above[i];
+      const c = i >= 4 ? above[i - 4] : 0;
+      const p = a + b - c;
+      const paeth = Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c) ? a : Math.abs(p - b) <= Math.abs(p - c) ? b : c;
+      out[i] = (row[i] - [0, a, b, (a + b) >> 1, paeth][filter]) & 255;
+    }
+    return Buffer.concat([Buffer.from([filter]), out]);
+  });
+  const chunk = (type, data) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, "latin1");
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(Buffer.concat([head.subarray(4), data])), 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(filtered))), chunk("IEND", Buffer.alloc(0))]);
+
+  const parts = relay.sliced({ filename: "diff.png", content: png });
+  assert.deepEqual(parts.map((p) => p.filename), ["diff-part1of4.png", "diff-part2of4.png", "diff-part3of4.png", "diff-part4of4.png"]);
+  // Even slices (9, 9, 9, 8 rows), and every pixel where it was.
+  const back = parts.flatMap((part) => {
+    const read = relay.readPng(part.content);
+    assert.equal(read.width, width);
+    const raw = zlib.inflateSync(Buffer.concat(read.idat));
+    return Array.from({ length: read.height }, (_, y) => raw.subarray(y * (width * 4 + 1) + 1, (y + 1) * (width * 4 + 1)));
+  });
+  assert.deepEqual(parts.map((p) => relay.readPng(p.content).height), [9, 9, 9, 8]);
+  assert.deepEqual(back.map((row) => [...row]), rows.map((row) => [...row]));
+  // Not tall enough, or not a PNG it reads: as it is.
+  assert.equal(relay.sliced({ filename: "wide.png", content: relay.writePng(35, 6, rows.slice(0, 10).map((r) => Buffer.concat([r, r, r, r.subarray(0, 20)]))) }).length, 1);
+  assert.deepEqual(relay.sliced({ filename: "x.jpg", content: Buffer.from("not a png") }).map((p) => p.filename), ["x.jpg"]);
+});
+
 test("a video you attach is typed into the tab by its path and then its stills, in order", { skip: !fs.existsSync("/opt/homebrew/bin/ffmpeg") && "needs ffmpeg" }, async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));

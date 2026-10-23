@@ -827,7 +827,7 @@ In the DM:
   ones only its tool calls name, such as scratch images made along the way, where Slack shows the
   images and plays the videos. Only files that really are PNG, JPEG, GIF,
   WebP, MP4, MOV or WebM by their contents, written during that turn, up to
-  20 MB for an image and 200 MB for a video, up to 20 a turn, shared ten to a message, and never one you
+  20 MB for an image and 200 MB for a video, up to 20 a turn, shared ten to a message, a PNG more than twice as tall as it is wide (a long diff's screenshot) as slices about as tall as they are wide, in order, since Slack shrinks an image by its longest side until a tall one's text is unreadable, and never one you
   sent, so an old file a turn only mentions stays on the Mac
 - `new: <prompt>` starts a new Claude tab with that prompt
 - a finished turn has a **Skill** button, and when Claude ended by asking,

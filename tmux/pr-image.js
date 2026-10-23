@@ -29,7 +29,8 @@ const path = require("node:path");
 
 const CSS = "https://cdn.jsdelivr.net/npm/github-markdown-css@5.8.1/github-markdown-dark.css";
 const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
-const WIDTH = 900;
+// How many device pixels to a CSS pixel: two on a Retina screen.
+const DPR = 2;
 
 const fail = (message) => {
   process.stdout.write(`\n  \x1b[31m${message}\x1b[0m\n\n  \x1b[38;5;244mPress any key to close.\x1b[0m`);
@@ -51,11 +52,11 @@ const puppeteer = () => {
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // GitHub's HTML, Mermaid blocks turned back into their source for Mermaid to draw.
-const pageFor = (pr, html) => {
+const pageFor = (pr, html, width) => {
   // GitHub wraps a diagram's source in a section its own viewer fills in.
   const diagrams = html.replace(/<section[^>]*data-type="mermaid"[^>]*>[\s\S]*?<pre lang="mermaid"[^>]*>([\s\S]*?)<\/pre>[\s\S]*?<\/section>/g, (_, inner) => `<pre class="mermaid">${inner}</pre>`);
   return `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="${CSS}">
-<style>body { background: #0d1117; margin: 0; } .markdown-body { box-sizing: border-box; width: ${WIDTH}px; padding: 32px; } pre.mermaid { background: transparent; }</style>
+<style>body { background: #0d1117; margin: 0; } .markdown-body { box-sizing: border-box; width: ${width}px; padding: 24px; font-size: 14px; } pre.mermaid { background: transparent; }</style>
 </head><body><article class="markdown-body">
 <h1>${escapeHtml(pr.title)} <span style="color:#7d8590">#${pr.number}</span></h1>
 <p><em>${pr.isDraft ? "Draft" : pr.state} · ${escapeHtml(pr.author?.login ?? "")} wants to merge <code>${escapeHtml(pr.headRefName)}</code> into <code>${escapeHtml(pr.baseRefName)}</code></em></p>
@@ -126,12 +127,18 @@ const show = (png, cols, rows, file) => {
   process.stdout.write(`${out}\x1b[39m`);
 };
 
-// The terminal's cell size in pixels (CSI 16 t, answered as CSI 6 ; h ; w t),
-// or undefined when it doesn't say within a moment. Ghostty on a Retina screen
-// reports physical pixels, two to a CSS pixel; a cell under 14 pixels wide is
-// taken as already in CSS pixels.
+// The terminal's cell size in device pixels: from tmux inside it, which knows
+// it from the terminal (#{client_cell_width}); outside, from the terminal
+// itself (CSI 16 t, answered as CSI 6 ; h ; w t). Undefined when neither says
+// within a moment.
 const cellSize = () =>
   new Promise((resolve) => {
+    if (process.env.TMUX) {
+      try {
+        const [w, h] = execFileSync("tmux", ["display", "-p", ...(process.env.TMUX_PANE ? ["-t", process.env.TMUX_PANE] : []), "#{client_cell_width} #{client_cell_height}"], { encoding: "utf8" }).trim().split(" ").map(Number);
+        if (w > 0 && h > 0) return resolve({ w, h });
+      } catch {}
+    }
     if (!process.stdin.isTTY) return resolve(undefined);
     process.stdin.setRawMode(true);
     const done = (size) => {
@@ -144,8 +151,7 @@ const cellSize = () =>
     const onData = (data) => {
       const m = /\x1b\[6;(\d+);(\d+)t/.exec(data.toString());
       if (!m) return;
-      const [h, w] = [Number(m[1]), Number(m[2])];
-      done(w >= 14 ? { w: w / 2, h: h / 2 } : { w, h });
+      done({ w: Number(m[2]), h: Number(m[1]) });
     };
     const timer = setTimeout(() => done(undefined), 500);
     process.stdin.on("data", onData);
@@ -157,7 +163,13 @@ const main = async () => {
   const dir = path.resolve(process.argv[2] ?? process.cwd());
   // Taken first, before anything else reads the keyboard. A guess at a
   // 13-point font when the terminal doesn't say.
-  const cell = (await cellSize()) ?? { w: 8, h: 17 };
+  const cell = (await cellSize()) ?? { w: 16, h: 34 };
+  // The page is laid out as wide as the pane, in CSS pixels, and drawn at the
+  // screen's own pixels, so it fills the pane at its own size, sharp.
+  const cols = process.stdout.columns || 80;
+  const rows = (process.stdout.rows || 24) - 1;
+  const width = Math.max(480, Math.floor((cols * cell.w) / DPR));
+  const pageHeight = Math.max(100, Math.floor((rows * cell.h) / DPR));
   process.stdout.write("\n  \x1b[38;5;244mReading the PR…\x1b[0m");
   let pr;
   try {
@@ -179,19 +191,14 @@ const main = async () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "pr-image-"));
   process.on("exit", () => fs.rmSync(work, { recursive: true, force: true }));
   const file = path.join(work, "pr.html");
-  fs.writeFileSync(file, pageFor(pr, html));
+  fs.writeFileSync(file, pageFor(pr, html, width));
   const browser = await lib.launch({ headless: true });
   const page = await browser.newPage();
-  await page.setViewport({ width: WIDTH, height: 800, deviceScaleFactor: 2 });
+  await page.setViewport({ width, height: 800, deviceScaleFactor: DPR });
   await page.goto(`file://${file}`, { waitUntil: "networkidle0" });
   await page.waitForSelector("body[data-done]", { timeout: 15_000 }).catch(() => {});
-  // Shown at its own size, a CSS pixel to a CSS pixel of the screen: as many
-  // columns as the page is wide in cells (or the pane, if narrower), and a page
-  // as tall as the pane. Each page ends where a block does, and a diagram taller
-  // than a page is drawn smaller, to fit one, so it is never cut in two.
-  const cols = Math.min(process.stdout.columns || 80, Math.round(WIDTH / cell.w));
-  const rows = (process.stdout.rows || 24) - 1;
-  const pageHeight = Math.max(100, Math.floor((rows * cell.h * WIDTH) / (cols * cell.w)));
+  // Each page ends where a block does, and a diagram taller than a page is
+  // drawn smaller, to fit one, so it is never cut in two.
   await page.addStyleTag({ content: `pre.mermaid svg { max-height: ${pageHeight - 40}px; max-width: 100%; height: auto; }` });
   // Where each block of the description starts and ends, to break pages
   // between them.
@@ -216,7 +223,7 @@ const main = async () => {
     const h = cuts[i + 1] - cuts[i];
     // A Buffer: puppeteer returns a plain Uint8Array, whose toString ignores
     // "base64" and lists its bytes instead.
-    const png = Buffer.from(await page.screenshot({ clip: { x: 0, y: cuts[i], width: WIDTH, height: h }, type: "png" }));
+    const png = Buffer.from(await page.screenshot({ clip: { x: 0, y: cuts[i], width, height: h }, type: "png" }));
     const file = path.join(work, `page-${i + 1}.png`);
     fs.writeFileSync(file, png);
     shots.push({ png, file, rows: Math.max(1, Math.round((h / pageHeight) * rows)) });

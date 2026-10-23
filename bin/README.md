@@ -515,6 +515,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | `Enter` | go into the chosen tab's pane | go to the chosen tab, or open the item |
 | `1`–`9` | go to that tab | choose that tab |
 | `p` or `:` | the `M-p` palette, in the chosen tab | the same |
+| `n` | a new tab running Claude in the chosen tab's directory, as `M-t` opens one | |
 | `d` `L` | the chosen tab's diff (diffview, as `M-d` there) or lazygit (as `C-l`) | the same; on a Work map row with no tab, in a popup in its worktree |
 | any bound Alt or Ctrl key | runs in the chosen tab | runs in the chosen tab |
 | `Tab` `S-Tab` | open mission control | the next or previous view |

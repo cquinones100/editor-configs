@@ -501,6 +501,8 @@ row of tabs to one line: the session, its counts, and the focused window in
 full. The states are the ones `tmux/agent-state.sh` keeps, so they mean what
 the tab badges meant.
 
+Mission control's views, which `Tab` and `]` go through, are its tabs, then the built-in views, then the plugins'. The **Work map** is every piece of work in the repositories your tabs are in, a row each: each worktree, and a main checkout a tab is in, with its ticket (from the branch), the tab it is open in or "no tab", its PR and where that stands (open, failing checks, in the merge queue, merged), and its directory, the ones needing you first and those no tab is in last, so work in flight is never forgotten. Enter goes to its tab, or opens one in a worktree that has none. Its worktrees are read with git, and a worktree's PR looked up by its branch, in the same minute's query as the tabs'.
+
 | Key | In the sidebar | In mission control |
 | --- | --- | --- |
 | `M-h` | move in, on the tab that needs you most, and back out | |

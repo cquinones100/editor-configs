@@ -631,6 +631,38 @@ test("/ filters mission control's cards, and X closes every merged tab and remov
   }
 });
 
+test("the work map lists every worktree in the tabs' repositories, with its tab or none, its ticket and its PR", async () => {
+  const repo = path.join(tmp, "workmap-repo");
+  const git = (...args) => execFileSync("git", ["-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { stdio: "ignore" });
+  fs.mkdirSync(repo, { recursive: true });
+  git("init", "-q", "-b", "main");
+  git("commit", "-q", "--allow-empty", "-m", "start");
+  git("remote", "add", "origin", "git@github.com:acme/workmap.git");
+  const open = path.join(repo, ".claude/worktrees/abc-12-feat-a");
+  const forgotten = path.join(repo, ".claude/worktrees/abc-13-feat-b");
+  git("worktree", "add", "-q", "-b", "abc-12-feat-a", open);
+  git("worktree", "add", "-q", "-b", "abc-13-feat-b", forgotten);
+  // Its PR, as GitHub would have said, looked up by its branch.
+  sidebar.known.set("acme/workmap@abc-13-feat-b", { pr: "42", merge: "queued", position: 2 });
+  const window = tmux("new-window", "-d", "-t", "test", "-c", open, "-P", "-F", "#{window_id}");
+  tmux("setw", "-t", window, "@tab_label", "#41 ABC-12: Feat A");
+  try {
+    await sidebar.refresh();
+    const tabs = sidebar.state.tabs;
+    await sidebar.refreshWorktrees(tabs);
+    assert.deepEqual(sidebar.untabbed(tabs).filter((w) => w.path.startsWith(repo)), [{ path: forgotten, branch: "abc-13-feat-b" }], "asked about by branch");
+    const rows = sidebar.workMap(tabs).filter((r) => (r.tab?.path ?? r.dir)?.startsWith(repo));
+    assert.deepEqual(rows.map((r) => [r.title, r.detail.replace(tmp, "TMP"), Boolean(r.tab), r.dir?.replace(tmp, "TMP")]), [
+      ["ABC-12  Feat A", "tab " + tabs.find((x) => x.id === window).index + " · #41 open · TMP/workmap-repo/.claude/worktrees/abc-12-feat-a", true, undefined],
+      ["ABC-13  feat b", "no tab · #42 in merge queue at 2 · TMP/workmap-repo/.claude/worktrees/abc-13-feat-b", false, "TMP/workmap-repo/.claude/worktrees/abc-13-feat-b"],
+    ], "the main checkout, with no tab in it, isn't a row");
+    assert.ok(sidebar.builtInViews(sidebar.state).some((v) => v.title === "Work map"));
+  } finally {
+    sidebar.known.delete("acme/workmap@abc-13-feat-b");
+    tmux("kill-window", "-t", window);
+  }
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

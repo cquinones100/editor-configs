@@ -33,6 +33,7 @@ const parts = Object.assign({},
   require("../lib/sidebar/panes"),
   require("../lib/sidebar/plugins"),
   require("../lib/sidebar/prs"),
+  require("../lib/sidebar/views"),
   require("../lib/sidebar/daemon"),
 );
 

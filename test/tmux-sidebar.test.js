@@ -600,6 +600,17 @@ test("a tab says what Claude is doing and what it waits on, as its hooks recorde
   }
 });
 
+test("flagged tabs come first in Needs you, ahead of ones waiting longer", () => {
+  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], claude: { sessionId: "s" } };
+  const tabs = [
+    { ...base, id: "@1", index: 1, name: "waiting long", state: "waiting", since: 10 },
+    { ...base, id: "@2", index: 2, name: "flagged", state: "idle", flagged: true },
+    { ...base, id: "@3", index: 3, name: "done", state: "done", since: 20 },
+  ];
+  assert.deepEqual(sidebar.grouped(tabs)[0].tabs.map((x) => x.name), ["flagged", "waiting long", "done"]);
+  assert.deepEqual(sidebar.staged(tabs)[0].tabs.map((x) => x.name), ["flagged", "waiting long", "done"]);
+});
+
 test("a tab flagged by hand needs you, whatever Claude is doing in it, until it is unflagged", async () => {
   const window = tmux("new-window", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
   try {

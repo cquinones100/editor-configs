@@ -159,7 +159,9 @@ const main = async () => {
   const pages = Math.max(1, Math.ceil(height / pageHeight));
   const shots = [];
   for (let i = 0; i < pages; i++) {
-    shots.push(await page.screenshot({ clip: { x: 0, y: i * pageHeight, width: WIDTH, height: Math.min(pageHeight, height - i * pageHeight) }, type: "png" }));
+    // A Buffer: puppeteer returns a plain Uint8Array, whose toString ignores
+    // "base64" and lists its bytes instead.
+    shots.push(Buffer.from(await page.screenshot({ clip: { x: 0, y: i * pageHeight, width: WIDTH, height: Math.min(pageHeight, height - i * pageHeight) }, type: "png" })));
   }
   await browser.close();
   // For checking the drawing without a terminal: the pages as PNGs, and out.

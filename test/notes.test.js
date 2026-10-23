@@ -425,6 +425,27 @@ test(":Notes opens the sidebar and the newest note, a welcome note at first; a n
   assert.ok(!fs.existsSync(path.join(dir, "New Note.md")));
 });
 
+test("the sidebar grows back to its width when the screen does, and is never narrower than its minimum", () => {
+  const { result } = lua(`
+    vim.o.columns = 200
+    vim.cmd("Notes")
+    local s = require("notes.sidebar")
+    local width = function() return vim.api.nvim_win_get_width(s.window()) end
+    local wide = width()
+    vim.o.columns = 30
+    vim.api.nvim_win_set_width(s.window(), 8)
+    vim.o.columns = 70
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    local narrow = width()
+    vim.o.columns = 200
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    io.write(vim.json.encode({ wide = wide, narrow = narrow, back = width(), full = s.WIDTH, min = require("notes").MIN_WIDTH }))
+  `);
+  assert.equal(result.wide, result.full);
+  assert.equal(result.narrow, result.min, "squeezed, it keeps its minimum");
+  assert.equal(result.back, result.full, "and grows back to full width");
+});
+
 test("Notes opens the note you had open last, through renames, and the newest once that one is deleted", () => {
   const { result: first, dir } = lua(`
     local s = require("notes.store")

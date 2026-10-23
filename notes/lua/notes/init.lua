@@ -459,7 +459,23 @@ function M.layout()
       wo.fillchars = "eob: "
     end)
   end
+  M.fit_sidebar()
   sidebar.draw()
+end
+
+-- The sidebar's width for the screen: its full width wherever the note keeps
+-- room beside it, else narrower, but never under MIN_WIDTH. Neovim shrinks a
+-- window when its pane gets narrow (M-e moving Notes beside a pane) and never
+-- grows it back, so this runs on every resize.
+M.MIN_WIDTH = 24
+function M.fit_sidebar()
+  local win = sidebar.window()
+  if not win then return end
+  local width = math.max(M.MIN_WIDTH, math.min(sidebar.WIDTH, vim.o.columns - 60))
+  if vim.api.nvim_win_get_width(win) ~= width then
+    vim.api.nvim_win_set_width(win, width)
+    sidebar.draw()
+  end
 end
 
 M.WELCOME = [==[
@@ -549,6 +565,7 @@ function M.start()
   -- The note you had open last, or the newest.
   M.open(store.last() or notes[1].path)
   vim.api.nvim_create_autocmd("VimLeavePre", { callback = M.save_all })
+  vim.api.nvim_create_autocmd("VimResized", { callback = M.fit_sidebar })
 end
 
 return M

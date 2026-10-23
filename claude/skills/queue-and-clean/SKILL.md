@@ -1,6 +1,6 @@
 ---
 name: queue-and-clean
-description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, fix what stops it merging (failing checks, conflicts, being dropped from the merge queue), and once it merges remove this worktree and its local branch.
+description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, fix what stops it merging (failing checks, conflicts, being dropped from the merge queue), and once it merges make sure its Linear ticket is done and its item in your notes ticked, then remove this worktree and its local branch.
 argument-hint: "[PR number]"
 disable-model-invocation: true
 ---
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Queue this worktree's PR for merge, in the merge queue or with auto-merge, unless it is already queued. Then watch the PR without blocking the conversation. When something the branch can fix stops it merging (a required check fails, it has merge conflicts, or the merge queue drops it), fix it, push, queue it again and go back to watching, as described in "Fixing". When it merges, remove the worktree and its local branch. If it closes without merging, or stops for something you can't fix, leave everything as it is.
 
-When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished; if you fixed anything on the way, say what in a few words after it, as `queue-and-clean: success (fixed: <what>)`, for example `queue-and-clean: success (fixed: lint error in api.ts; reran a flaky e2e job)`. `fail` means the PR could not be queued, closed without merging, stopped for something "Fixing" leaves alone or still failed after its last round, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`), and what you tried when you tried fixing it. The questions in "Before watching", the merge method question in "Queuing", the questions in "Fixing", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
+When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished; if you fixed anything on the way, say what in a few words after it, as `queue-and-clean: success (fixed: <what>)`, for example `queue-and-clean: success (fixed: lint error in api.ts; reran a flaky e2e job)`. What "Closing out" did goes in the same brackets, after anything fixed. `fail` means the PR could not be queued, closed without merging, stopped for something "Fixing" leaves alone or still failed after its last round, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`), and what you tried when you tried fixing it. The questions in "Before watching", the merge method question in "Queuing", the questions in "Fixing", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
 
 Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 
@@ -37,6 +37,10 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
    - The PR is a draft. Queuing it would mean marking it ready for review, which is the user's call.
 
    If the PR is already `MERGED`, skip the queue and the watch and go straight to cleanup.
+
+4. Settle the ticket and the note now, so finishing up later asks nothing:
+   - **The ticket**: the Linear ticket the branch names (an ID like `ABC-123` at the start of the branch name), else one the PR's title or body names. None is fine: then there is no ticket to close out.
+   - **The note**: which of the user's notes holds this work's checklist item, settled as `~/.claude/skills/note-watch/pick-note.md` says, with **No note** as an option, since not every PR has one. Remember the answer; read the note only at "Closing out".
 
 ## Queuing
 
@@ -193,6 +197,16 @@ Only after GitHub reports the PR `MERGED`. If any command in steps 2 to 4 errors
    ```
 
 4. Run `git -C <main-clone> fetch --prune origin` so the deleted remote branch stops showing up. Do not check anything out or pull in the main clone. Its working tree is not yours to change.
-5. Reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
+5. Close out the ticket and the note, as "Closing out" says.
+6. Reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
 
 The only pushes are `/ci-loop`'s fix commits (see "Fixing"), to the PR's own branch, and never a force-push. Never delete the remote branch: GitHub or the repo's settings handle that.
+
+## Closing out
+
+After the cleanup, with the ticket and note settled before watching:
+
+1. **The ticket.** Read it with the Linear connector. In a completed state (its state's type is `completed`), there is nothing to do. Otherwise move it to the team's completed state, the one its other merged tickets use ("Done", "Deployed"…), unless the team's workflow moves it there on its own once the PR merges and it hasn't caught up yet: then leave it. Say which, in the final line's note (below).
+2. **The note.** Read only the note settled before watching. Find the checklist item for this work: one naming the ticket's ID or link, or the PR's number or link, else one whose words plainly match the ticket's or PR's title. Tick it (`- [x]`) and move it under the unticked items in its list, with anything indented under it, as the user's CLAUDE.md says for notes, changing those lines and nothing else. When no item matches, or more than one might, tick nothing and say so.
+
+Neither step fails the run: the PR merged and the cleanup finished. Add what they did to the success line, `queue-and-clean: success (ticket ABC-123 done; note: ticked "…")`, or what they couldn't (`note: no item for ABC-123`).

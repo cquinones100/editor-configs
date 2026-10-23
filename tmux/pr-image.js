@@ -19,8 +19,9 @@
 // to the ends; q closes it.
 //
 // Images in tmux are its weak point: tmux doesn't know they are there, so a
-// tab switch or a resize can leave one stale until the page is drawn again,
-// which r does.
+// tab switch can leave one stale until the page is drawn again, which r does.
+// A resize lays the pages out again for the new size and draws the page that
+// holds what was at the top.
 
 const { execFile, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -171,13 +172,7 @@ const main = async () => {
   const dir = path.resolve(process.argv[2] ?? process.cwd());
   // Taken first, before anything else reads the keyboard. A guess at a
   // 13-point font when the terminal doesn't say.
-  const cell = (await cellSize()) ?? { w: 16, h: 34 };
-  // The page is laid out as wide as the pane, in CSS pixels, and drawn at the
-  // screen's own pixels, so it fills the pane at its own size, sharp.
-  const cols = process.stdout.columns || 80;
-  const rows = (process.stdout.rows || 24) - 1;
-  const width = Math.max(480, Math.floor((cols * cell.w) / DPR));
-  const pageHeight = Math.max(100, Math.floor((rows * cell.h) / DPR));
+  let cell = (await cellSize()) ?? { w: 16, h: 34 };
   process.stdout.write("\n  \x1b[38;5;244mReading the PR…\x1b[0m");
   let pr;
   try {
@@ -199,48 +194,78 @@ const main = async () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "pr-image-"));
   process.on("exit", () => fs.rmSync(work, { recursive: true, force: true }));
   const file = path.join(work, "pr.html");
-  fs.writeFileSync(file, pageFor(pr, html, width));
+  // The page is laid out as wide as the pane, in CSS pixels, and drawn at the
+  // screen's own pixels, so it fills the pane at its own size, sharp. The
+  // browser stays open, so a resize lays the same page out again rather than
+  // reading and drawing it all over.
+  const size = () => {
+    const cols = process.stdout.columns || 80;
+    const rows = (process.stdout.rows || 24) - 1;
+    return { cols, rows, width: Math.max(480, Math.floor((cols * cell.w) / DPR)), pageHeight: Math.max(100, Math.floor((rows * cell.h) / DPR)) };
+  };
+  let view = size();
+  fs.writeFileSync(file, pageFor(pr, html, view.width));
   const browser = await lib.launch({ headless: true });
   const page = await browser.newPage();
-  await page.setViewport({ width, height: 800, deviceScaleFactor: DPR });
+  await page.setViewport({ width: view.width, height: 800, deviceScaleFactor: DPR });
   await page.goto(`file://${file}`, { waitUntil: "networkidle0" });
   await page.waitForSelector("body[data-done]", { timeout: 15_000 }).catch(() => {});
-  // Each page ends where a block does, and a diagram taller than a page is
-  // drawn smaller, to fit one, so it is never cut in two.
-  await page.addStyleTag({ content: `pre.mermaid svg { max-height: ${pageHeight - 40}px; max-width: 100%; height: auto; }` });
-  // Where each block of the description starts and ends, to break pages
-  // between them.
-  const { height, blocks } = await page.evaluate(() => {
-    const body = document.querySelector(".markdown-body");
-    const top = body.getBoundingClientRect().top;
-    return {
-      height: body.getBoundingClientRect().height,
-      blocks: [...body.children].map((el) => ({ top: el.getBoundingClientRect().top - top, bottom: el.getBoundingClientRect().bottom - top })),
-    };
-  });
+  // Filled in by layOut for each size; puppeteer refuses an empty one.
+  const fitStyle = await page.addStyleTag({ content: "/* fit */" });
 
-  const cuts = [0];
-  while (cuts.at(-1) + pageHeight < height) {
-    const start = cuts.at(-1);
-    const fits = blocks.filter((b) => b.top > start && b.top <= start + pageHeight).map((b) => b.top);
-    cuts.push(fits.length ? Math.max(...fits) : start + pageHeight);
-  }
-  cuts.push(height);
-  const shots = [];
-  for (let i = 0; i < cuts.length - 1; i++) {
-    const h = cuts[i + 1] - cuts[i];
-    // A Buffer: puppeteer returns a plain Uint8Array, whose toString ignores
-    // "base64" and lists its bytes instead.
-    const png = Buffer.from(await page.screenshot({ clip: { x: 0, y: cuts[i], width, height: h }, type: "png" }));
-    const file = path.join(work, `page-${i + 1}.png`);
-    fs.writeFileSync(file, png);
-    shots.push({ png, file, rows: Math.max(1, Math.round((h / pageHeight) * rows)) });
-  }
-  const pages = shots.length;
-  await browser.close();
+  // The pages for the pane as it is now: each ends where a block does, and a
+  // diagram taller than a page is drawn smaller, to fit one, so it is never
+  // cut in two. Each layout's files get names of their own, so the terminal
+  // never reads one the next layout is writing.
+  let layouts = 0;
+  const layOut = async () => {
+    const { width, pageHeight, rows } = view;
+    const n = ++layouts;
+    await page.setViewport({ width, height: 800, deviceScaleFactor: DPR });
+    await page.evaluate((w, h) => {
+      document.querySelector(".markdown-body").style.width = `${w}px`;
+      document.querySelectorAll("style").forEach((el) => {
+        if (el.dataset.fit) el.textContent = `pre.mermaid svg { max-height: ${h - 40}px; max-width: 100%; height: auto; }`;
+      });
+    }, width, pageHeight);
+    // Where each block of the description starts and ends, to break pages
+    // between them.
+    const { height, blocks } = await page.evaluate(() => {
+      const body = document.querySelector(".markdown-body");
+      const top = body.getBoundingClientRect().top;
+      return {
+        height: body.getBoundingClientRect().height,
+        blocks: [...body.children].map((el) => ({ top: el.getBoundingClientRect().top - top, bottom: el.getBoundingClientRect().bottom - top })),
+      };
+    });
+    const cuts = [0];
+    while (cuts.at(-1) + pageHeight < height) {
+      const start = cuts.at(-1);
+      const fits = blocks.filter((b) => b.top > start && b.top <= start + pageHeight).map((b) => b.top);
+      cuts.push(fits.length ? Math.max(...fits) : start + pageHeight);
+    }
+    cuts.push(height);
+    const shots = [];
+    for (let i = 0; i < cuts.length - 1; i++) {
+      const h = cuts[i + 1] - cuts[i];
+      // A Buffer: puppeteer returns a plain Uint8Array, whose toString ignores
+      // "base64" and lists its bytes instead.
+      const png = Buffer.from(await page.screenshot({ clip: { x: 0, y: cuts[i], width, height: h }, type: "png" }));
+      const file = path.join(work, `page-${n}-${i + 1}.png`);
+      fs.writeFileSync(file, png);
+      // Where the page starts, as a share of the whole, to find it again in
+      // the next layout.
+      shots.push({ png, file, rows: Math.max(1, Math.round((h / pageHeight) * rows)), from: cuts[i] / height });
+    }
+    fs.readdirSync(work).filter((f) => f.startsWith("page-") && !f.startsWith(`page-${n}-`)).forEach((f) => fs.rmSync(path.join(work, f), { force: true }));
+    return shots;
+  };
+  await page.evaluate((el) => { el.dataset.fit = "1"; }, fitStyle);
+  let shots = await layOut();
   // For checking the drawing without a terminal: the pages as PNGs, and out.
   if (process.env.PR_IMAGE_DUMP) {
     shots.forEach((shot, i) => fs.writeFileSync(path.join(process.env.PR_IMAGE_DUMP, `page-${i + 1}.png`), shot.png));
+    await browser.close();
     process.exit(0);
   }
 
@@ -250,13 +275,61 @@ const main = async () => {
   let said = "";
   // Pages go by file until the terminal turns one down, then as data.
   let byFile = true;
+  // Which of the two image IDs the next drawing takes: every drawing takes
+  // the other one from the drawing before, a redraw or resize as much as a
+  // new page, so tmux rewrites every cell of it.
+  let drawings = 0;
+  // Set while a resize is laid out, when keys wait.
+  let busy = false;
+  const footer = (text) => process.stdout.write(`\x1b[${view.rows + 1};1H\x1b[2K\x1b[38;5;244m ${text}\x1b[0m`);
   const draw = () => {
-    show(shots[at].png, cols, shots[at].rows, byFile ? shots[at].file : undefined, IMAGES[at % 2]);
+    show(shots[at].png, view.cols, shots[at].rows, byFile ? shots[at].file : undefined, IMAGES[drawings++ % 2]);
     // A full redraw, as moving out of the pane and back makes, so nothing of
     // the page before is left on screen.
     if (process.env.TMUX) execFile("tmux", ["refresh-client"], () => {});
-    process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   j k space b: page   r: redraw   q: close${said ? `   \x1b[31m${said}` : ""}\x1b[0m`);
+    footer(`page ${at + 1}/${shots.length}   j k space b: page   r: redraw   q: close${said ? `   \x1b[31m${said}` : ""}`);
   };
+  // A resize lays the pages out again for the pane's new size, then shows
+  // the page that holds where the one on screen started. A drag sends a run
+  // of resizes, so it waits for them to stop, and one that comes while
+  // laying out is laid out again after.
+  let resizeTimer;
+  let again = false;
+  const relayout = async () => {
+    if (busy) {
+      again = true;
+      return;
+    }
+    busy = true;
+    const from = shots[at].from;
+    // A new font size changes the cell; tmux knows it. Not cellSize(), whose
+    // fallback asks the terminal on the keyboard's input and pauses it.
+    if (process.env.TMUX) {
+      try {
+        const [w, h] = execFileSync("tmux", ["display", "-p", ...(process.env.TMUX_PANE ? ["-t", process.env.TMUX_PANE] : []), "#{client_cell_width} #{client_cell_height}"], { encoding: "utf8" }).trim().split(" ").map(Number);
+        if (w > 0 && h > 0) cell = { w, h };
+      } catch {}
+    }
+    view = size();
+    process.stdout.write("\x1b[H\x1b[2J");
+    footer("Laying it out for the new size…");
+    try {
+      shots = await layOut();
+    } catch (err) {
+      said = err.message.split("\n")[0];
+    }
+    at = Math.max(0, shots.findLastIndex((shot) => shot.from <= from + 1e-6));
+    busy = false;
+    if (again) {
+      again = false;
+      return relayout();
+    }
+    draw();
+  };
+  process.stdout.on("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(relayout, 250);
+  });
   process.stdin.setRawMode(true);
   process.stdin.on("data", (key) => {
     const k = key.toString();
@@ -267,17 +340,19 @@ const main = async () => {
         return draw();
       }
       said = reply[1];
-      process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   \x1b[31m${said}\x1b[0m`);
+      footer(`page ${at + 1}/${shots.length}   \x1b[31m${said}`);
       return;
     }
     if (k === "q" || k === "\x03" || k === "\x1b") {
       process.stdout.write("\x1b[2J");
-      process.exit(0);
+      browser.close().finally(() => process.exit(0));
+      return;
     }
-    if (["j", " ", "\x1b[B", "\x1b[6~"].includes(k)) at = Math.min(pages - 1, at + 1);
+    if (busy) return;
+    if (["j", " ", "\x1b[B", "\x1b[6~"].includes(k)) at = Math.min(shots.length - 1, at + 1);
     else if (["k", "b", "\x1b[A", "\x1b[5~"].includes(k)) at = Math.max(0, at - 1);
     else if (k === "g") at = 0;
-    else if (k === "G") at = pages - 1;
+    else if (k === "G") at = shots.length - 1;
     draw();
   });
   // Read again: the cell size's question paused it, and a listener alone

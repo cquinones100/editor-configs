@@ -73,10 +73,8 @@ case "${1:-}" in
       wait_key "${red}Could not reach Linear.${reset}"
     jq -e '.data.issue' "$work/ticket.json" >/dev/null 2>&1 ||
       wait_key "${red}Linear has no ticket $id${reset} ($(jq -r '.errors[0].message // "no answer"' "$work/ticket.json" 2>/dev/null))."
-    width=$(( $(tput cols 2>/dev/null || echo 80) - 4 ))
-    node "${0%/*}/pr-view.js" ticket "$work/ticket.json" "$work" "$width" || wait_key "${red}Could not read the ticket.${reset}"
-    glow -s dark -w "$width" "$work/pr.md" | node "${0%/*}/pr-view.js" splice "$work" > "$work/pr.txt"
-    less -RS --mouse "$work/pr.txt"
+    # Laid out and paged as the PR view is, drawn again when the pane is resized.
+    "${0%/*}/pr-view.sh" page ticket "$work/ticket.json" "$work"
     ;;
 esac
 exit 0

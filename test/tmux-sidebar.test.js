@@ -727,6 +727,9 @@ test("M-e finds a Notes that lost its marks from the notes lock, rather than sta
   execFileSync("bash", [path.join(__dirname, "../tmux/notes-open.sh"), "side", "none", tmux("display", "-p", "-t", here, "#{pane_id}")], { env: { ...process.env, NOTES_DIR: notesDir, NOTES_OPEN_COMMAND: "false" } });
   assert.equal(tmux("display", "-p", "-t", pane, "#{window_id}"), here, "the same Notes, moved beside you");
   assert.equal(tmux("display", "-p", "-t", pane, "#{@notes_pane}"), "1", "and marked again");
+  const standIn = tmux("list-panes", "-t", restored, "-F", "#{pane_id} #{@notes_placeholder}").split("\n").find((l) => l.endsWith(" 1"));
+  assert.ok(standIn, "its tab, which had nothing else, keeps a pane saying where Notes went");
+  assert.equal(tmux("display", "-p", "-t", restored, "#{@notes}"), "1", "and is the Notes tab again");
 });
 
 test("M-w on a tool in a pane's place closes the tool and brings the pane back, keeping the tab", () => {

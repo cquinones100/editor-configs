@@ -103,9 +103,12 @@ if [ "${1:-}" = side ]; then
   # Leaving its own Notes tab, it leaves notes-away.sh in its place, so the
   # tab stays and says where Notes went. Leaving another tab, nothing.
   old=$(tmux display -p -t "$existing" '#{window_id}')
-  if [ "$(tmux show -wqv -t "$old" @notes)" = 1 ] && [ -z "$(placeholder)" ]; then
+  # Its own tab: marked @notes, or holding nothing else but the sidebar, as a
+  # Notes tab that lost its marks (tmux-resurrect) does.
+  alone=$(tmux list-panes -t "$existing" -F '#{?@sidebar,,x}' | grep -c x)
+  if { [ "$(tmux show -wqv -t "$old" @notes)" = 1 ] || [ "$alone" -eq 1 ]; } && [ -z "$(placeholder)" ]; then
     stand_in=$(tmux split-window -d -t "$existing" -c "$HOME" -P -F '#{pane_id}' "${0%/*}/notes-away.sh")
-    [ -n "$stand_in" ] && tmux set-option -p -t "$stand_in" @notes_placeholder 1
+    [ -n "$stand_in" ] && tmux set-option -p -t "$stand_in" @notes_placeholder 1 && own_tab "$old"
   fi
   tmux join-pane -h -l 40% -s "$existing" -t "$here"
   # Brought into the Notes tab itself, it takes the stand-in's place there.

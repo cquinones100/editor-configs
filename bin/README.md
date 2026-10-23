@@ -514,6 +514,7 @@ the tab badges meant.
 | `Tab` `S-Tab` | open mission control | the next or previous view |
 | `r` | | fetch the plugin's view again |
 | `Esc` `q` | back out | close |
+| `a` | | answer the chosen tab's question or permission prompt there: an option's number, `s` to submit one that takes several, `t` to type your own answer; with no prompt showing, type a message and press Enter |
 | `?` | these keys, until the next key | the same |
 
 A click on a tab in the sidebar goes there, and the wheel scrolls it. Each

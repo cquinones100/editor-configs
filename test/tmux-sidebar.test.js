@@ -512,6 +512,37 @@ test("a window holding a pane parked behind lazygit is not a tab, and gets no si
   }
 });
 
+test("a waiting tab is answered from mission control: its options shown, a number pressed in it", async () => {
+  // A tab showing a permission prompt, then echoing what is pressed in it.
+  const script = path.join(tmp, "prompt.sh");
+  fs.writeFileSync(script, "printf 'Do you want to proceed?\\n\\xe2\\x9d\\xaf 1. Yes\\n  2. No, and tell Claude what to do differently\\n'; exec cat\n");
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", `sh ${script}`);
+  const pane = tmux("display", "-p", "-t", window, "#{pane_id}");
+  tmux("set", "-p", "-t", pane, "@agent_state", "waiting");
+  tmux("set", "-p", "-t", pane, "@agent_since", String(Math.floor(Date.now() / 1000)));
+  tmux("setw", "-t", window, "@agent", "waiting");
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 120, rows: 30, tmuxClient: "none" };
+  try {
+    await wait(300);
+    await sidebar.refresh();
+    const order = sidebar.missionGrid(sidebar.state.tabs).order;
+    client.view.cursor = order.findIndex((t) => t.id === window);
+    assert.ok(client.view.cursor >= 0, "the waiting tab is a card");
+
+    await sidebar.missionKey(client, { key: "a" });
+    assert.equal(client.answering.found.question, "Do you want to proceed?");
+    assert.deepEqual(client.answering.found.options.map((o) => o.label), ["Yes", "No, and tell Claude what to do differently"]);
+    assert.match(plain(sent.at(-1)), /ANSWER .*Do you want to proceed\?.*1 +Yes.*2 +No/s);
+
+    await sidebar.missionKey(client, { key: "2" });
+    assert.ok(await until(() => tmux("capture-pane", "-p", "-t", pane).includes("2")), "2 was pressed in the tab");
+    assert.equal(client.answering.note, "Chose 2. No, and tell Claude what to do differently");
+  } finally {
+    tmux("kill-window", "-t", window);
+  }
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

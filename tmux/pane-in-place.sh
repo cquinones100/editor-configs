@@ -44,8 +44,8 @@ tool_command() {
         tmux display-message "Not in a git repository: ${dir//\#/##}"
         exit 0
       fi
-      tmux display-popup -c "$client" -E -w 34 -h 3 -T " diffview " \
-        "printf ' Fetching the PR base branch...'; sleep 30" </dev/null >/dev/null 2>&1 &
+      tmux display-popup -c "$client" -E -w 60 -h 9 -T " diffview " \
+        "printf '\\n\\n\\n%14s\\033[1mFetching the PR base branch...\\033[0m' ''; sleep 30" </dev/null >/dev/null 2>&1 &
       base=$(cd "$dir" && gh pr view --json baseRefName -q .baseRefName 2>/dev/null)
       [ -n "$base" ] || base=$(git -C "$dir" rev-parse --abbrev-ref origin/HEAD 2>/dev/null)
       base=${base#origin/}

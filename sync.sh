@@ -112,8 +112,6 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/accent-color.sh ~/.config/tmux/accent-color.sh
   put_link ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
   put_link ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh
-  put_link ~/editor-configs/tmux/workspace.sh ~/.config/tmux/workspace.sh
-  put_link ~/editor-configs/tmux/toggle-shell-pane.sh ~/.config/tmux/toggle-shell-pane.sh
   put_link ~/editor-configs/tmux/palette.sh ~/.config/tmux/palette.sh
   put_link ~/editor-configs/tmux/pr-ready.sh ~/.config/tmux/pr-ready.sh
   put_link ~/editor-configs/tmux/pr-open.zsh ~/.config/tmux/pr-open.zsh
@@ -143,7 +141,6 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh
   put_link ~/editor-configs/tmux/window-pr.sh ~/.config/tmux/window-pr.sh
   put_link ~/editor-configs/tmux/tab-label.sh ~/.config/tmux/tab-label.sh
-  put_link ~/editor-configs/tmux/tab-goto.sh ~/.config/tmux/tab-goto.sh
   put_link ~/editor-configs/tmux/path-facts.sh ~/.config/tmux/path-facts.sh
   put_link ~/editor-configs/tmux/tab-status.sh ~/.config/tmux/tab-status.sh
   put_link ~/editor-configs/tmux/tab-name.zsh ~/.config/tmux/tab-name.zsh

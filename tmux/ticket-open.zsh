@@ -1,7 +1,7 @@
 #!/bin/zsh
 
-# Popup for the M-I binding: asks for a Linear ticket and opens it in the
-# browser. The ticket's counterpart to pr-open.zsh (M-R).
+# Popup for the M-p palette's "Open a Linear ticket in the browser": asks for a Linear ticket and opens it in the
+# browser. The ticket's counterpart to pr-open.zsh.
 #
 # Usage: ticket-open.zsh
 #

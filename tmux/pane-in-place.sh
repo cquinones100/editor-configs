@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A tool in a pane's place, leaving the rest of the window, sidebar included,
-# as it is; quitting the tool puts the pane back. C-l opens lazygit this way,
+# as it is; quitting the tool puts the pane back. M-p's lazygit opens this way,
 # M-d diffview.nvim (nvim/lua/plugins/diffview.lua).
 #
 # Usage:
@@ -13,7 +13,7 @@
 # tool goes where the pane was, and the pane waits in that window, marked
 # @pane_parked so the sidebar gives it no sidebar and leaves it out of the
 # tabs. The tool's pane records the parked pane in @parked_pane and its own
-# name in @in_place, which C-l and M-d use to tell their tool's pane, since
+# name in @in_place, which the lazygit binding and M-d use to tell their tool's pane, since
 # its command reads as the shell that runs the tool. When the tool exits,
 # however it is quit, its shell swaps the pane back and selects it, and the
 # parked window, left with only the tool's closing pane, closes with it. A

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Logs in to AWS IAM Identity Center (`aws sso login`), from the M-A popup,
+# Logs in to AWS IAM Identity Center (`aws sso login`), from the M-p palette's popup,
 # opening the login page in a chosen Chrome profile rather than whichever
 # Chrome window is in front. The popup stays open until the login finishes, so
 # the verification code and any error can be read, then waits for a key.

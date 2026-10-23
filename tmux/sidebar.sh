@@ -7,7 +7,6 @@
 #   sidebar.sh start              start the daemon unless it is running, and lay
 #                                 out the status line for the sidebar
 #   sidebar.sh nudge              tell the daemon something changed
-#   sidebar.sh focus <window>     M-h: put the cursor in the window's sidebar
 #   sidebar.sh mission <client> [work:tabs|work:untabbed]
 #                                 M-Space: open mission control on that client;
 #                                 M-j, M-o: on the Work map as a picker
@@ -74,23 +73,6 @@ start() {
 case "${1:-}" in
   start) start ;;
   nudge) nudge ;;
-  focus)
-    window=${2:-}
-    [ -n "$window" ] || exit 0
-    if [ "$(tmux show -gqv @sidebar_on)" = off ]; then
-      tmux set -gu @sidebar_on
-      status_layout
-    fi
-    start
-    nudge
-    # A window that has no sidebar yet gets one from the daemon in a moment.
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-      pane=$(tmux list-panes -t "$window" -F '#{pane_id} #{@sidebar}' 2>/dev/null | awk '$2 == "1" { print $1; exit }')
-      [ -n "$pane" ] && { tmux select-pane -t "$pane"; exit 0; }
-      sleep 0.1
-    done
-    tmux display-message "The sidebar isn't running; see $state_dir/daemon.log."
-    ;;
   mission)
     start
     tmux display-popup -c "${2:-}" -E -B -x 0 -y 0 -w 100% -h 100% "exec $(printf '%q ' "$client" mission "$state_dir/sock" "${2:-}" "${3:-}")"

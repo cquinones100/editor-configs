@@ -515,7 +515,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 
 | Key | In the sidebar | In mission control |
 | --- | --- | --- |
-| `M-h` | move in, on the tab you are in, and back out | |
+| `C-w h` / `C-w l` | move in, on the tab you are in, and back out, as between any panes | |
 | `M-Space` | open mission control | close it |
 | `j` `k` (arrows) | choose a tab, bringing it to the front (the list holds still until you leave the sidebar) | move down or up a row |
 | `h` `l` | back out / go to the tab | move left or right |
@@ -523,7 +523,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | `1`–`9` | go to that tab | choose that tab |
 | `p` or `:` | the `M-p` palette, in the chosen tab | the same |
 | `n` | a new tab running Claude in the chosen tab's directory, as `M-t` opens one | |
-| `d` `L` | the chosen tab's diff (diffview, as `M-d` there) or lazygit (as `C-l`) | the same; on a Work map row with no tab, in a popup in its worktree |
+| `d` `L` | the chosen tab's diff (diffview, as `M-d` there) or lazygit, in its place there, as `M-p` opens them | the same; on a Work map row with no tab, in a popup in its worktree |
 | any bound Alt or Ctrl key | runs in the chosen tab | runs in the chosen tab |
 | `Tab` `S-Tab` | open mission control | the next or previous view |
 | `r` | | fetch the plugin's view again |
@@ -538,8 +538,7 @@ A click on a tab in the sidebar goes there, and the wheel scrolls it. Each
 mission control card shows a tab's state, PR and session name, your last
 prompt, the end of Claude's last reply, and, when it is waiting on a
 permission prompt or a question, what it is asking. The sidebar is turned off
-and on with "Turn the sidebar on or off" in `M-p` (the `@sidebar_on` option);
-`M-h` turns it back on.
+and on with "Turn the sidebar on or off" in `M-p` (the `@sidebar_on` option).
 
 ### Setup
 

@@ -4,7 +4,7 @@ Dotfiles for the tools listed by directory. `sync.sh` symlinks them into place, 
 
 The global `~/.gitconfig` isn't kept here: it holds a machine's git identity and paths, which don't belong in a public repo. `./sync.sh git` only sets this clone's `core.hooksPath`.
 
-Nothing here runs code that another repository supplies unless you have trusted that repository. Trusted directories are listed in `~/.config/editor-configs/trusted-dirs`, one absolute or `~/` path per line (blank lines and lines starting with `#` ignored), which is yours, never committed, and never written for you; a missing file trusts nothing. A directory counts only when its real path equals a listed one's exactly, so trusting `~/code` doesn't trust what is under it. Today only `tmux/workspace.sh` (prefix `W`) needs it, to run a directory's own `worktree` script, and it says which file to edit when it skips one. Any new script that would execute something from a repository checks this file the same way, inline.
+Nothing here runs code that another repository supplies unless you have trusted that repository. Trusted directories are listed in `~/.config/editor-configs/trusted-dirs`, one absolute or `~/` path per line (blank lines and lines starting with `#` ignored), which is yours, never committed, and never written for you; a missing file trusts nothing. A directory counts only when its real path equals a listed one's exactly, so trusting `~/code` doesn't trust what is under it. Nothing needs it today, since the workspace layout that ran a directory's own `worktree` script is gone. Any new script that would execute something from a repository checks this file the same way, inline.
 
 ## Pushing
 
@@ -122,8 +122,8 @@ it typed into a tab has been answered, even by a session outside tmux.
 ## The sidebar and mission control
 
 `bin/tmux-sidebar` (code in `lib/sidebar/`) is one daemon that draws a sidebar
-pane on the left of every window and the mission control popup (`M-h`,
-`M-Space`). Every sidebar pane and the popup run `tmux/sidebar-pane.zsh`, which
+pane on the left of every window, reached as any pane is (`C-w h`), and the
+mission control popup (`M-Space`). Every sidebar pane and the popup run `tmux/sidebar-pane.zsh`, which
 uses only zsh builtins so a sidebar starts no processes however long it runs;
 keep it that way. The daemon reads tmux in one `list-panes` per refresh and
 `~/.claude` as files, so its drawing path starts no process and never waits on
@@ -182,7 +182,7 @@ means reading what changed and putting the new commit in `plugins.txt`.
 
 ## Key bindings and the M-p palette
 
-`C-l` (lazygit) and `M-d` (diffview.nvim, `nvim/lua/plugins/diffview.lua`, showing the branch against origin's default branch as GitHub does) put a tool in the pane's place without touching the rest of the window (`tmux/pane-in-place.sh`): the tool starts in a window of its own and `swap-pane` trades places, the pane waiting in that window, marked `@pane_parked` so the sidebar gives it no sidebar and lists it as no tab, and the tool's pane naming it in `@parked_pane` and itself in `@in_place`, which the key uses to quit its own tool, since the tool's pane reads as the shell that runs it. The shell swaps the pane back when the tool exits, and `confirm.sh` swaps back any `@parked_pane` before it kills a pane, so closing the tool's pane with `M-w` never strands it. Another tool in place goes in `pane-in-place.sh`'s list.
+Lazygit (in `M-p`, with no hotkey) and `M-d` (diffview.nvim, `nvim/lua/plugins/diffview.lua`, showing the branch against origin's default branch as GitHub does) put a tool in the pane's place without touching the rest of the window (`tmux/pane-in-place.sh`): the tool starts in a window of its own and `swap-pane` trades places, the pane waiting in that window, marked `@pane_parked` so the sidebar gives it no sidebar and lists it as no tab, and the tool's pane naming it in `@parked_pane` and itself in `@in_place`, which the key uses to quit its own tool, since the tool's pane reads as the shell that runs it. The shell swaps the pane back when the tool exits, and `confirm.sh` swaps back any `@parked_pane` before it kills a pane, so closing the tool's pane with `M-w` never strands it. Another tool in place goes in `pane-in-place.sh`'s list.
 
 `M-p` opens `tmux/palette.sh`, an fzf list of the custom bindings that picks
 one and presses its key. The list is read from tmux, not kept anywhere: a

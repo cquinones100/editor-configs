@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Opens the repository's merge queue in the browser, from the M-q popup.
+# Opens the repository's merge queue in the browser, from the M-p palette's popup.
 # Usage: merge-queue.sh [path]   (defaults to the current directory, which is
 # how the popup passes the pane's)
 #

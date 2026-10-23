@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-# Popup for the M-R binding: asks for a pull request number or URL and opens it
+# Popup for the M-p palette's "Open a PR in the browser": asks for a pull request number or URL and opens it
 # in the browser with `gh pr view --web`.
 #
 # Usage: pr-open.zsh

@@ -262,6 +262,35 @@ test("an idle tab says how long since its pane last printed anything", async () 
   assert.deepEqual(text.slice(4, 6), ["▌     idle for 5m · cat", "▌     #12345"]);
 });
 
+test("a frozen layout keeps each tab in its group and place while states change", () => {
+  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh" };
+  const before = [
+    { ...base, id: "@1", index: 1, name: "one", state: "idle" },
+    { ...base, id: "@2", index: 2, name: "two", state: "done", since: 10 },
+    { ...base, id: "@3", index: 3, name: "three", state: "working" },
+    { ...base, id: "@4", index: 4, name: "four", state: "idle" },
+  ];
+  const frozen = sidebar.frozenFrom(before);
+  // two was seen, four started working, one now waits, and five opened.
+  const after = [
+    { ...before[0], state: "waiting", since: 20 },
+    { ...before[1], state: "idle", since: undefined },
+    before[2],
+    { ...before[3], state: "working" },
+    { ...base, id: "@5", index: 5, name: "five", state: "waiting", since: 5 },
+  ];
+  assert.deepEqual(sidebar.grouped(after, frozen).map((g) => [g.title, g.tabs.map((x) => x.name)]), [
+    ["Needs you", ["two", "five"]],
+    ["Working", ["three"]],
+    ["Idle", ["one", "four"]],
+  ]);
+  assert.deepEqual(sidebar.grouped(after).map((g) => [g.title, g.tabs.map((x) => x.name)]), [
+    ["Needs you", ["five", "one"]],
+    ["Working", ["three", "four"]],
+    ["Idle", ["two"]],
+  ], "unfrozen, the live order");
+});
+
 test("tabs whose PR is in the merge queue or merged get sections of their own, after the ones that need you", () => {
   const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh" };
   const tabs = [

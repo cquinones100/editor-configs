@@ -507,7 +507,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | --- | --- | --- |
 | `M-h` | move in, on the tab that needs you most, and back out | |
 | `M-Space` | open mission control | close it |
-| `j` `k` (arrows) | choose a tab, bringing it to the front | move down or up a row |
+| `j` `k` (arrows) | choose a tab, bringing it to the front (the list holds still until you leave the sidebar) | move down or up a row |
 | `h` `l` | back out / go to the tab | move left or right |
 | `Enter` | go into the chosen tab's pane | go to the chosen tab, or open the item |
 | `1`–`9` | go to that tab | choose that tab |

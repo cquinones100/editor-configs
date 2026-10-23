@@ -224,6 +224,23 @@ before any window opens, so a typo in one leaves none of them half-started.
   whatever your shell config defines, so the shell has to be zsh or bash with
   that line in place.
 
+## update-main
+
+Brings the repository's local default branch up to date with origin's, from
+wherever you are, a worktree on another branch included, without switching
+anything. Only a fast forward: a main with local commits is left as it is.
+Where main is checked out, usually the main clone, it is fast-forwarded there,
+which moves that checkout's files, so one with changes not committed is left
+alone and said so; checked out nowhere, the branch alone is moved.
+
+```
+update-main          the repository of the current directory
+update-main <dir>    the repository <dir> is in
+```
+
+The M-p palette's "Update local main to origin's" (`tmux/update-main.sh`) runs
+it in a popup for the pane's repository.
+
 ## worktree-from-pr
 
 The same idea for a GitHub pull request instead of a Linear ticket. Takes a PR

@@ -718,6 +718,20 @@ test("Notes taken from its own tab leaves the tab saying where it went, and come
   assert.equal(find("@notes_placeholder"), undefined, "in the stand-in's place");
 });
 
+test("M-e moves Notes, not the sidebar pane sitting first in the Notes tab", (t) => {
+  const script = path.join(__dirname, "../tmux/notes-open.sh");
+  const env = { ...process.env, NOTES_OPEN_COMMAND: "cat" };
+  execFileSync("bash", [script, "none"], { env });
+  const [notes, notesTab] = tmux("list-panes", "-a", "-F", "#{pane_id} #{window_id} #{@notes_pane}").split("\n").map((l) => l.split(" ")).find((p) => p[2] === "1");
+  const sidebarPane = tmux("split-window", "-bdh", "-l", "10", "-t", notes, "-P", "-F", "#{pane_id}", "cat");
+  tmux("set-option", "-p", "-t", sidebarPane, "@sidebar", "1");
+  const here = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  t.after(() => [here, notesTab].forEach((w) => { try { tmux("kill-window", "-t", w); } catch {} }));
+  execFileSync("bash", [script, "side", "none", tmux("display", "-p", "-t", here, "#{pane_id}")], { env });
+  assert.equal(tmux("display", "-p", "-t", notes, "#{window_id}"), here, "Notes is beside your pane");
+  assert.equal(tmux("display", "-p", "-t", sidebarPane, "#{window_id}"), notesTab, "and the sidebar stayed in the Notes tab");
+});
+
 test("M-e finds a Notes that lost its marks from the notes lock, rather than starting another", (t) => {
   const notesDir = fs.mkdtempSync(path.join(tmp, "notes-"));
   // A Notes tmux-resurrect brought back: no @notes or @notes_pane, but the

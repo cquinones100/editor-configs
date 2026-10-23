@@ -28,8 +28,11 @@ set -u
 notes_dir=${NOTES_DIR:-$HOME/Notes}
 notes_pane() {
   local found pid tty hops=0
-  found=$(tmux list-panes -a -F '#{pane_id} #{@notes_pane} #{@notes}' 2>/dev/null |
-    awk '$2 == "1" { print $1; found = 1; exit } $3 == "1" && !old { old = $1 } END { if (!found && old) print old }')
+  # Every field is a 0 or 1, never empty: awk would close up an empty one and
+  # read the next as it, taking a pane with only its tab's @notes for the
+  # notes pane. Sidebar panes are never it, though they sit first in the tab.
+  found=$(tmux list-panes -a -F '#{pane_id} #{?@notes_pane,1,0} #{?@notes,1,0} #{?@sidebar,1,0}' 2>/dev/null |
+    awk '$4 == "1" { next } $2 == "1" { print $1; found = 1; exit } $3 == "1" && !old { old = $1 } END { if (!found && old) print old }')
   if [ -z "$found" ] && pid=$(cat "$notes_dir/.notes.lock" 2>/dev/null) && [ -n "$pid" ]; then
     while [ -n "$pid" ] && [ "$pid" != 1 ] && (( hops++ < 6 )); do
       tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')

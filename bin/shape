@@ -11,6 +11,8 @@
 //
 //   shape "people can't tell which phase is active"
 //   shape ABC-123        an existing ticket: review it, or refine it
+//   shape --continue ABC-123
+//                        refine it, without first asking whether to review it
 //
 // Runs in the repository's main checkout, even when called from a worktree,
 // since a ticket being shaped has no branch yet. Fetches first and warns when
@@ -29,7 +31,7 @@ const fail = (message) => {
 const usage = () => {
   console.error(
     "Usage: shape <what the ticket is about>\n" +
-      "       shape <linear-ticket-id-or-url>\n\n" +
+      "       shape [--continue] <linear-ticket-id-or-url>\n\n" +
       "Examples:\n" +
       '  shape "people can\'t tell which phase is active"\n' +
       "  shape ABC-123",
@@ -98,8 +100,13 @@ const nameTab = (label) => {
 };
 
 const main = () => {
-  const args = process.argv.slice(2);
-  if (!args.length || args.includes("--help") || args.includes("-h")) usage();
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) usage();
+  // For a ticket, carry straight on shaping it: the /shape skill reads the
+  // flag after the ticket and skips asking whether to run a review loop.
+  const carryOn = argv.includes("--continue");
+  const args = argv.filter((arg) => arg !== "--continue");
+  if (!args.length) usage();
 
   const input = args.join(" ").trim();
   const ticket = ticketIn(input);
@@ -110,7 +117,7 @@ const main = () => {
   const words = input.split(/\s+/).slice(0, 4).join(" ");
   nameTab(`Shaping: ${ticket ? ticket.toUpperCase() : words}${!ticket && input.split(/\s+/).length > 4 ? "..." : ""}`);
 
-  const claude = spawnSync("claude", [`/shape ${ticket ? ticket.toUpperCase() : input}`], {
+  const claude = spawnSync("claude", [`/shape ${ticket ? `${ticket.toUpperCase()}${carryOn ? " --continue" : ""}` : input}`], {
     cwd: root,
     stdio: "inherit",
   });

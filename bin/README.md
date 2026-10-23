@@ -157,8 +157,15 @@ the way `wt-batch` does for `wt`.
 ```
 shape-batch "phase label is unclear" "results load slowly" ABC-123
 shape-batch "ABC-123, ABC-124"
+shape-batch --continue "ABC-123, ABC-124"
 shape-batch < ideas.txt
 ```
+
+`--continue` carries straight on shaping each ticket, without `/shape` first
+asking whether to run a review loop on it; `shape --continue ABC-123` does the
+same for one. The M-p palette's "Continue shaping Linear tickets"
+(`tmux/shape-open.zsh`) asks for a list of ticket IDs or URLs, the clipboard
+filled in when it holds them, and does the same.
 
 An idea is free text full of spaces and commas, so unlike `wt-batch` each
 argument is one thing to shape; quote it. An argument made only of ticket

@@ -11,7 +11,11 @@
 //
 //   shape-batch "phase label is unclear" "results load slowly" ABC-123
 //   shape-batch "ABC-123, ABC-124"
+//   shape-batch --continue "ABC-123, ABC-124"
 //   shape-batch < ideas.txt
+//
+// --continue carries straight on shaping each ticket, without /shape first
+// asking whether to run a review loop on it (shape --continue).
 //
 // The windows go at the end of the tab list, in the order given. Focus stays
 // where it is. Each tab is named "Shaping: ..." by `shape` itself once it
@@ -29,7 +33,7 @@ const fs = require("node:fs");
 
 const usage = () => {
   console.error(
-    "Usage: shape-batch <ideas-or-tickets...>\n" +
+    "Usage: shape-batch [--continue] <ideas-or-tickets...>\n" +
       "       shape-batch < ideas.txt\n\n" +
       "Each argument is one thing to shape; quote ideas that contain spaces.\n" +
       "Examples:\n" +
@@ -60,8 +64,10 @@ const tmux = (args) =>
   execFileSync("tmux", args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }).trim();
 
 const main = () => {
-  const argv = process.argv.slice(2);
-  if (argv.includes("--help") || argv.includes("-h")) usage();
+  const all = process.argv.slice(2);
+  if (all.includes("--help") || all.includes("-h")) usage();
+  const carryOn = all.includes("--continue");
+  const argv = all.filter((arg) => arg !== "--continue");
 
   const fromStdin =
     argv.length === 0 && !process.stdin.isTTY
@@ -93,7 +99,7 @@ const main = () => {
       "zsh",
       "-i",
       "-c",
-      'shape "$1"; exec zsh -i',
+      carryOn ? 'shape --continue "$1"; exec zsh -i' : 'shape "$1"; exec zsh -i',
       "shape",
       item.replace(/\s*\n\s*/g, " "),
     ]);

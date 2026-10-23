@@ -119,6 +119,7 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/pr-open.zsh ~/.config/tmux/pr-open.zsh
   put_link ~/editor-configs/tmux/ticket-open.zsh ~/.config/tmux/ticket-open.zsh
   put_link ~/editor-configs/tmux/wt-open.zsh ~/.config/tmux/wt-open.zsh
+  put_link ~/editor-configs/tmux/shape-open.zsh ~/.config/tmux/shape-open.zsh
   put_link ~/editor-configs/tmux/slack-relay-open.sh ~/.config/tmux/slack-relay-open.sh
   put_link ~/editor-configs/tmux/agent-state.sh ~/.config/tmux/agent-state.sh
   put_link ~/editor-configs/tmux/claude-pane.sh ~/.config/tmux/claude-pane.sh

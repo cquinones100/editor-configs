@@ -1183,9 +1183,11 @@ typing and leaves you typing. The menu also has the
 checklist's Move Checked to Bottom, Uncheck All and Delete Checked Items, and
 a table's add and delete row and column.
 
-- **Checklists.** Click a ☐, or press Enter on its line, to tick it.
-  `require("notes").setup({ move_checked_to_bottom = true })` moves an item
-  under the rest when it is ticked, as Notes' setting of that name does.
+- **Checklists.** Click a ☐, or press Enter on its line, to tick it. A ticked
+  item moves under the ones left to do, with its details and sub-items, so a
+  list leads with what is left, as Notes' "Move checked items to bottom"
+  does; sub-items sort the same way under their item.
+  `require("notes").setup({ move_checked_to_bottom = false })` turns it off.
 - **Line numbers.** The note window numbers its lines relative to the
   cursor, with the cursor's line showing its own, as your Neovim does, for
   jumps like `5j`. `require("notes").setup({ relative_line_numbers = false })`

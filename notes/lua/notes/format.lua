@@ -13,9 +13,10 @@ local M = {}
 local render = require("notes.render")
 
 -- Notes' "Move checked items to bottom": when on, ticking an item moves it
--- under the ones still to do. Off by default, as in Notes; set it with
--- `require("notes").setup({ move_checked_to_bottom = true })`.
-M.options = { move_checked_to_bottom = false }
+-- under the ones still to do, so a list leads with what is left. On by
+-- default; turn it off with
+-- `require("notes").setup({ move_checked_to_bottom = false })`.
+M.options = { move_checked_to_bottom = true }
 
 local function get_line(buf, row)
   return vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ""
@@ -278,32 +279,66 @@ end
 
 -- ── Checklists ─────────────────────────────────────────────────────────────
 
+local function indent_of(line) return #line:match("^%s*") end
+local function is_check(line) return render.line_kind(line).kind == "check" end
+
 -- The rows of the checklist around `row`: the run of checklist items either
--- side of it.
+-- side of it, with whatever is indented under them (an item's details and
+-- sub-items), starting and ending on an item.
 local function checklist_bounds(buf, row)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local function part(r)
-    return lines[r] ~= nil and render.line_kind(lines[r]).kind == "check"
+    local line = lines[r]
+    return line ~= nil and (is_check(line) or (line:match("%S") ~= nil and indent_of(line) > 0))
   end
   if not part(row) then return nil end
   local first, last = row, row
   while part(first - 1) do first = first - 1 end
   while part(last + 1) do last = last + 1 end
+  while first <= last and not is_check(lines[first]) do first = first + 1 end
+  while last >= first and not is_check(lines[last]) do last = last - 1 end
+  if first > last then return nil end
   return first, last
 end
 
--- Moves the ticked items of the checklist around `row` under the rest,
--- keeping each group's order.
+-- Lines of a list, ticked items under the rest at every level: each item
+-- moves with everything indented under it, and each group keeps its order.
+-- Lines before the first item at the shallowest level stay first.
+local function sorted(lines)
+  local base
+  for _, line in ipairs(lines) do
+    if is_check(line) and (not base or indent_of(line) < base) then base = indent_of(line) end
+  end
+  if not base then return lines end
+  local head, items = {}, {}
+  for _, line in ipairs(lines) do
+    if is_check(line) and indent_of(line) <= base then
+      table.insert(items, { line })
+    elseif #items > 0 then
+      table.insert(items[#items], line)
+    else
+      table.insert(head, line)
+    end
+  end
+  local todo, done = {}, {}
+  for _, item in ipairs(items) do
+    local under = sorted(vim.list_slice(item, 2))
+    local whole = vim.list_extend({ item[1] }, under)
+    table.insert(render.line_kind(item[1]).done and done or todo, whole)
+  end
+  local out = head
+  for _, group in ipairs(vim.list_extend(todo, done)) do vim.list_extend(out, group) end
+  return out
+end
+
+-- Moves the ticked items of the checklist around `row` under the rest, as
+-- `sorted` does.
 function M.sort_checked(buf, row)
   local first, last = checklist_bounds(buf, row)
   if not first then return end
   local lines = vim.api.nvim_buf_get_lines(buf, first - 1, last, false)
-  local todo, done = {}, {}
-  for _, line in ipairs(lines) do
-    table.insert(render.line_kind(line).done and done or todo, line)
-  end
-  vim.list_extend(todo, done)
-  if not vim.deep_equal(todo, lines) then vim.api.nvim_buf_set_lines(buf, first - 1, last, false, todo) end
+  local out = sorted(lines)
+  if not vim.deep_equal(out, lines) then vim.api.nvim_buf_set_lines(buf, first - 1, last, false, out) end
 end
 
 -- Ticks or unticks the item on `row`. Returns whether it was an item.

@@ -277,6 +277,8 @@ test("checklists tick, move ticked items down, uncheck all and delete checked", 
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "# List", "- [ ] eggs", "- [ ] milk", "- [ ] bread", "", "after" })
     local seen = {}
     local function snap() table.insert(seen, vim.api.nvim_buf_get_lines(buf, 0, -1, false)) end
+    local on_by_default = f.options.move_checked_to_bottom
+    f.options.move_checked_to_bottom = false
     local not_item = f.toggle_check(buf, 1)
     f.toggle_check(buf, 2) snap()
     f.options.move_checked_to_bottom = true
@@ -284,13 +286,38 @@ test("checklists tick, move ticked items down, uncheck all and delete checked", 
     f.uncheck_all(buf) snap()
     f.toggle_check(buf, 2)
     f.delete_checked(buf) snap()
-    io.write(vim.json.encode({ not_item = not_item, seen = seen }))
+    io.write(vim.json.encode({ not_item = not_item, seen = seen, on_by_default = on_by_default }))
   `);
+  assert.equal(result.on_by_default, true, "a list leads with what is left unless turned off");
   assert.equal(result.not_item, false);
   assert.deepEqual(result.seen[0].slice(1, 4), ["- [x] eggs", "- [ ] milk", "- [ ] bread"]);
   assert.deepEqual(result.seen[1].slice(1, 4), ["- [ ] bread", "- [x] eggs", "- [x] milk"], "ticked items under the rest, in order");
   assert.deepEqual(result.seen[2].slice(1, 4), ["- [ ] bread", "- [ ] eggs", "- [ ] milk"]);
   assert.deepEqual(result.seen[3], ["# List", "- [ ] eggs", "- [ ] milk", "", "after"]);
+});
+
+test("a ticked item moves down with its details and sub-items, and sub-items sort under their item", () => {
+  const { result } = lua(`
+    local f = require("notes.format")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "# Trip",
+      "- [ ] book flights",
+      "  compare two airlines",
+      "  - [ ] outbound",
+      "  - [ ] return",
+      "- [ ] pack",
+      "",
+      "after",
+    })
+    local seen = {}
+    local function snap() table.insert(seen, vim.api.nvim_buf_get_lines(buf, 0, -1, false)) end
+    f.toggle_check(buf, 4) snap()
+    f.toggle_check(buf, 2) snap()
+    io.write(vim.json.encode({ seen = seen }))
+  `);
+  assert.deepEqual(result.seen[0], ["# Trip", "- [ ] book flights", "  compare two airlines", "  - [ ] return", "  - [x] outbound", "- [ ] pack", "", "after"], "a sub-item sorts under its item, its details first");
+  assert.deepEqual(result.seen[1], ["# Trip", "- [ ] pack", "- [x] book flights", "  compare two airlines", "  - [ ] return", "  - [x] outbound", "", "after"], "an item moves with everything under it");
 });
 
 test("Enter carries a list on and ends it on an empty item; Tab indents an item and renumbers", () => {

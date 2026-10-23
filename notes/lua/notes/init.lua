@@ -29,8 +29,9 @@ local tables = require("notes.table")
 local sync = require("notes.sync")
 
 M.options = {
-  -- Notes' "Move checked items to bottom".
-  move_checked_to_bottom = false,
+  -- Notes' "Move checked items to bottom", on so a list leads with what is
+  -- left to do.
+  move_checked_to_bottom = true,
   -- A click on a link follows it, as in Notes; off, a click only moves the
   -- cursor, and Enter follows.
   follow_links_on_click = true,

@@ -25,3 +25,6 @@ customCommands:
     output: terminal
 os:
   editPreset: 'nvim'
+# Esc with nothing left to back out of quits, as q and C-c do, so every tool
+# in a pane's place (tmux/pane-in-place.sh) and every popup closes the same way.
+quitOnTopLevelReturn: true

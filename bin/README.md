@@ -515,7 +515,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | any bound Alt or Ctrl key | runs in the chosen tab | runs in the chosen tab |
 | `Tab` `S-Tab` | open mission control | the next or previous view |
 | `r` | | fetch the plugin's view again |
-| `Esc` `q` | back out | close |
+| `Esc` `q` `C-c` | back out | close |
 | `a` | | answer the chosen tab's question or permission prompt there: an option's number, `s` to submit one that takes several, `t` to type your own answer; with no prompt showing, type a message and press Enter |
 | `Space` | | peek at the chosen tab without going there: its whole last turn, or with `s` its screen (`r` captures it again); `jk` scroll, Enter goes there |
 | `/` | | filter the cards by name, number, PR or directory; Enter keeps the filter, Esc clears it |

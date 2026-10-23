@@ -1,5 +1,6 @@
 -- diffview.nvim: a branch's changes as GitHub's "Files changed" shows them, a
--- file tree beside a side-by-side diff of the chosen file. q closes it.
+-- file tree beside a side-by-side diff of the chosen file. q closes it, and
+-- Esc in the file tree or history.
 --
 -- tmux's M-d opens it in a pane's place (tmux/pane-in-place.sh) as
 -- `:DiffviewOpen <origin's default branch> --merge-base`: everything since the
@@ -12,6 +13,10 @@
 -- commits (`:DiffviewFileHistory` over them), each showing its changes the
 -- same way, and c or q there goes back to the whole branch.
 local close = { "n", "q", "<cmd>DiffviewClose<cr>", { desc = "Close the diff" } }
+-- Esc too, in the file tree and the history, where it has nothing else to do,
+-- so diffview closes as lazygit and every popup do. Not in the diff itself,
+-- where Esc leaves insert mode.
+local escape = { "n", "<esc>", "<cmd>DiffviewClose<cr>", { desc = "Close the diff" } }
 
 local quit = {
   "n",
@@ -70,8 +75,8 @@ return {
   opts = {
     keymaps = {
       view = { close, quit },
-      file_panel = { close, quit, commits },
-      file_history_panel = { close, quit, back },
+      file_panel = { close, escape, quit, commits },
+      file_history_panel = { close, escape, quit, back },
     },
   },
   config = function(_, opts)

@@ -620,6 +620,28 @@ test("a waiting tab is answered from mission control: its options shown, a numbe
   }
 });
 
+test("/ in the sidebar narrows its tabs to those whose title has the text, and Esc brings them back", async (t) => {
+  const one = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-n", "findme one", "-P", "-F", "#{window_id}");
+  const two = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-n", "other two", "-P", "-F", "#{window_id}");
+  t.after(() => [one, two].forEach((w) => tmux("kill-window", "-t", w)));
+  tmux("select-window", "-t", one);
+  assert.equal(sidebar.start(), true);
+  t.after(() => sidebar.stop());
+  const pane = await until(() => sidebarPane(one));
+  assert.ok(pane, "no sidebar");
+  const shown = () => tmux("capture-pane", "-p", "-t", pane);
+  assert.ok(await until(() => shown().includes("findme one") && shown().includes("other two")));
+  tmux("select-pane", "-t", pane);
+  await wait(100);
+  await sidebar.refresh();
+  tmux("send-keys", "-t", pane, "/");
+  tmux("send-keys", "-t", pane, "-l", "findme");
+  assert.ok(await until(() => shown().includes("/findme") && !shown().includes("other two")), "only the tab whose title matches");
+  assert.ok(shown().includes("findme one"));
+  tmux("send-keys", "-t", pane, "Escape");
+  assert.ok(await until(() => shown().includes("other two") && !shown().includes("/findme")), "Esc brings them back");
+});
+
 test("the sidebar's Space opens a popup with only that tab's peek, closed with it", async (t) => {
   const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", "sh -c 'seq 1 60; exec cat'");
   t.after(() => tmux("kill-window", "-t", window));

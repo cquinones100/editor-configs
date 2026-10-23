@@ -521,7 +521,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | `Esc` `q` `C-c` | back out | close |
 | `a` | answer the chosen tab, as in mission control, in a popup | answer the chosen tab's question or permission prompt there: an option's number, `s` to submit one that takes several, `t` to type your own answer; with no prompt showing, type a message and press Enter |
 | `Space` | peek at the chosen tab, as in mission control, in a popup | peek at the chosen tab without going there: its whole last turn, or with `s` its screen (`r` captures it again); `jk` scroll, Enter goes there |
-| `/` | | filter the cards by name, number, PR or directory; Enter keeps the filter, Esc clears it |
+| `/` | find a tab by title: type, the arrows move, Enter goes, Esc clears; in every window's sidebar until you leave it | filter the cards by name, number, PR or directory; Enter keeps the filter, Esc clears it |
 | `X` | | close every tab in Merged and remove its worktree, after a y/n; a worktree with uncommitted changes is kept and said |
 | `?` | these keys, in a popup over the window, until the next key | these keys, in a box over mission control, until the next key |
 

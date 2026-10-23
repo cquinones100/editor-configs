@@ -79,11 +79,11 @@ const shellFunction = () => `wtpr() {
   claude
 }`;
 
-// gh accepts a number or a URL, so the URL is passed through untouched — that
-// way a PR in some other repo resolves to that repo rather than the local one.
+// gh accepts a number or a URL, so the URL is passed through untouched. Its
+// repository is kept too: a PR in another repository is refused (see main).
 const parsePr = (input) => {
-  const fromUrl = input.match(/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/);
-  if (fromUrl) return { ref: input, number: Number(fromUrl[1]) };
+  const fromUrl = input.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+  if (fromUrl) return { ref: input, number: Number(fromUrl[3]), repo: `${fromUrl[1]}/${fromUrl[2]}` };
 
   const bare = input.match(/^#?(\d+)$/);
   if (bare) return { ref: bare[1], number: Number(bare[1]) };
@@ -345,7 +345,23 @@ const main = async () => {
   if (!prInput || !looksLikePr(prInput)) usage();
 
   const root = repoRoot();
-  const { ref } = parsePr(prInput);
+  const { ref, repo } = parsePr(prInput);
+  // The worktree is made in this clone, from this clone's remote, so a URL for
+  // a PR in another repository would fetch this one's branch, or its PR of the
+  // same number. Refused rather than guessed.
+  if (repo) {
+    const url = (() => {
+      try {
+        return gitOutput(["remote", "get-url", defaultRemote(root)], { cwd: root });
+      } catch {
+        return "";
+      }
+    })();
+    const here = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
+    if (here && `${here[1]}/${here[2]}`.toLowerCase() !== repo.toLowerCase()) {
+      fail(`That PR is in ${repo}, and this clone's remote is ${here[1]}/${here[2]}.\nRun wtpr from a clone of ${repo}.`);
+    }
+  }
   const pr = fetchPullRequest(ref, root);
 
   // Fork branches do not live on this repo's remote, so there is nothing to

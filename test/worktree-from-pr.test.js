@@ -52,3 +52,25 @@ test("a merged PR whose branch the remote deleted opens from the commits GitHub 
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("a PR URL from another repository is refused, rather than opening this one's PR of that number", () => {
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "wtpr-test-")));
+  const env = { ...process.env, HOME: tmp, GIT_CONFIG_GLOBAL: "/dev/null", PATH: `${path.join(tmp, "bin")}:${process.env.PATH}` };
+  try {
+    const clone = path.join(tmp, "clone");
+    execFileSync("git", ["init", "-q", clone], { env });
+    execFileSync("git", ["-C", clone, "remote", "add", "origin", "git@github.com:acme/widgets.git"], { env });
+    fs.mkdirSync(path.join(tmp, "bin"));
+    fs.writeFileSync(path.join(tmp, "bin/gh"), `#!/bin/sh\necho '${JSON.stringify({ number: 5, title: "Elsewhere", author: { login: "t" }, headRefName: "x", isCrossRepository: false, state: "OPEN", url: "https://github.com/other/thing/pull/5" })}'\n`, { mode: 0o755 });
+    let error = "";
+    try {
+      execFileSync(process.execPath, [script, "--no-claude", "https://github.com/other/thing/pull/5"], { cwd: clone, env, encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] });
+    } catch (err) {
+      error = err.stderr;
+    }
+    assert.match(error, /That PR is in other\/thing, and this clone's remote is acme\/widgets/);
+    assert.equal(fs.existsSync(path.join(clone, ".claude/worktrees")), false, "and nothing was made");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

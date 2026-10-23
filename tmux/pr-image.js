@@ -101,9 +101,13 @@ const IMAGE = 222;
 // row mark and a column mark, coloured with the image's ID. To tmux those are
 // text, so they sit in this pane and move and redraw with it. After a row's
 // first cell, the terminal counts the columns on.
-const show = (png, cols, rows) => {
-  const data = png.toString("base64");
+// `file`, when given, is the page saved on disk: sent as its path (t=f) the
+// terminal reads it itself, a few dozen bytes through tmux rather than the
+// whole image, which tmux relays slowly. Without one, the image itself.
+const show = (png, cols, rows, file) => {
+  const data = file ? Buffer.from(file).toString("base64") : png.toString("base64");
   const chunks = data.match(/.{1,4096}/g) ?? [];
+  const medium = file ? "t=f," : "";
   const tmux = (seq) => (process.env.TMUX ? `\x1bPtmux;${seq.replace(/\x1b/g, "\x1b\x1b")}\x1b\\` : seq);
   // The screen is cleared first: clearing it after would delete the image
   // just sent along with what was on screen.
@@ -111,7 +115,7 @@ const show = (png, cols, rows) => {
   chunks.forEach((chunk, i) => {
     const more = i < chunks.length - 1 ? 1 : 0;
     // Not quiet (q=1: errors only), so the footer can say why a page failed.
-    const head = i === 0 ? `a=T,U=1,f=100,i=${IMAGE},c=${cols},r=${rows},q=1,m=${more}` : `m=${more}`;
+    const head = i === 0 ? `a=T,U=1,f=100,${medium}i=${IMAGE},c=${cols},r=${rows},q=1,m=${more}` : `m=${more}`;
     out += tmux(`\x1b_G${head};${chunk}\x1b\\`);
   });
   const cell = String.fromCodePoint(0x10eeee);
@@ -213,7 +217,9 @@ const main = async () => {
     // A Buffer: puppeteer returns a plain Uint8Array, whose toString ignores
     // "base64" and lists its bytes instead.
     const png = Buffer.from(await page.screenshot({ clip: { x: 0, y: cuts[i], width: WIDTH, height: h }, type: "png" }));
-    shots.push({ png, rows: Math.max(1, Math.round((h / pageHeight) * rows)) });
+    const file = path.join(work, `page-${i + 1}.png`);
+    fs.writeFileSync(file, png);
+    shots.push({ png, file, rows: Math.max(1, Math.round((h / pageHeight) * rows)) });
   }
   const pages = shots.length;
   await browser.close();
@@ -227,8 +233,10 @@ const main = async () => {
   // The terminal's last word on a page: kitty graphics answer an error as
   // ESC _G i=<id>;<message> ESC \.
   let said = "";
+  // Pages go by file until the terminal turns one down, then as data.
+  let byFile = true;
   const draw = () => {
-    show(shots[at].png, cols, shots[at].rows);
+    show(shots[at].png, cols, shots[at].rows, byFile ? shots[at].file : undefined);
     process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   j k space b: page   r: redraw   q: close${said ? `   \x1b[31m${said}` : ""}\x1b[0m`);
   };
   process.stdin.setRawMode(true);
@@ -236,6 +244,10 @@ const main = async () => {
     const k = key.toString();
     const reply = /\x1b_G([^\x1b]*)\x1b\\/.exec(k);
     if (reply) {
+      if (byFile) {
+        byFile = false;
+        return draw();
+      }
       said = reply[1];
       process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   \x1b[31m${said}\x1b[0m`);
       return;

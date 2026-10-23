@@ -498,6 +498,20 @@ test("a tab flagged by hand needs you, whatever Claude is doing in it, until it 
   }
 });
 
+test("a window holding a pane parked behind lazygit is not a tab, and gets no sidebar", async () => {
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  try {
+    tmux("setw", "-t", window, "@pane_parked", "1");
+    const snap = await sidebar.snapshot();
+    const tab = sidebar.tabsFrom(snap).find((x) => x.id === window);
+    assert.equal(tab.parked, true);
+    await sidebar.reconcile({ ...snap, on: true }, [tab], { ...config, minWindowWidth: 0 });
+    assert.equal(tmux("list-panes", "-t", window, "-F", "#{pane_id}").split("\n").length, 1, "no sidebar added");
+  } finally {
+    tmux("kill-window", "-t", window);
+  }
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

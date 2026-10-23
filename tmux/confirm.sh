@@ -17,5 +17,11 @@ printf "%*s%s" "$pad_left" "" "$text"
 read -rsn 1 ans
 
 case "$ans" in
-  y|Y) tmux kill-pane -t "$target" ;;
+  y|Y)
+    # A pane standing in for another (lazygit-pane.sh) puts it back first, so
+    # closing it never leaves that pane parked out of sight.
+    parked=$(tmux show -pqv -t "$target" @parked_pane 2>/dev/null)
+    [ -n "$parked" ] && tmux swap-pane -d -s "$parked" -t "$target" 2>/dev/null && tmux select-pane -t "$parked"
+    tmux kill-pane -t "$target"
+    ;;
 esac

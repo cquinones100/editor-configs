@@ -842,19 +842,16 @@ test("the daemon draws the tabs in each sidebar and moves between them with the 
   t.after(() => viewer.kill());
   assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{session_attached}") !== "0"), true);
 
-  // Into the sidebar from alpha: the cursor starts on the first tab (bravo).
+  // Into the sidebar from alpha: the cursor starts on alpha, the tab you are in.
+  const session = tmux("display", "-p", "-t", second, "#{session_id}");
   tmux("select-pane", "-t", pane);
   await wait(100);
   await sidebar.refresh();
-  // Browsing shows each tab as the cursor reaches it: j to the next tab (alpha,
-  // or a window an earlier test left), which comes to the front, then k back
-  // to bravo, whose window comes to the front with focus in its own sidebar
-  // and the cursor still on bravo.
-  const session = tmux("display", "-p", "-t", second, "#{session_id}");
-  tmux("send-keys", "-t", pane, "j");
-  assert.equal(await until(() => sidebar.state.cursors.get(session) !== second), true);
-  assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{window_id}") === sidebar.state.cursors.get(session)), true, "the next tab is in front");
-  tmux("send-keys", "-t", tmux("display", "-p", "-t", "test", "#{pane_id}"), "k");
+  assert.equal(sidebar.state.cursors.get(session), first);
+  // Browsing shows each tab as the cursor reaches it: k up to bravo, first as
+  // it waits on you, whose window comes to the front with focus in its own
+  // sidebar and the cursor still on bravo.
+  tmux("send-keys", "-t", pane, "k");
   assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{window_id}") === second), true, "bravo is in front");
   assert.equal(await until(() => tmux("display", "-p", "-t", second, "#{@sidebar}") === "1"), true, "focus is in bravo's sidebar");
   await sidebar.refresh();

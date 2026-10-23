@@ -557,6 +557,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | `/` | find a tab by title: type, the arrows move, Enter goes, Esc clears; in every window's sidebar until you leave it | filter the cards by name, number, PR or directory; Enter keeps the filter, Esc clears it |
 | `X` | | close every tab in Merged and remove its worktree, after a y/n; a worktree with uncommitted changes is kept and said |
 | `?` | these keys, in a popup over the window, until the next key | these keys, in a box over mission control, until the next key |
+| the mouse | a click on a tab goes there, a right click peeks at it, the wheel moves | a click on a view's name switches to it; a click on a card or row chooses it, a second click goes there (Enter); the wheel moves |
 
 A click on a tab in the sidebar goes there, and the wheel scrolls it. Each
 mission control card shows a tab's state, PR and session name, your last

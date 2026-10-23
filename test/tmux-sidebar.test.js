@@ -822,6 +822,27 @@ test("/ in the sidebar narrows its tabs to those whose title has the text, and E
   assert.ok(await until(() => shown().includes("other two") && !shown().includes("/findme")), "Esc brings them back");
 });
 
+test("mission control takes the mouse: a view's name switches to it, a card is chosen and then gone to, the wheel moves", async (t) => {
+  const one = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-n", "mouse one", "-P", "-F", "#{window_id}");
+  const two = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-n", "mouse two", "-P", "-F", "#{window_id}");
+  t.after(() => [one, two].forEach((w) => tmux("kill-window", "-t", w)));
+  await sidebar.refresh();
+  const client = { kind: "mission", socket: { write() {}, end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 60, tmuxClient: "none" };
+  sidebar.draw(client);
+  const order = sidebar.missionGrid(sidebar.state.tabs).order;
+  const target = order.findIndex((x) => x.id === two);
+  const card = client.hits.find((h) => h.index === target);
+  assert.ok(card, "the card has somewhere to click");
+  const click = (h) => sidebar.missionKey(client, { mouse: { button: 0, x: h.x0 + 1, y: h.y, press: true } });
+  await click(card);
+  assert.equal(client.view.cursor, target, "a click chooses it");
+  await sidebar.missionKey(client, { mouse: { button: target ? 64 : 65, x: 1, y: 3, press: true } });
+  assert.notEqual(client.view.cursor, target, "the wheel moves to the next card");
+  const viewName = client.hits.find((h) => h.view === 1);
+  await click(viewName);
+  assert.equal(client.view.view, 1, "a view's name switches to it");
+});
+
 test("the sidebar's Space opens a popup with only that tab's peek, closed with it", async (t) => {
   const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", "sh -c 'seq 1 60; exec cat'");
   t.after(() => tmux("kill-window", "-t", window));

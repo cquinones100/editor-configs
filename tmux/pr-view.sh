@@ -51,7 +51,7 @@ case "${1:-}" in
     printf '%s' "$pr" > "$work/pr.json"
     node "${0%/*}/pr-view.js" prepare "$work/pr.json" "$work" "$width" || wait_key "${red}Could not read the PR.${reset}"
     glow -s dark -w "$width" "$work/pr.md" | node "${0%/*}/pr-view.js" splice "$work" > "$work/pr.txt"
-    less -RS "$work/pr.txt"
+    less -RS --mouse "$work/pr.txt"
     ;;
 esac
 exit 0

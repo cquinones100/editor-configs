@@ -5,14 +5,7 @@
 #
 # Usage: new-tab.zsh
 #
-# An fzf list of the directories you work in, the way the Slack relay's places
-# and the Work map find them: the directory you are in first (the binding's
-# -d), then every open tab's, then every one a Claude session ran in, most
-# recent first, from wt-revive's cache (~/.cache/wt-revive/index.json, kept
-# fresh by the sidebar daemon), then your home. Only directories that still
-# exist are listed, and no worktree but the one you are in. Type to narrow it; Enter takes the chosen one, or, when
-# nothing matches, what you typed if it is a directory. Esc cancels and opens
-# nothing.
+# The directory comes from pick-dir.zsh, which shape-open.zsh asks with too.
 
 dim=$'\e[38;5;244m' red=$'\e[31m' reset=$'\e[0m'
 script_dir=${0:A:h}
@@ -24,33 +17,7 @@ fail() {
   exit 0
 }
 
-here=$PWD
-typeset -U dirs
-dirs=(
-  "$here"
-  ${(f)"$(tmux list-panes -a -F '#{?@sidebar,,#{pane_current_path}}' 2>/dev/null)"}
-  ${(f)"$(jq -r '.transcripts | to_entries | sort_by(-.value.mtimeMs) | .[].value.cwd // empty' ~/.cache/wt-revive/index.json 2>/dev/null)"}
-  "$HOME"
-)
-shown=()
-# Worktrees (.claude/worktrees/…) are left out: there are dozens, and a new
-# tab belongs in a repository, where wt or wtpr makes its worktree. The one you
-# are in stays, first, since that is where you asked from.
-for dir in $dirs; do
-  [[ $dir == */.claude/worktrees/* && $dir != "$here" ]] && continue
-  [[ -n $dir && -d $dir ]] && shown+=("${dir/#$HOME/~}")
-done
-
-# fzf prints the query, then the choice: none when nothing matches (exit 1),
-# and it exits 130 on Esc.
-out=$(print -rl -- $shown | fzf --print-query --no-sort --layout=reverse --height=100% \
-  --prompt='Open in > ' --header='A new tab running Claude: Enter opens it there; a path you type works too. Esc cancels.')
-(( $? == 130 )) && exit 0
-picked=("${(@f)out}")
-choice=${picked[2]:-${picked[1]}}
-[[ -n $choice ]] || exit 0
-dir=${choice/#\~/$HOME}
-[[ -d $dir ]] || fail "No such directory: $choice"
+dir=$("$script_dir/pick-dir.zsh" "A new tab running Claude: Enter opens it there") || exit 0
 
 # tmux expands formats in -c, so a # in the path is doubled.
 tmux new-window -c "${dir//\#/##}" "zsh -i -c 'claude; exec zsh -i'" || fail "tmux could not open a tab."

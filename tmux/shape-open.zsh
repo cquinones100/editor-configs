@@ -5,7 +5,8 @@
 # `shape-batch --continue` does from a shell, without /shape first asking
 # whether to run a review loop instead. Takes one ticket or a list, as
 # wt-open.zsh does, and starts in the focused pane's directory (the binding's
-# -d), so `shape` finds that repository.
+# -d) unless you pick another, which it asks after the tickets (pick-dir.zsh), so
+# `shape` finds that repository.
 #
 # Usage: shape-open.zsh
 #
@@ -68,12 +69,14 @@ for token in $(tokens_of "$input"); do
 done
 (( ${#tickets} )) || exit 0
 
-git rev-parse --git-dir >/dev/null 2>&1 ||
-  fail "This tab is not in a repository, so shape has no code to read. Run it from the repo the tickets belong to."
+# Which repository to shape them in, asked as a new tab asks (pick-dir.zsh).
+dir=$("${0:A:h}/pick-dir.zsh" "Shape ${#tickets} ticket(s) here: Enter opens a tab for each") || exit 0
+git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 ||
+  fail "${dir/#$HOME/~} is not in a repository, so shape has no code to read. Pick the repo the tickets belong to."
 
 first=
 for ticket in $tickets; do
-  window=$(tmux new-window -d -c "$PWD" -n "Shaping $ticket" -P -F '#{window_id}' -- zsh -i -c 'shape --continue "$1"; exec zsh -i' shape "$ticket") ||
+  window=$(tmux new-window -d -c "${dir//\#/##}" -n "Shaping $ticket" -P -F '#{window_id}' -- zsh -i -c 'shape --continue "$1"; exec zsh -i' shape "$ticket") ||
     fail "tmux could not open a tab for $ticket."
   first=${first:-$window}
 done

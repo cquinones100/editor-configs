@@ -4,7 +4,7 @@
 # what bin/tmux-sidebar's daemon draws and sends it the keys you press.
 #
 # Usage: sidebar-pane.zsh sidebar <socket>
-#        sidebar-pane.zsh mission <socket> <tmux client>
+#        sidebar-pane.zsh mission <socket> <tmux client> [peek:<window>|answer:<window>]
 #
 # Built from zsh's own modules (sockets, select, raw reads and writes) so each
 # sidebar is one small process that starts no others, however long it runs:
@@ -14,7 +14,7 @@
 
 zmodload zsh/net/socket zsh/zselect zsh/system zsh/datetime || exit 1
 
-mode=$1 sock=$2 client=${3:-}
+mode=$1 sock=$2 client=${3:-} only=${4:-}
 stty raw -echo 2>/dev/null
 # The cursor is hidden and wrapping off while the daemon draws; a sidebar
 # that has lost it says so in its first line.
@@ -22,7 +22,7 @@ print -n '\e[?25l\e[?7l'
 
 if [[ $mode == mission ]]; then
   size=($(stty size 2>/dev/null))
-  hello="mission $client ${size[2]:-120} ${size[1]:-40}"
+  hello="mission $client ${size[2]:-120} ${size[1]:-40} $only"
 else
   hello="sidebar $TMUX_PANE"
 fi

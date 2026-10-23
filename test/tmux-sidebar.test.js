@@ -594,6 +594,32 @@ test("a waiting tab is answered from mission control: its options shown, a numbe
   }
 });
 
+test("the sidebar's Space opens a popup with only that tab's peek, closed with it", async (t) => {
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", "sh -c 'seq 1 60; exec cat'");
+  t.after(() => tmux("kill-window", "-t", window));
+  assert.equal(sidebar.start(), true);
+  t.after(() => sidebar.stop());
+  await wait(300);
+  await sidebar.refresh();
+
+  const popup = net.connect(sidebar.SOCKET);
+  let received = "";
+  let closed = false;
+  popup.on("data", (data) => (received += data));
+  popup.on("close", () => (closed = true));
+  popup.write(`mission none 100 20 peek:${window}\n`);
+  assert.ok(await until(() => /PEEK.*60/s.test(plain(received))), "the peek, at once");
+  popup.write("q");
+  assert.equal(await until(() => closed), true, "closing the peek closes the popup");
+
+  // A tab that has gone closes it straight away.
+  const gone = net.connect(sidebar.SOCKET);
+  let goneClosed = false;
+  gone.on("close", () => (goneClosed = true));
+  gone.write("mission none 100 20 answer:@999999\n");
+  assert.equal(await until(() => goneClosed), true);
+});
+
 test("Space peeks at a tab from mission control: its screen, or its whole last turn, without going there", async () => {
   const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", "sh -c 'seq 1 60; exec cat'");
   const sent = [];

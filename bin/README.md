@@ -516,8 +516,8 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | `Tab` `S-Tab` | open mission control | the next or previous view |
 | `r` | | fetch the plugin's view again |
 | `Esc` `q` `C-c` | back out | close |
-| `a` | | answer the chosen tab's question or permission prompt there: an option's number, `s` to submit one that takes several, `t` to type your own answer; with no prompt showing, type a message and press Enter |
-| `Space` | | peek at the chosen tab without going there: its whole last turn, or with `s` its screen (`r` captures it again); `jk` scroll, Enter goes there |
+| `a` | answer the chosen tab, as in mission control, in a popup | answer the chosen tab's question or permission prompt there: an option's number, `s` to submit one that takes several, `t` to type your own answer; with no prompt showing, type a message and press Enter |
+| `Space` | peek at the chosen tab, as in mission control, in a popup | peek at the chosen tab without going there: its whole last turn, or with `s` its screen (`r` captures it again); `jk` scroll, Enter goes there |
 | `/` | | filter the cards by name, number, PR or directory; Enter keeps the filter, Esc clears it |
 | `X` | | close every tab in Merged and remove its worktree, after a y/n; a worktree with uncommitted changes is kept and said |
 | `?` | these keys, until the next key | the same |

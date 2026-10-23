@@ -103,14 +103,16 @@ const show = (png, cols, rows) => {
   const data = png.toString("base64");
   const chunks = data.match(/.{1,4096}/g) ?? [];
   const tmux = (seq) => (process.env.TMUX ? `\x1bPtmux;${seq.replace(/\x1b/g, "\x1b\x1b")}\x1b\\` : seq);
-  let out = tmux(`\x1b_Ga=d,d=I,i=${IMAGE},q=2\x1b\\`);
+  // The screen is cleared first: clearing it after would delete the image
+  // just sent along with what was on screen.
+  let out = "\x1b[H\x1b[2J" + tmux(`\x1b_Ga=d,d=I,i=${IMAGE},q=2\x1b\\`);
   chunks.forEach((chunk, i) => {
     const more = i < chunks.length - 1 ? 1 : 0;
     const head = i === 0 ? `a=T,U=1,f=100,i=${IMAGE},c=${cols},r=${rows},q=2,m=${more}` : `m=${more}`;
     out += tmux(`\x1b_G${head};${chunk}\x1b\\`);
   });
   const cell = String.fromCodePoint(0x10eeee);
-  out += `\x1b[H\x1b[2J\x1b[38;5;${IMAGE}m`;
+  out += `\x1b[38;5;${IMAGE}m`;
   for (let r = 0; r < Math.min(rows, MARKS.length); r++) {
     out += `\x1b[${r + 1};1H${cell}${String.fromCodePoint(MARKS[r])}${String.fromCodePoint(MARKS[0])}${cell.repeat(cols - 1)}`;
   }

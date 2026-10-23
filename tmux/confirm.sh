@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Popup confirmation for tmux pane actions.
-# Usage: confirm.sh "Prompt text" <pane_id>
+# Usage: confirm.sh "Prompt text" [<pane_id>]
+#
+# Without a pane, the one in the global @confirm_pane, which M-w sets just
+# before the popup, since display-popup does not expand #{pane_id} in its
+# command.
 
 prompt="$1"
-target="$2"
+target=${2:-$(tmux show -gqv @confirm_pane)}
+[ -n "$target" ] || exit 0
 
 text="$prompt (y/n) "
 cols=$(tput cols)

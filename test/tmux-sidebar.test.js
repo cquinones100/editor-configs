@@ -618,6 +618,26 @@ test("a tab flagged by hand needs you, whatever Claude is doing in it, until it 
   }
 });
 
+test("M-w on a tool in a pane's place closes the tool and brings the pane back, keeping the tab", () => {
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const own = tmux("display", "-p", "-t", window, "#{pane_id}");
+  // As pane-in-place.sh leaves it: the tool in the pane's place, the pane parked.
+  const tool = tmux("new-window", "-d", "-t", "test", "-P", "-F", "#{pane_id}", "cat");
+  tmux("set", "-w", "-t", tool, "@pane_parked", "1");
+  tmux("set", "-p", "-t", tool, "@parked_pane", own);
+  tmux("swap-pane", "-d", "-s", tool, "-t", own);
+  tmux("select-pane", "-t", tool);
+  try {
+    // M-w names the pane in @confirm_pane, since its popup can't pass it.
+    tmux("set", "-gF", "@confirm_pane", tool);
+    execFileSync("bash", [path.join(__dirname, "../tmux/confirm.sh"), "Close pane?"], { input: "y", env: { ...process.env, TERM: "xterm" }, stdio: ["pipe", "ignore", "ignore"] });
+    const panes = tmux("list-panes", "-t", window, "-F", "#{pane_id}").split("\n");
+    assert.deepEqual(panes, [own], "your pane is back in its tab, and the tool is gone");
+  } finally {
+    tmux("kill-window", "-t", window);
+  }
+});
+
 test("a window holding a pane parked behind lazygit is not a tab, and gets no sidebar", async () => {
   const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
   try {

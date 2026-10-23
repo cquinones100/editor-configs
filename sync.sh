@@ -105,10 +105,51 @@ sync_tmux_plugins() {
   done
 }
 
+# mermaid-ascii, which draws the Mermaid diagrams in M-v's PR view
+# (tmux/pr-view.sh), pinned to one release and checked against its checksum
+# before it is installed in ~/.local/bin. Updating it means reading what changed
+# and putting the new version and checksums here.
+MERMAID_ASCII_VERSION=1.6.1
+# Its checksums, from the release's checksums.txt. bash 3.2, which macOS has,
+# has no associative arrays, hence the case.
+mermaid_ascii_sha256() {
+  case $1 in
+    Darwin_arm64) echo 9b7f7788bd2596437d92856e9a60b7b05ecb5f6f786c8c0b1cb369f742bf8063 ;;
+    Darwin_x86_64) echo a0fc7b8dc4f01d0ad0afff16590d63b8a85d157cc957b2a659ffeca617360bdc ;;
+  esac
+}
+sync_mermaid_ascii() {
+  local platform sum tmp stamp=~/.local/state/editor-configs/mermaid-ascii.version
+  platform="$(uname -s)_$(uname -m | sed 's/aarch64/arm64/')"
+  sum=$(mermaid_ascii_sha256 "$platform")
+  if [ -z "$sum" ]; then
+    echo "  no pinned mermaid-ascii for $platform; M-v shows diagrams as their source" >&2
+    return 0
+  fi
+  # It has no --version, so the version installed is kept beside it.
+  if [ -x ~/.local/bin/mermaid-ascii ] && [ "$(cat "$stamp" 2>/dev/null)" = "$MERMAID_ASCII_VERSION" ]; then
+    echo "  mermaid-ascii $MERMAID_ASCII_VERSION"
+    return 0
+  fi
+  tmp=$(mktemp -d)
+  if curl -fsSL -o "$tmp/m.tar.gz" "https://github.com/AlexanderGrooff/mermaid-ascii/releases/download/$MERMAID_ASCII_VERSION/mermaid-ascii_$platform.tar.gz" &&
+    echo "$sum  $tmp/m.tar.gz" | shasum -a 256 -c --quiet - &&
+    tar -xzf "$tmp/m.tar.gz" -C "$tmp" mermaid-ascii &&
+    mkdir -p ~/.local/bin "${stamp%/*}" && install -m 755 "$tmp/mermaid-ascii" ~/.local/bin/mermaid-ascii; then
+    echo "$MERMAID_ASCII_VERSION" > "$stamp"
+    echo "  mermaid-ascii $MERMAID_ASCII_VERSION"
+  else
+    echo "  could not install mermaid-ascii $MERMAID_ASCII_VERSION" >&2
+  fi
+  rm -rf "$tmp"
+}
+
 sync_tmux() {
   mkdir -p ~/.config/tmux
   put_link ~/editor-configs/tmux/tmux.conf ~/.config/tmux/tmux.conf
   sync_tmux_plugins
+  sync_mermaid_ascii
+  put_link ~/editor-configs/tmux/pr-view.sh ~/.config/tmux/pr-view.sh
   put_link ~/editor-configs/tmux/accent-color.sh ~/.config/tmux/accent-color.sh
   put_link ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
   put_link ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh

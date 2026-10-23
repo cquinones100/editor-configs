@@ -395,8 +395,9 @@ child process can ask tmux to do that.
 
 ### Notes
 
-- `M-j` in the tmux config opens the picker in a popup, which is the form this
-  gets used in most: a list of every window labelled by repository, PR number,
+- `M-j` in the tmux config no longer opens this picker: it opens mission control's
+  Work map showing only open tabs, a filter typing (see tmux-sidebar). From a shell, `wt-jump` with no argument opens
+  it: a list of every window labelled by repository, PR number,
   and branch, type a few letters, Enter. fzf searches the whole row, so a PR
   number finds its window there as well as on the command line. The column is
   left out when no window has a number to show. It goes through `tmux/window-jump.sh`, which exists
@@ -455,9 +456,11 @@ version that read the end of every transcript each time took.
 ./sync.sh tmux
 ```
 
-`M-o` in the tmux config opens it in a popup through `tmux/window-revive.sh`,
-which puts node on the PATH (the tmux server has none, as with `wt-jump`) and
-holds the popup open when there is an error or nothing to reopen.
+`M-o` in the tmux config opens mission control's Work map showing only these
+worktrees, a filter typing, read from `wt-revive --json`, which prints each row as
+a line of JSON. `tmux/window-revive.sh` still opens this picker from a shell,
+putting node on the PATH (the tmux server has none) and holding the popup open
+when there is an error or nothing to reopen.
 
 ### Notes
 
@@ -501,7 +504,7 @@ row of tabs to one line: the session, its counts, and the focused window in
 full. The states are the ones `tmux/agent-state.sh` keeps, so they mean what
 the tab badges meant.
 
-Mission control's views, which `Tab` and `]` go through, are its tabs, then the built-in views, then the plugins'. The **Work map** is every piece of work in the repositories your tabs are in, a row each: each worktree, and a main checkout a tab is in, with its ticket (from the branch), the tab it is open in or "no tab", its PR and where that stands (open, failing checks, in the merge queue, merged), and its directory, the ones needing you first and those no tab is in last, so work in flight is never forgotten. Enter goes to its tab, or opens one in a worktree that has none. Its worktrees are read with git, and a worktree's PR looked up by its branch, in the same minute's query as the tabs'. **Activity** is what happened across the tabs, newest first, for catching up after time away: turns finished, Claude starting work or asking you something (and what), checks starting to fail, PRs joining the merge queue or merging, tabs opening and closing. Each refresh compares the tabs with how they were; the newest 200 are kept in `activity.jsonl` in the state directory, so a restart doesn't lose them. Enter goes to the tab. **PRs** is a board of your pull requests in the repositories your tabs are in, in columns by where they stand: Draft, In review, Approved, In merge queue, and Merged in the last 7 days, each with its checks and review, failing checks or changes asked for marked as needing you. `h`/`l` move between columns, Enter opens the PR. It is fetched every two minutes with two searches through `gh`; only those repositories, so old pull requests elsewhere stay off it. **Sessions** lists each Claude tab's session with how full its context is, its model, how long it has run and how long since it last did anything, fullest first, a session at 80% or more marked as needing you: the ones to compact or close. The context and model are what Claude Code gives the statusline, which writes them to `~/.local/state/tmux-sidebar/context/<session>`.
+Mission control's views, which `Tab` and `]` go through, are its tabs, then the built-in views, then the plugins'. The **Work map** is every piece of work in the repositories your tabs are in, a row each: each worktree, and a main checkout a tab is in, with its ticket (from the branch), the tab it is open in or "no tab", its PR and where that stands (open, failing checks, in the merge queue, merged), and its directory, the ones needing you first and those no tab is in last, so work in flight is never forgotten. Worktrees with no tab come from `wt-revive` too, so they cover every repository a Claude session used in the last two weeks, most recently used first, each with when it was last used and the last prompt given there. Enter goes to its tab, or opens one in a worktree that has none and resumes its Claude with `claude-here`. `/` filters it, as it does any list but the PR board, by title and detail. `M-j` opens it showing only open tabs and `M-o` only worktrees with no tab, a filter already typing: the arrows move, Enter goes, Esc closes. Its worktrees are read with git, and a worktree's PR looked up by its branch, in the same minute's query as the tabs'. **Activity** is what happened across the tabs, newest first, for catching up after time away: turns finished, Claude starting work or asking you something (and what), checks starting to fail, PRs joining the merge queue or merging, tabs opening and closing. Each refresh compares the tabs with how they were; the newest 200 are kept in `activity.jsonl` in the state directory, so a restart doesn't lose them. Enter goes to the tab. **PRs** is a board of your pull requests in the repositories your tabs are in, in columns by where they stand: Draft, In review, Approved, In merge queue, and Merged in the last 7 days, each with its checks and review, failing checks or changes asked for marked as needing you. `h`/`l` move between columns, Enter opens the PR. It is fetched every two minutes with two searches through `gh`; only those repositories, so old pull requests elsewhere stay off it. **Sessions** lists each Claude tab's session with how full its context is, its model, how long it has run and how long since it last did anything, fullest first, a session at 80% or more marked as needing you: the ones to compact or close. The context and model are what Claude Code gives the statusline, which writes them to `~/.local/state/tmux-sidebar/context/<session>`.
 
 | Key | In the sidebar | In mission control |
 | --- | --- | --- |

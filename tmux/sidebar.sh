@@ -8,7 +8,9 @@
 #                                 out the status line for the sidebar
 #   sidebar.sh nudge              tell the daemon something changed
 #   sidebar.sh focus <window>     M-h: put the cursor in the window's sidebar
-#   sidebar.sh mission <client>   M-Space: open mission control on that client
+#   sidebar.sh mission <client> [work:tabs|work:untabbed]
+#                                 M-Space: open mission control on that client;
+#                                 M-j, M-o: on the Work map as a picker
 #   sidebar.sh toggle             turn the sidebar on or off (@sidebar_on)
 #
 # The daemon is a node script, and the tmux server keeps the environment it
@@ -91,7 +93,7 @@ case "${1:-}" in
     ;;
   mission)
     start
-    tmux display-popup -c "${2:-}" -E -B -x 0 -y 0 -w 100% -h 100% "exec $(printf '%q ' "$client" mission "$state_dir/sock" "${2:-}")"
+    tmux display-popup -c "${2:-}" -E -B -x 0 -y 0 -w 100% -h 100% "exec $(printf '%q ' "$client" mission "$state_dir/sock" "${2:-}" "${3:-}")"
     ;;
   toggle)
     if [ "$(tmux show -gqv @sidebar_on)" = off ]; then tmux set -gu @sidebar_on; else tmux set -g @sidebar_on off; fi

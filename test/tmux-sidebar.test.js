@@ -731,6 +731,33 @@ test("the work map lists every worktree in the tabs' repositories, with its tab 
   }
 });
 
+test("the work map adds wt-revive's worktrees with when and what you last asked there, and M-j and M-o open it as a picker", async (t) => {
+  // wt-revive's rows: one in a repository no tab is in, one with a tab.
+  sidebar.revived.set("/elsewhere/.claude/worktrees/abc-20-old", { tree: "/elsewhere/.claude/worktrees/abc-20-old", repo: "/elsewhere", branch: "abc-20-old", when: 100, age: "3d ago", prompt: "Fix the flaky test" });
+  sidebar.revived.set("/elsewhere/.claude/worktrees/abc-21-older", { tree: "/elsewhere/.claude/worktrees/abc-21-older", repo: "/elsewhere", branch: "abc-21-older", when: 50, age: "6d ago", prompt: "(no recent Claude session)" });
+  t.after(() => sidebar.revived.clear());
+  const rows = sidebar.workMap([]).filter((r) => r.dir?.startsWith("/elsewhere"));
+  assert.deepEqual(rows.map((r) => [r.title, r.detail]), [
+    ["ABC-20  old", "no tab · no PR · used 3d ago · /elsewhere/.claude/worktrees/abc-20-old · Fix the flaky test"],
+    ["ABC-21  older", "no tab · no PR · used 6d ago · /elsewhere/.claude/worktrees/abc-21-older · (no recent Claude session)"],
+  ], "most recently used first");
+
+  // M-j: the Work map, open tabs only, a filter typing; Esc closes it.
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  t.after(() => tmux("kill-window", "-t", window));
+  const client = { kind: "mission", socket: { write() {}, end() { client.ended = true; } }, view: { view: 1, cursor: 0 }, cols: 120, rows: 30, tmuxClient: "none", scope: "tabs", picker: true, filter: { text: "", typing: true } };
+  await sidebar.refresh();
+  const workMap = sidebar.viewsFor(client).find((v) => v.title.startsWith("Work map"));
+  assert.equal(workMap.title, "Work map · open tabs");
+  assert.ok(workMap.items.every((item) => item.tab), "no worktree without a tab");
+  client.scope = "untabbed";
+  assert.deepEqual(sidebar.viewsFor(client).find((v) => v.title.startsWith("Work map")).items.filter((i) => i.dir?.startsWith("/elsewhere")).map((i) => i.title), ["ABC-20  old", "ABC-21  older"]);
+  for (const key of ["o", "l", "d", "e"]) await sidebar.missionKey(client, { key });
+  assert.deepEqual(sidebar.viewsFor(client).find((v) => v.title.startsWith("Work map")).items.map((i) => i.title), ["ABC-21  older"], "the filter matches title and detail");
+  await sidebar.missionKey(client, { key: "Escape" });
+  assert.equal(client.ended, true, "Esc closes the picker");
+});
+
 test("the activity feed records what changed across the tabs, newest first, and keeps it across a restart", () => {
   fs.rmSync(path.join(sidebar.STATE_DIR, "activity.jsonl"), { force: true });
   sidebar.resetActivity();

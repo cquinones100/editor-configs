@@ -10,6 +10,8 @@
 //   wt-revive          fzf picker, from the repository of the current directory
 //   wt-revive <dir>    the same, starting from <dir>'s repository
 //   wt-revive --list   print the rows instead of opening the picker
+//   wt-revive --json   each row as a line of JSON, nothing when there are none:
+//                      mission control's Work map (lib/sidebar/views.js) reads it
 //
 // Which repositories: the one <dir> is in, every open pane's, and every one a
 // Claude session has run in over the last two weeks, so a repository whose tabs
@@ -45,7 +47,7 @@ const PROMPT_TAILS = [256 * 1024, 2 * 1024 * 1024, Infinity];
 const NOT_A_REPO_MS = 24 * 60 * 60 * 1000;
 
 const usage = () => {
-  console.error("Usage: wt-revive [--list] [<dir>]");
+  console.error("Usage: wt-revive [--list | --json] [<dir>]");
   process.exit(1);
 };
 
@@ -219,7 +221,8 @@ const main = () => {
   const argv = process.argv.slice(2);
   if (argv.includes("--help") || argv.includes("-h")) usage();
   const listOnly = argv.includes("--list");
-  const positional = argv.filter((arg) => arg !== "--list");
+  const json = argv.includes("--json");
+  const positional = argv.filter((arg) => arg !== "--list" && arg !== "--json");
   if (positional.length > 1) usage();
   const dir = path.resolve(positional[0] ?? process.cwd());
 
@@ -236,7 +239,10 @@ const main = () => {
         .filter(Boolean),
     ),
   ];
-  if (!repos.length) fail("No git repositories found in your tabs or recent Claude sessions.");
+  if (!repos.length) {
+    if (json) return;
+    fail("No git repositories found in your tabs or recent Claude sessions.");
+  }
 
   // A worktree is open when some pane is in it or below it.
   const isOpen = (tree) => panes.some((pane) => pane === tree || pane.startsWith(`${tree}/`));
@@ -255,6 +261,8 @@ const main = () => {
           return {
             when,
             tree,
+            repo,
+            branch,
             label: `${path.basename(repo)} ${branch}`,
             age: age(when),
             prompt: session ? session.prompt : "(no recent Claude session)",
@@ -270,6 +278,10 @@ const main = () => {
     repos: Object.fromEntries(dirs.filter((candidate) => cache.repos[candidate]).map((candidate) => [candidate, cache.repos[candidate]])),
   });
 
+  if (json) {
+    rows.forEach((row) => console.log(JSON.stringify(row)));
+    return;
+  }
   if (!rows.length) fail("Every worktree already has a tab open.");
   if (listOnly) {
     rows.forEach((row) => console.log([row.label, row.age, row.prompt].join("\t")));

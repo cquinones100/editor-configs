@@ -1118,7 +1118,10 @@ can do.
 In tmux, `M-N` (Alt-Shift-N) opens it in a tab of its own named Notes, or goes
 to that tab when it is open already, since two of them saving the same notes
 as you type would write over each other. It runs `tmux/notes-open.sh`, which
-`./sync.sh tmux` links, so the binding needs both that and `./sync.sh notes`.
+`./sync.sh tmux` links, so the binding needs both that and `./sync.sh notes`. `M-e` puts the same
+Notes in a pane to the right of the one you are in, moving it from wherever it
+is, or starting it there; pressed again in that tab, it goes back to a tab of
+its own.
 
 ### In the list
 

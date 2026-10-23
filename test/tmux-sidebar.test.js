@@ -618,6 +618,36 @@ test("a tab flagged by hand needs you, whatever Claude is doing in it, until it 
   }
 });
 
+test("M-e opens Notes to the right of the pane, moves the one Notes there from elsewhere, and puts it back in its own tab", () => {
+  const script = path.join(__dirname, "../tmux/notes-open.sh");
+  const env = { ...process.env, NOTES_OPEN_COMMAND: "cat" };
+  const notes = () => tmux("list-panes", "-a", "-F", "#{pane_id} #{@notes_pane} #{window_id}").split("\n").filter((l) => l.split(" ")[1] === "1").map((l) => l.split(" "));
+  const first = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const second = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const paneIn = (w) => tmux("display", "-p", "-t", w, "#{pane_id}");
+  const a = paneIn(first);
+  const b = paneIn(second);
+  try {
+    execFileSync("bash", [script, "side", "none", a], { env });
+    assert.equal(notes().length, 1);
+    assert.equal(notes()[0][2], first, "beside the pane, in its tab");
+    const pane = notes()[0][0];
+
+    execFileSync("bash", [script, "side", "none", b], { env });
+    assert.deepEqual(notes(), [[pane, "1", second]], "the same Notes, moved");
+    assert.equal(tmux("list-panes", "-t", first, "-F", "#{pane_id}"), a, "and gone from where it was");
+
+    execFileSync("bash", [script, "side", "none", b], { env });
+    const [, , own] = notes()[0];
+    assert.notEqual(own, second, "pressed again, it goes back to a tab of its own");
+    assert.equal(tmux("display", "-p", "-t", own, "#{@notes}"), "1");
+    execFileSync("bash", [script, "side", "none", pane], { env });
+    assert.equal(notes()[0][2], own, "and from there, alone, it stays put");
+  } finally {
+    [first, second, ...notes().map((n) => n[2])].forEach((w) => { try { tmux("kill-window", "-t", w); } catch {} });
+  }
+});
+
 test("M-w on a tool in a pane's place closes the tool and brings the pane back, keeping the tab", () => {
   const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
   const own = tmux("display", "-p", "-t", window, "#{pane_id}");

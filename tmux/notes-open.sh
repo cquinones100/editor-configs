@@ -1,30 +1,81 @@
 #!/usr/bin/env bash
-# Opens the notes app (bin/notes) in its own tab, or goes to that tab when it
-# is already open: two Neovims saving the same notes as you type would write
-# over each other. M-N runs it.
-# Usage: notes-open.sh <client_name>
+# Opens the notes app (bin/notes) in its own tab, or beside the pane you are
+# in, or goes to it when it is already open: there is only ever one, since two
+# Neovims saving the same notes as you type would write over each other. M-N
+# runs it for a tab, M-e beside the pane.
 #
-# The tab is found by its @notes window option, which this sets, so renaming
-# it doesn't lose it. It runs notes from an interactive zsh, which has the
-# PATH ~/.zshrc sets up (~/.local/bin, nvm), unlike the tmux server's own
-# environment, and it closes when you quit notes.
+# Usage: notes-open.sh <client_name>            M-N: its own tab, or go to it
+#        notes-open.sh side <client_name> <pane> M-e: to the right of <pane>
+#
+# The notes pane is found by its @notes_pane option, which this sets, so it is
+# found wherever it has been moved, and renaming its tab doesn't lose it; a
+# tab of its own also carries the @notes window option. It runs notes from an
+# interactive zsh, which has the PATH ~/.zshrc sets up (~/.local/bin, nvm),
+# unlike the tmux server's own environment, and it closes when you quit notes.
+#
+# Beside a pane: notes already open elsewhere moves there (join-pane), its own
+# tab closing behind it; open in that tab already, it goes back to a tab of its
+# own (break-pane), so the key opens and puts away the same pane.
 
 set -u
 
-client=${1:-}
+# The pane marked @notes_pane, else the first pane of a tab marked @notes, as
+# a tab opened before panes were marked is.
+notes_pane() {
+  tmux list-panes -a -F '#{pane_id} #{@notes_pane} #{@notes}' 2>/dev/null |
+    awk '$2 == "1" { print $1; found = 1; exit } $3 == "1" && !old { old = $1 } END { if (!found && old) print old }'
+}
 
-existing=$(tmux list-windows -a -F '#{window_id} #{@notes}' 2>/dev/null | awk '$2 == "1" { print $1; exit }')
-if [ -n "$existing" ]; then
-  if [ -n "$client" ]; then
-    tmux switch-client -c "$client" -t "$existing"
-  else
-    tmux select-window -t "$existing"
+# What runs notes; the tests put a stand-in here.
+notes_command=${NOTES_OPEN_COMMAND:-zsh -i -c notes}
+
+# A tab of its own for the notes pane, named Notes.
+own_tab() {
+  local window=$1 session
+  tmux set-option -w -t "$window" @notes 1
+  tmux set-option -w -t "$window" @tab_name "Notes"
+  session=$(tmux display-message -p -t "$window" '#{session_name}')
+  "${0%/*}/window-names.sh" "$session"
+}
+
+if [ "${1:-}" = side ]; then
+  client=${2:-} here=${3:-}
+  [ -n "$here" ] || exit 0
+  existing=$(notes_pane)
+  if [ -z "$existing" ]; then
+    pane=$(tmux split-window -h -l 40% -t "$here" -c "$HOME" -P -F '#{pane_id}' "$notes_command") || exit 0
+    tmux set-option -p -t "$pane" @notes_pane 1
+    exit 0
   fi
+  tmux set-option -p -t "$existing" @notes_pane 1
+  if [ "$(tmux display -p -t "$existing" '#{window_id}')" = "$(tmux display -p -t "$here" '#{window_id}')" ]; then
+    # Alone in its own tab (beside the sidebar) it is already put away.
+    [ "$(tmux list-panes -t "$existing" -F '#{?@sidebar,,x}' | grep -c x)" -gt 1 ] || exit 0
+    window=$(tmux break-pane -d -s "$existing" -P -F '#{window_id}') && own_tab "$window"
+    exit 0
+  fi
+  # Its old tab is no longer the notes tab, whatever is left in it.
+  old=$(tmux display -p -t "$existing" '#{window_id}')
+  tmux join-pane -h -l 40% -s "$existing" -t "$here"
+  tmux set-option -wu -t "$old" @notes 2>/dev/null
+  tmux set-option -wu -t "$old" @tab_name 2>/dev/null
   exit 0
 fi
 
-window=$(tmux new-window -P -F '#{window_id}' -c "$HOME" "zsh -i -c notes")
-tmux set-option -w -t "$window" @notes 1
-tmux set-option -w -t "$window" @tab_name "Notes"
-session=$(tmux display-message -p -t "$window" '#{session_name}')
-"${0%/*}/window-names.sh" "$session"
+client=${1:-}
+
+existing=$(notes_pane)
+if [ -n "$existing" ]; then
+  window=$(tmux display -p -t "$existing" '#{window_id}')
+  if [ -n "$client" ]; then
+    tmux switch-client -c "$client" -t "$window"
+  else
+    tmux select-window -t "$window"
+  fi
+  tmux select-pane -t "$existing"
+  exit 0
+fi
+
+window=$(tmux new-window -P -F '#{window_id}' -c "$HOME" "$notes_command")
+tmux set-option -p -t "$window" @notes_pane 1
+own_tab "$window"

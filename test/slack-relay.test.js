@@ -1088,6 +1088,26 @@ test("agent-state.sh marks the tab a background job was parked from", async () =
   }
 });
 
+test("agent-state.sh ignores a headless Claude's hooks, though it names the tab's pane", async () => {
+  const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", fakeClaude);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const [pane, panePid] = tmux("display", "-p", "-t", window, "#{pane_id}\t#{pane_pid}").split("\t");
+  const sessions = path.join(home, ".claude/sessions");
+  fs.writeFileSync(path.join(sessions, `${panePid}.json`), JSON.stringify({ pid: Number(panePid), sessionId: "own", entrypoint: "cli" }));
+  // A review loop's script starts a headless Claude, which inherits TMUX_PANE.
+  fs.writeFileSync(path.join(sessions, "900020.json"), JSON.stringify({ pid: 900020, sessionId: "headless", entrypoint: "sdk-cli" }));
+  const hook = path.join(__dirname, "../tmux/agent-state.sh");
+  const env = { ...process.env, HOME: home, TMUX_PANE: pane };
+  try {
+    execFileSync("bash", [hook, "set", "working"], { env, input: JSON.stringify({ hook_event_name: "PostToolUse", session_id: "own" }) });
+    execFileSync("bash", [hook, "set", "done"], { env, input: JSON.stringify({ session_id: "headless" }) });
+    assert.equal(tmux("display", "-p", "-t", window, "#{@agent_state}"), "working", "the headless turn ending changes nothing");
+  } finally {
+    ["900020", panePid].forEach((pid) => fs.rmSync(path.join(sessions, `${pid}.json`)));
+    tmux("kill-window", "-t", window);
+  }
+});
+
 test("a lagging transcript is waited for until its last text is the hook's final message", async () => {
   const [window, index] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));

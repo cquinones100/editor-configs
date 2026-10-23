@@ -93,6 +93,12 @@ job's `jobId` in `~/.claude/sessions/`), and `agent-state.sh` follows that
 link to mark the tab, so a backgrounded conversation still shows as working,
 waiting or done there rather than idle.
 
+A headless Claude (`entrypoint` `sdk-cli` in its session file), such as one a
+review loop's script starts, inherits the tab's `TMUX_PANE` and names its pane
+in its session file too. `agent-state.sh` ignores its hooks, and the sidebar
+reads the tab's own interactive session for the pane, so a tab running a loop
+shows the loop's background work rather than the helper's turns.
+
 Whether a pane runs Claude is decided in `tmux/claude-pane.sh`, which
 `agent-state.sh` and `tab-status.sh` source, and again in
 `lib/slack-relay/tabs.js`, so a change to one belongs in the other. tmux names

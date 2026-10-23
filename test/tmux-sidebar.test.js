@@ -114,6 +114,18 @@ test("the last turn is the last prompt, what Claude said after it, and the tool 
   assert.equal(turn.at, Date.parse("2026-01-01T00:01:00Z"));
 });
 
+test("a tab's own Claude wins its pane over a headless one that names it too", () => {
+  const pane = tmux("display", "-p", "-t", "test:", "#{pane_id}");
+  // A review loop's script starts a headless Claude, which inherits the pane.
+  fs.writeFileSync(path.join(home, ".claude/sessions/121.json"), JSON.stringify({ pid: 121, sessionId: "own", cwd: "/work", tmux: `test:@9.${pane}`, entrypoint: "cli" }));
+  fs.writeFileSync(path.join(home, ".claude/sessions/999.json"), JSON.stringify({ pid: 999, sessionId: "headless", cwd: "/work", tmux: `test:@9.${pane}`, entrypoint: "sdk-cli" }));
+  try {
+    assert.equal(sidebar.sessionsByPane().get(pane).sessionId, "own");
+  } finally {
+    ["121", "999"].forEach((pid) => fs.rmSync(path.join(home, `.claude/sessions/${pid}.json`)));
+  }
+});
+
 test("a tab's conversation is found from the session file that names its pane", () => {
   const pane = tmux("display", "-p", "-t", "test:", "#{pane_id}");
   fs.writeFileSync(path.join(home, ".claude/sessions/111.json"), JSON.stringify({ pid: 111, sessionId: "s1", cwd: "/work", tmux: `test:@9.${pane}`, name: "Login retry", nameSource: "user", startedAt: 1700000000000 }));

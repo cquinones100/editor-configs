@@ -51,8 +51,8 @@ export LC_ALL=en_US.UTF-8
 # the Stop hook, since the transcript can lag behind), and when a session
 # takes a prompt, with its text, so it can tell you Claude has your message. The relay keeps an events file, and
 # removes it only when stopped on purpose; each such hook appends one line to
-# it. Without the file nothing is written, and the prompt hook's input isn't
-# even read. This runs before the tmux check for that reason.
+# it. Without the file nothing is written. This runs before the tmux check for
+# that reason.
 RELAY_EVENTS=~/.local/state/slack-relay/events.jsonl
 payload=""
 relay_event() {
@@ -62,24 +62,34 @@ relay_event() {
       + (if .prompt then {prompt: .prompt[0:300]} else {} end)
       + (if .last_assistant_message then {last: .last_assistant_message} else {} end)' <<<"$payload" >>"$RELAY_EVENTS" 2>/dev/null
 }
+# A headless Claude (entrypoint sdk-cli in its session file), such as one a
+# review loop's script starts, inherits the tab's TMUX_PANE and runs these
+# hooks too; its turns are not the tab's, so they mark nothing and tell the
+# relay nothing. Its session file is found by the session ID in the input.
+from_headless() {
+  local session
+  session=$(jq -r '.session_id // empty' <<<"$payload" 2>/dev/null)
+  [ -n "$session" ] || return 1
+  jq -e --arg s "$session" 'select(.sessionId == $s and ((.entrypoint // "") | startswith("sdk")))' ~/.claude/sessions/*.json >/dev/null 2>&1
+}
+case "${1:-}" in
+  set | notification)
+    payload=$(cat 2>/dev/null)
+    from_headless && exit 0
+    ;;
+esac
 case "${1:-}:${2:-}" in
   set:done | set:waiting)
-    payload=$(cat 2>/dev/null)
     relay_event "$2"
     ;;
   set:working)
     # UserPromptSubmit and the tool hooks both say "working"; only the first
     # is a prompt being taken. Read either way, for what Claude is doing.
-    payload=$(cat 2>/dev/null)
     if [ -f "$RELAY_EVENTS" ]; then
       [ "$(jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null)" = UserPromptSubmit ] && relay_event prompt
     fi
     ;;
-  set:*)
-    payload=$(cat 2>/dev/null)
-    ;;
   notification:*)
-    payload=$(cat 2>/dev/null)
     case $(jq -r '.notification_type // empty' <<<"$payload" 2>/dev/null) in
       permission_prompt | elicitation_dialog | elicitation_url_dialog | agent_needs_input) relay_event waiting ;;
     esac
@@ -111,7 +121,6 @@ parked_pane() {
 if [ -z "${TMUX_PANE:-}" ]; then
   case "${1:-}" in
     set | notification)
-      [ -n "$payload" ] || payload=$(cat 2>/dev/null)
       session=$(jq -r '.session_id // empty' <<<"$payload" 2>/dev/null)
       [ -n "$session" ] && TMUX_PANE=$(parked_pane "$session") || exit 0
       ;;

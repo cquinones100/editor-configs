@@ -429,7 +429,7 @@ test("the tabs' PRs are asked about in one query, a gone worktree's by its branc
 test("a tab whose turn ended with background tasks still running reads as working in the background", () => {
   const file = path.join(home, ".claude/projects/-work/background.jsonl");
   const now = Date.now();
-  const started = (id, ms) => JSON.stringify({ type: "user", timestamp: new Date(ms).toISOString(), message: { content: [{ type: "tool_result", content: `Command running in background with ID: ${id}. Output is being written to: /tmp/x` }] } });
+  const started = (id, ms) => JSON.stringify({ type: "assistant", timestamp: new Date(ms).toISOString(), message: { content: [{ type: "tool_use", id: `use-${id}`, name: "Bash", input: { command: "npm test", run_in_background: true } }] } }) + "\n" + JSON.stringify({ type: "user", timestamp: new Date(ms).toISOString(), message: { content: [{ type: "tool_result", tool_use_id: `use-${id}`, content: `Command running in background with ID: ${id}. Output is being written to: /tmp/x` }] } });
   const ended = (id) => JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: `<task-notification>\n<task-id>${id}</task-id>\n<status>completed</status>\n</task-notification>` } });
   fs.writeFileSync(file, [
     started("old1", now - 60_000), // before this process started: died with the last one
@@ -471,6 +471,13 @@ test("a Monitor watch runs through its events until it expires, and a tab only w
   assert.deepEqual(sidebar.grouped([tab]).map((g) => g.title), ["Monitoring"]);
   assert.equal(sidebar.stateWords(tab), "monitoring · CI on #12");
   assert.deepEqual(sidebar.grouped([{ ...tab, background: 2 }]).map((g) => g.title), ["Working"], "other work as well is working");
+
+  // A command whose output only quotes those words starts nothing.
+  fs.appendFileSync(file, [
+    { type: "assistant", timestamp: at(500), message: { content: [{ type: "tool_use", id: "g1", name: "Bash", input: { command: "grep -h 'Monitor started' *.jsonl" } }] } },
+    { type: "user", timestamp: at(500), message: { content: [{ type: "tool_result", tool_use_id: "g1", content: "Monitor started (task X, expires in 30m unless…)\nCommand running in background with ID: Y" }] } },
+  ].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 1, monitors: ["CI on #12"] }, "quoted, not started");
 
   fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: at(0), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>m1</task-id>\n<summary>Monitor expired after 30m with no events delivered.</summary>\n</task-notification>" } }) + "\n");
   assert.deepEqual(sidebar.backgroundWork(file, now - 60_000), { count: 0, monitors: [] }, "its expiry ends it");

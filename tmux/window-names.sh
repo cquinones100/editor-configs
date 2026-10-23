@@ -27,8 +27,14 @@ export LC_ALL=en_US.UTF-8
 # line shows the whole label for the focused window.
 MAX_LABEL=30
 
-tmux list-windows -t "$session" -F '#{window_index},#{pane_current_path}' |
-  while IFS=, read -r idx path; do
+# Each window's directory is its active pane's, but never a sidebar's (the
+# @sidebar pane option): with the sidebar's cursor on a tab, the sidebar is
+# that window's active pane, and the tab would take the sidebar's directory.
+# A window with only its sidebar active goes by its first other pane.
+tmux list-panes -s -t "$session" -F $'#{window_index}\t#{?@sidebar,s,p}#{pane_active}\t#{pane_current_path}' |
+  awk -F'\t' '$2 ~ /^p/ && (!($1 in path) || $2 == "p1") { if (!($1 in path)) order[++n] = $1; path[$1] = $3 }
+    END { for (i = 1; i <= n; i++) print order[i] "\t" path[order[i]] }' |
+  while IFS=$'\t' read -r idx path; do
     # Color, label and PR in one cached answer (see path-facts.sh).
     IFS=$'\t' read -r whex label pr <<<"$("$script_dir/path-facts.sh" "$path")"
 

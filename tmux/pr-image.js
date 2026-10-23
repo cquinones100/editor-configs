@@ -22,7 +22,7 @@
 // tab switch or a resize can leave one stale until the page is drawn again,
 // which r does.
 
-const { execFileSync } = require("node:child_process");
+const { execFile, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -93,7 +93,10 @@ const MARKS = [
 ];
 // Its ID, which the placeholders carry as their 256-colour foreground: above
 // 15, since tmux rewrites colours 0 to 15 as the basic ones, which carry no ID.
-const IMAGE = 222;
+// Two of them, a page taking the one the page before it didn't, so every
+// placeholder cell changes colour from one page to the next and tmux rewrites
+// them all, rather than leaving some showing the page before.
+const IMAGES = [222, 223];
 
 // A kitty graphics image, shown through Unicode placeholders, which is what
 // works inside tmux: the image is sent once (passed through tmux to the
@@ -104,22 +107,22 @@ const IMAGE = 222;
 // `file`, when given, is the page saved on disk: sent as its path (t=f) the
 // terminal reads it itself, a few dozen bytes through tmux rather than the
 // whole image, which tmux relays slowly. Without one, the image itself.
-const show = (png, cols, rows, file) => {
+const show = (png, cols, rows, file, image) => {
   const data = file ? Buffer.from(file).toString("base64") : png.toString("base64");
   const chunks = data.match(/.{1,4096}/g) ?? [];
   const medium = file ? "t=f," : "";
   const tmux = (seq) => (process.env.TMUX ? `\x1bPtmux;${seq.replace(/\x1b/g, "\x1b\x1b")}\x1b\\` : seq);
   // The screen is cleared first: clearing it after would delete the image
   // just sent along with what was on screen.
-  let out = "\x1b[H\x1b[2J" + tmux(`\x1b_Ga=d,d=I,i=${IMAGE},q=2\x1b\\`);
+  let out = "\x1b[H\x1b[2J" + IMAGES.map((id) => tmux(`\x1b_Ga=d,d=I,i=${id},q=2\x1b\\`)).join("");
   chunks.forEach((chunk, i) => {
     const more = i < chunks.length - 1 ? 1 : 0;
     // Not quiet (q=1: errors only), so the footer can say why a page failed.
-    const head = i === 0 ? `a=T,U=1,f=100,${medium}i=${IMAGE},c=${cols},r=${rows},q=1,m=${more}` : `m=${more}`;
+    const head = i === 0 ? `a=T,U=1,f=100,${medium}i=${image},c=${cols},r=${rows},q=1,m=${more}` : `m=${more}`;
     out += tmux(`\x1b_G${head};${chunk}\x1b\\`);
   });
   const cell = String.fromCodePoint(0x10eeee);
-  out += `\x1b[38;5;${IMAGE}m`;
+  out += `\x1b[38;5;${image}m`;
   // Every cell carries its own row and column, none worked out from the cell
   // before it: tmux redraws a changed screen a cell at a time, jumping about,
   // and a cell worked out from its neighbour then takes the wrong one's place.
@@ -248,7 +251,10 @@ const main = async () => {
   // Pages go by file until the terminal turns one down, then as data.
   let byFile = true;
   const draw = () => {
-    show(shots[at].png, cols, shots[at].rows, byFile ? shots[at].file : undefined);
+    show(shots[at].png, cols, shots[at].rows, byFile ? shots[at].file : undefined, IMAGES[at % 2]);
+    // A full redraw, as moving out of the pane and back makes, so nothing of
+    // the page before is left on screen.
+    if (process.env.TMUX) execFile("tmux", ["refresh-client"], () => {});
     process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   j k space b: page   r: redraw   q: close${said ? `   \x1b[31m${said}` : ""}\x1b[0m`);
   };
   process.stdin.setRawMode(true);

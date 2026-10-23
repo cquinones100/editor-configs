@@ -24,19 +24,33 @@ set -u
 
 # The command that runs <tool> in <dir>, or nothing.
 tool_command() {
-  local tool=$1 dir=$2 base
+  local tool=$1 dir=$2 base ref
   case $tool in
     lazygit) echo lazygit ;;
-    # GitHub's comparison: everything since the branch left origin's
-    # default branch (main where origin doesn't say), uncommitted changes
-    # included. It does not fetch: it compares with what was last fetched.
+    # GitHub's "Files changed": the branch's commits since it left its PR's
+    # base branch (origin's default branch without a PR, main where origin
+    # doesn't say), as origin has that branch now, so it is fetched first: a
+    # base last fetched before the branch was rebased onto a newer one would
+    # count that newer work as the branch's. Committed changes only, as on
+    # GitHub. gh and the fetch each wait on the network, about a second.
     diffview)
       if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
         tmux display-message "Not in a git repository: ${dir//\#/##}"
         exit 0
       fi
-      base=$(git -C "$dir" rev-parse --abbrev-ref origin/HEAD 2>/dev/null) || base=main
-      echo "nvim --cmd 'let g:diff_pane = 1' -c 'DiffviewOpen $base --merge-base'"
+      base=$(cd "$dir" && gh pr view --json baseRefName -q .baseRefName 2>/dev/null)
+      [ -n "$base" ] || base=$(git -C "$dir" rev-parse --abbrev-ref origin/HEAD 2>/dev/null)
+      base=${base#origin/}
+      [ -n "$base" ] || base=main
+      # It goes into a command line, so only a branch name's characters.
+      [[ $base =~ ^[A-Za-z0-9._/-]+$ ]] || base=main
+      tmux display-message "Fetching origin/$base..."
+      git -C "$dir" fetch --quiet origin "$base" 2>/dev/null ||
+        tmux display-message "Could not fetch origin/$base; comparing with it as last fetched."
+      # A repository with no origin compares with its own branch.
+      ref=origin/$base
+      git -C "$dir" rev-parse --verify --quiet "$ref" >/dev/null || ref=$base
+      echo "nvim --cmd 'let g:diff_pane = 1' --cmd 'let g:diff_base = \"$ref\"' -c 'DiffviewOpen $ref...HEAD'"
       ;;
   esac
 }

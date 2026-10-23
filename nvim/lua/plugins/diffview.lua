@@ -3,8 +3,9 @@
 -- Esc in the file tree or history.
 --
 -- tmux's M-d opens it in a pane's place (tmux/pane-in-place.sh) as
--- `:DiffviewOpen <origin's default branch> --merge-base`: everything since the
--- branch left it, uncommitted changes included. That Neovim is started with
+-- `:DiffviewOpen origin/<base>...HEAD`, the PR's base branch freshly fetched:
+-- the branch's committed changes as GitHub's "Files changed" shows them, and
+-- the base in g:diff_base. That Neovim is started with
 -- g:diff_pane set, and closing the last view quits it, which puts the pane
 -- back; so does C-c, as in lazygit.
 --
@@ -27,8 +28,10 @@ local quit = {
   { desc = "Close the diff and go back" },
 }
 
--- origin's default branch, as pane-in-place.sh finds it, else main.
+-- The base pane-in-place.sh compared with, else origin's default branch, else
+-- main.
 local function base()
+  if vim.g.diff_base then return vim.g.diff_base end
   local out = vim.fn.systemlist({ "git", "rev-parse", "--abbrev-ref", "origin/HEAD" })
   return vim.v.shell_error == 0 and out[1] or "main"
 end

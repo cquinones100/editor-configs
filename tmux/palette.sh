@@ -15,6 +15,10 @@
 # The key cannot be pressed from inside the popup, which would swallow it. This
 # leaves it in @palette_choice, and the M-p binding presses it once the popup
 # has closed.
+#
+# The commands picked last come first, newest first: their keys are kept in
+# ~/.local/state/tmux-palette/recent, one per line, the last few only. The
+# rest follow alphabetically.
 
 set -u
 
@@ -94,26 +98,46 @@ show_key='
   }'
 
 # The palette itself is left out: picking it would only reopen it.
-# Shown as "<description>  <tags>  <key>", sorted by description, with the
-# tags and the key dimmed. A binding's tags end its description in tmux.conf,
-# as #words ("Open lazygit ... #git #commit"); they are matched and ranked as
-# any other word, so a search can name what a command is about rather than
-# its wording. The rows go to a file so every keystroke can rank them again
+# Shown as "<description>  <tags>  <key>", the recent ones first and the rest
+# sorted by description, with the tags and the key dimmed. The columns are
+# fitted to the popup: a description or tags too long for theirs is cut with
+# an ellipsis, so every row's tags and key line up. A binding's tags end its
+# description in tmux.conf, as #words ("Open lazygit ... #git #commit"); they
+# are matched and ranked as any other word, so a search can name what a
+# command is about rather than its wording. The rows go to a file so every
+# keystroke can rank them again
 # (see --rank); --no-sort keeps that order instead of fzf's own.
 # --exact matches each word typed as it is written, not as letters scattered
 # through a row ("shape" in "Close the pane"), and each still has to be there.
 # --no-hscroll keeps each row at the start of its description: fzf otherwise
 # slides a row sideways to show the match, so a tag at its end that matched
 # would push the description out of sight.
+recent_file=${XDG_STATE_HOME:-$HOME/.local/state}/tmux-palette/recent
+RECENT_MAX=6
+# fzf's border, pointer, margins and scrollbar take 7 columns; the key gets 10,
+# the tags 24, and the description the rest.
+columns=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2)
+width=$(( ${columns:-70} - 7 ))
+tags_width=24 key_width=10
+text_width=$(( width - tags_width - key_width - 2 ))
+(( text_width < 30 )) && text_width=30
 rows=$(mktemp)
 trap 'rm -f "$rows"' EXIT
 bindings | awk -F'\t' '$1 != "M-p"' | sort -t$'\t' -k2,2 |
-  awk -F'\t' "$show_key"'{
-    text = $2; tags = ""
-    at = index(text, " #")
-    if (at) { tags = substr(text, at + 1); text = substr(text, 1, at - 1) }
-    printf "%s\t%-48s \033[38;5;240m%-30s\033[38;5;244m%s\033[0m\n", $1, text, tags, shown($1)
-  }' > "$rows"
+  awk -F'\t' -v recent_file="$recent_file" '
+    BEGIN { while ((getline key < recent_file) > 0) if (!(key in rank)) rank[key] = ++n }
+    { print ($1 in rank ? rank[$1] : n + 1) "\t" NR "\t" $0 }' |
+  sort -t$'\t' -k1,1n -k2,2n | cut -f3- |
+  awk -F'\t' -v tw="$text_width" -v gw="$tags_width" "$show_key"'
+    function cut(s, w) { return length(s) > w ? substr(s, 1, w - 1) "…" : s }
+    # awk counts bytes, and the ellipsis is three of them but one column.
+    function pad(s, w,   n) { n = length(s) - (index(s, "…") ? 2 : 0); return s sprintf("%" (w - n > 0 ? w - n : 0) "s", "") }
+    {
+      text = $2; tags = ""
+      at = index(text, " #")
+      if (at) { tags = substr(text, at + 1); text = substr(text, 1, at - 1) }
+      printf "%s\t%s \033[38;5;240m%s \033[38;5;244m%s\033[0m\n", $1, pad(cut(text, tw), tw), pad(cut(tags, gw), gw), shown($1)
+    }' > "$rows"
 
 choice=$(
   fzf --ansi --delimiter=$'\t' --with-nth=2 --no-sort --no-hscroll --exact \
@@ -122,5 +146,10 @@ choice=$(
     cut -f1
 )
 
-[ -n "$choice" ] && tmux set -g @palette_choice "$choice"
+if [ -n "$choice" ]; then
+  tmux set -g @palette_choice "$choice"
+  mkdir -p "${recent_file%/*}"
+  { printf '%s\n' "$choice"; grep -vxF -- "$choice" "$recent_file" 2>/dev/null; } | head -n "$RECENT_MAX" > "$recent_file.$$" &&
+    mv "$recent_file.$$" "$recent_file"
+fi
 exit 0

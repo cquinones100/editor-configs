@@ -221,6 +221,15 @@ leads to, as the branch-copy commands (`tmux/branch-copy.sh`) are: the palette
 lists that table with no key shown, and the `M-p` binding switches the client
 to it before pressing the key.
 
+The palette lists the commands picked last first, newest first, from
+`~/.local/state/tmux-palette/recent` (the last six keys, written by
+`palette.sh` after each pick), then the rest by description. Its columns are
+fitted to the popup, 60% of the screen, so a description or tag list too long
+for its column is cut with an ellipsis. `tmux.conf` empties the `palette`
+table before binding it (`unbind -aq -T palette`), so a command taken out of
+the file leaves the palette on the next reload; a binding removed from the
+root or prefix table still needs `tmux unbind` by hand.
+
 Every format inside a shell command (`run-shell`, `if-shell` without `-F`,
 `#(...)`) is written `#{q:...}`, never bare or in quotes. tmux pastes the value
 into the command before the shell parses it, so a directory named

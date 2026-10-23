@@ -150,6 +150,7 @@ sync_tmux() {
   sync_tmux_plugins
   sync_mermaid_ascii
   put_link ~/editor-configs/tmux/pr-view.sh ~/.config/tmux/pr-view.sh
+  put_link ~/editor-configs/tmux/pr-view.js ~/.config/tmux/pr-view.js
   put_link ~/editor-configs/tmux/accent-color.sh ~/.config/tmux/accent-color.sh
   put_link ~/editor-configs/tmux/update-colors.sh ~/.config/tmux/update-colors.sh
   put_link ~/editor-configs/tmux/theme.sh ~/.config/tmux/theme.sh

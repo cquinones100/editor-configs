@@ -43,33 +43,15 @@ case "${1:-}" in
       wait_key "${red}No PR for this branch${reset} ($(git branch --show-current 2>/dev/null || echo "not a repository"))."
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
-    # A header like GitHub's, then the body with each Mermaid block swapped for
-    # its drawing. A diagram mermaid-ascii can't draw keeps its source, said so.
-    jq -r '"# \(.title) #\(.number)\n\n_\(if .isDraft then "Draft" else .state end) · \(.author.login) wants to merge `\(.headRefName)` into `\(.baseRefName)`_\n\n---\n\n\(.body // "")"' <<<"$pr" |
-      tr -d '\r' |
-      awk -v work="$work" '
-        /^[ \t]*```+[ \t]*mermaid[ \t]*$/ { inside = 1; n++; file = work "/" n ".mmd"; printf "" > file; next }
-        inside && /^[ \t]*```+[ \t]*$/ {
-          inside = 0; close(file)
-          out = ""; ok = 1
-          # Its drawing ends without a newline, so its status goes on a line of
-          # its own after one.
-          cmd = "mermaid-ascii -f \"" file "\" 2>/dev/null; rc=$?; echo; echo \"rc=$rc\""
-          while ((cmd | getline line) > 0) { if (line ~ /^rc=/) ok = (line == "rc=0"); else out = out line "\n" }
-          close(cmd)
-          sub(/\n+$/, "\n", out)
-          if (ok && out != "") { print "```"; printf "%s", out; print "```" }
-          else {
-            print "_A Mermaid diagram mermaid-ascii cannot draw; M-r shows it on GitHub:_"
-            print "```mermaid"; while ((getline line < file) > 0) print line; close(file); print "```"
-          }
-          next
-        }
-        inside { print >> file; next }
-        { print }
-      ' > "$work/pr.md"
-    width=$(( $(tput cols 2>/dev/null || echo 80) - 2 ))
-    PAGER="less -R" glow -s dark -w "$width" -p "$work/pr.md"
+    width=$(( $(tput cols 2>/dev/null || echo 80) - 4 ))
+    # The Markdown, each Mermaid diagram drawn by mermaid-ascii and kept out of
+    # glow, which would wrap it, then put back into glow's output (pr-view.js).
+    # less -S cuts a drawing still wider than the pane at its edge, for the
+    # arrow keys to scroll, where wrapping would break its boxes apart.
+    printf '%s' "$pr" > "$work/pr.json"
+    node "${0%/*}/pr-view.js" prepare "$work/pr.json" "$work" "$width" || wait_key "${red}Could not read the PR.${reset}"
+    glow -s dark -w "$width" "$work/pr.md" | node "${0%/*}/pr-view.js" splice "$work" > "$work/pr.txt"
+    less -RS "$work/pr.txt"
     ;;
 esac
 exit 0

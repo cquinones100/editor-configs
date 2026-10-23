@@ -275,6 +275,20 @@ test("a tab is named after its own pane's directory, not its sidebar's, while th
   assert.equal(tmux("display", "-p", "-t", window, "#{@tab_label}"), "named-work");
 });
 
+test("the status line is about the tab's own pane, not its sidebar, while the sidebar has focus", (t) => {
+  const work = path.join(tmp, "status-work");
+  const elsewhere = path.join(tmp, "status-elsewhere");
+  [work, elsewhere].forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
+  const window = tmux("new-window", "-d", "-t", "test", "-c", work, "-P", "-F", "#{window_id}");
+  t.after(() => tmux("kill-window", "-t", window));
+  const side = tmux("split-window", "-hb", "-d", "-t", window, "-c", elsewhere, "-P", "-F", "#{pane_id}");
+  tmux("set", "-p", "-t", side, "@sidebar", "1");
+  tmux("select-pane", "-t", side);
+  const line = (...flag) => execFileSync("bash", [path.join(__dirname, "../tmux/tab-status.sh"), side, elsewhere, "zsh", "/dev/null", ...flag], { encoding: "utf8" }).replace(/#\[[^\]]*\]/g, "");
+  assert.match(line("1"), /^status-work /);
+  assert.match(line(), /^status-elsewhere /, "without the flag, the pane it was given");
+});
+
 test("a frozen layout keeps each tab in its group and place while states change", () => {
   const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh" };
   const before = [

@@ -49,7 +49,7 @@ status_layout() {
     [ -n "$saved" ] || tmux set -g @sidebar_status_format "$(tmux show -gv 'status-format[0]')"
     # status-right is drawn too, though it shows nothing: tmux-continuum saves
     # the session from a #() job in it, which only runs while it is drawn.
-    tmux set -g status on \; set -g 'status-format[0]' '#[align=left]#{T:status-left}#[default] #(~/.config/tmux/tab-status.sh #{q:pane_id} #{q:pane_current_path} #{q:pane_current_command} #{q:pane_tty})#[align=right]#{T:status-right}'
+    tmux set -g status on \; set -g 'status-format[0]' '#[align=left]#{T:status-left}#[default] #(~/.config/tmux/tab-status.sh #{q:pane_id} #{q:pane_current_path} #{q:pane_current_command} #{q:pane_tty} #{q:@sidebar})#[align=right]#{T:status-right}'
   fi
 }
 

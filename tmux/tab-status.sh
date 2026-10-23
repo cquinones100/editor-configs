@@ -5,15 +5,24 @@
 # commit made here, the command, and in a Claude pane the session's title and
 # last prompt.
 #
-# Usage: tab-status.sh <pane_id> <path> <command> <tty>
+# Usage: tab-status.sh <pane_id> <path> <command> <tty> [<@sidebar>]
 #
 # tmux runs this from status-format[1] on every redraw, so nothing in it may
 # wait on the network.
 
 set -u
 
-pane="${1:-}" path="${2:-}" command="${3:-}" tty="${4:-}"
+pane="${1:-}" path="${2:-}" command="${3:-}" tty="${4:-}" sidebar="${5:-}"
 [ -n "$pane" ] || exit 0
+
+# With the sidebar focused (its @sidebar option, which sidebar.sh's status
+# line passes), the line is about the tab's own pane: the one focused before
+# the sidebar, else its first other pane. Otherwise it would show the
+# sidebar's directory while you browse, where the tab's title is cut short.
+if [ "$sidebar" = 1 ]; then
+  IFS=$'\t' read -r pane path command tty < <(tmux list-panes -t "$pane" -F $'#{?@sidebar,,#{?pane_last,0,1}}\t#{pane_id}\t#{pane_current_path}\t#{pane_current_command}\t#{pane_tty}' 2>/dev/null | grep -v '^\t' | sort -k1,1n | cut -f2- | head -n 1)
+  [ -n "$pane" ] || exit 0
+fi
 
 script_dir="${0%/*}"
 source "$script_dir/claude-pane.sh"

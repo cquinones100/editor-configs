@@ -250,6 +250,9 @@ const main = async () => {
     else if (k === "G") at = pages - 1;
     draw();
   });
+  // Read again: the cell size's question paused it, and a listener alone
+  // doesn't undo a pause, so nothing would keep this running.
+  process.stdin.resume();
   draw();
 };
 

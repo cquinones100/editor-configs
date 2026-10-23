@@ -1,6 +1,7 @@
 #!/bin/zsh
 
-# Popup for naming a tab, opened by M-n and by M-t after it creates a window.
+# Popup for naming a tab, opened by M-n, and by new-tab.zsh (M-t) once it has
+# opened the window.
 # The name goes in the window's @tab_name option, which tab-label.sh puts ahead
 # of the ticket and directory in both the tab and the second status line.
 #

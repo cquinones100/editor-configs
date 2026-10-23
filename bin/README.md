@@ -516,6 +516,8 @@ the tab badges meant.
 | `Esc` `q` | back out | close |
 | `a` | | answer the chosen tab's question or permission prompt there: an option's number, `s` to submit one that takes several, `t` to type your own answer; with no prompt showing, type a message and press Enter |
 | `Space` | | peek at the chosen tab without going there: its whole last turn, or with `s` its screen (`r` captures it again); `jk` scroll, Enter goes there |
+| `/` | | filter the cards by name, number, PR or directory; Enter keeps the filter, Esc clears it |
+| `X` | | close every tab in Merged and remove its worktree, after a y/n; a worktree with uncommitted changes is kept and said |
 | `?` | these keys, until the next key | the same |
 
 A click on a tab in the sidebar goes there, and the wheel scrolls it. Each

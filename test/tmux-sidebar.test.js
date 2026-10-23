@@ -585,6 +585,52 @@ test("Space peeks at a tab from mission control: its screen, or its whole last t
   assert.match(top, /› explain the change[\s\S]*line 1 of the reply[\s\S]*line 30 of the reply/, "the reply in full, not cut to a card");
 });
 
+test("/ filters mission control's cards, and X closes every merged tab and removes its worktree", async () => {
+  // A repository on "GitHub", with a worktree whose PR has merged.
+  const repo = path.join(tmp, "merged-repo");
+  const git = (...args) => execFileSync("git", ["-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { stdio: "ignore" });
+  fs.mkdirSync(repo, { recursive: true });
+  git("init", "-q", "-b", "main");
+  git("commit", "-q", "--allow-empty", "-m", "start");
+  git("remote", "add", "origin", "git@github.com:acme/merging.git");
+  const worktree = path.join(repo, ".claude/worktrees/feat-landed");
+  git("worktree", "add", "-q", "-b", "feat-landed", worktree);
+  sidebar.known.set("acme/merging#31", { merge: "merged" });
+  const landed = tmux("new-window", "-d", "-t", "test", "-c", worktree, "-P", "-F", "#{window_id}");
+  tmux("setw", "-t", landed, "@tab_label", "#31 feat landed");
+  const other = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  tmux("setw", "-t", other, "@tab_label", "something else");
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 120, rows: 30, tmuxClient: "none" };
+  try {
+    await sidebar.refresh();
+    assert.equal(sidebar.state.tabs.find((x) => x.id === landed).merge, "merged");
+
+    // / then "landed": only that card is left; Esc puts them all back.
+    for (const key of ["/", "l", "a", "n", "d", "e", "d", "Enter"]) await sidebar.missionKey(client, { key });
+    assert.match(plain(sent.at(-1)), /\/landed/);
+    assert.match(plain(sent.at(-1)), /feat landed/);
+    assert.doesNotMatch(plain(sent.at(-1)), /something else/);
+    await sidebar.missionKey(client, { key: "Escape" });
+    assert.match(plain(sent.at(-1)), /something else/);
+
+    // X asks first; n leaves everything as it was.
+    await sidebar.missionKey(client, { key: "X" });
+    assert.match(plain(sent.at(-1)), /Close 1 merged tab and remove their worktrees\? \(y\/n\)[\s\S]*feat landed/);
+    await sidebar.missionKey(client, { key: "n" });
+    assert.ok(fs.existsSync(worktree));
+    // y closes the tab and removes its worktree, and says so.
+    await sidebar.missionKey(client, { key: "X" });
+    await sidebar.missionKey(client, { key: "y" });
+    assert.ok(!tmux("list-windows", "-a", "-F", "#{window_id}").split("\n").includes(landed), "the tab is closed");
+    assert.ok(!fs.existsSync(worktree), "its worktree is removed");
+    assert.match(plain(sent.at(-1)), /Closed 1 merged tab\./);
+  } finally {
+    sidebar.known.delete("acme/merging#31");
+    tmux("kill-window", "-t", other);
+  }
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

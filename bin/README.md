@@ -1120,7 +1120,9 @@ as you type would write over each other. It runs `tmux/notes-open.sh`, which
 Notes in a pane to the right of the one you are in, moving it from wherever it
 is, or starting it there; pressed again in that tab, or `M-w` on it, it goes back to a
 tab of its own. While it is beside a tab's pane, that tab says "✎ Notes here" in the
-sidebar and on its mission control card.
+sidebar and on its mission control card. Its own Notes tab stays, in the sidebar's Other, showing which tab
+has Notes (Enter goes there, `M-e` brings it back), and Notes goes back into
+it when put away.
 
 ### In the list
 

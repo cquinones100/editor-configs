@@ -56,9 +56,22 @@ own_tab() {
 
 # Puts the notes pane back in a tab of its own, unless it is alone in its tab
 # already (beside the sidebar). Returns whether it moved.
+# The pane standing in for Notes in its tab while Notes is away
+# (notes-away.sh), if there is one.
+placeholder() {
+  tmux list-panes -a -F '#{pane_id} #{@notes_placeholder}' 2>/dev/null | awk '$2 == "1" { print $1; exit }'
+}
+
+# Back in the Notes tab it left, in the place of what stood in for it there,
+# or in a new Notes tab.
 put_away() {
-  local pane=$1 window
+  local pane=$1 window stand_in
   [ "$(tmux list-panes -t "$pane" -F '#{?@sidebar,,x}' | grep -c x)" -gt 1 ] || return 1
+  stand_in=$(placeholder)
+  if [ -n "$stand_in" ]; then
+    tmux join-pane -d -s "$pane" -t "$stand_in" && tmux kill-pane -t "$stand_in"
+    return 0
+  fi
   window=$(tmux break-pane -d -s "$pane" -P -F '#{window_id}') && own_tab "$window"
 }
 
@@ -87,11 +100,19 @@ if [ "${1:-}" = side ]; then
     put_away "$existing"
     exit 0
   fi
-  # Its old tab is no longer the notes tab, whatever is left in it.
+  # Leaving its own Notes tab, it leaves notes-away.sh in its place, so the
+  # tab stays and says where Notes went. Leaving another tab, nothing.
   old=$(tmux display -p -t "$existing" '#{window_id}')
+  if [ "$(tmux show -wqv -t "$old" @notes)" = 1 ] && [ -z "$(placeholder)" ]; then
+    stand_in=$(tmux split-window -d -t "$existing" -c "$HOME" -P -F '#{pane_id}' "${0%/*}/notes-away.sh")
+    [ -n "$stand_in" ] && tmux set-option -p -t "$stand_in" @notes_placeholder 1
+  fi
   tmux join-pane -h -l 40% -s "$existing" -t "$here"
-  tmux set-option -wu -t "$old" @notes 2>/dev/null
-  tmux set-option -wu -t "$old" @tab_name 2>/dev/null
+  # Brought into the Notes tab itself, it takes the stand-in's place there.
+  stand_in=$(placeholder)
+  if [ -n "$stand_in" ] && [ "$(tmux display -p -t "$stand_in" '#{window_id}')" = "$(tmux display -p -t "$here" '#{window_id}')" ]; then
+    tmux kill-pane -t "$stand_in"
+  fi
   exit 0
 fi
 

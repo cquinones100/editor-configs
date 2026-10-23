@@ -178,6 +178,7 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/aws-login.sh ~/.config/tmux/aws-login.sh
   put_link ~/editor-configs/tmux/chrome-profile.sh ~/.config/tmux/chrome-profile.sh
   put_link ~/editor-configs/tmux/notes-open.sh ~/.config/tmux/notes-open.sh
+  put_link ~/editor-configs/tmux/notes-away.sh ~/.config/tmux/notes-away.sh
   put_link ~/editor-configs/tmux/window-names.sh ~/.config/tmux/window-names.sh
   put_link ~/editor-configs/tmux/window-pr.sh ~/.config/tmux/window-pr.sh
   put_link ~/editor-configs/tmux/tab-label.sh ~/.config/tmux/tab-label.sh

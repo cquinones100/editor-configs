@@ -692,6 +692,29 @@ test("M-w on Notes beside another pane puts it back in a tab of its own rather t
   assert.equal(tmux("display", "-p", "-t", tab, "#{@notes}"), "1", "and in a Notes tab of its own, still running");
 });
 
+test("Notes taken from its own tab leaves the tab saying where it went, and comes back into it", async (t) => {
+  const script = path.join(__dirname, "../tmux/notes-open.sh");
+  const env = { ...process.env, NOTES_OPEN_COMMAND: "cat" };
+  // Notes in its own tab, as M-N opens it.
+  execFileSync("bash", [script, "none"], { env });
+  const find = (option) => tmux("list-panes", "-a", "-F", `#{pane_id} #{window_id} #{${option}}`).split("\n").map((l) => l.split(" ")).find((p) => p[2] === "1");
+  const [notes, notesTab] = find("@notes_pane");
+  const here = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  t.after(() => [here, notesTab].forEach((w) => { try { tmux("kill-window", "-t", w); } catch {} }));
+
+  execFileSync("bash", [script, "side", "none", tmux("display", "-p", "-t", here, "#{pane_id}")], { env });
+  assert.equal(tmux("display", "-p", "-t", notes, "#{window_id}"), here, "Notes is beside your pane");
+  const [standIn, standInTab] = find("@notes_placeholder");
+  assert.equal(standInTab, notesTab, "and its tab is still there, with a pane in its place");
+  assert.equal(tmux("display", "-p", "-t", notesTab, "#{@notes}"), "1");
+  await wait(300);
+  assert.match(tmux("capture-pane", "-p", "-t", standIn), /Notes is beside tab \d+/, "saying which tab has it");
+
+  execFileSync("bash", [script, "away", "none", notes], { env });
+  assert.equal(tmux("display", "-p", "-t", notes, "#{window_id}"), notesTab, "put away, it goes back into its tab");
+  assert.equal(find("@notes_placeholder"), undefined, "in the stand-in's place");
+});
+
 test("M-e finds a Notes that lost its marks from the notes lock, rather than starting another", (t) => {
   const notesDir = fs.mkdtempSync(path.join(tmp, "notes-"));
   // A Notes tmux-resurrect brought back: no @notes or @notes_pane, but the

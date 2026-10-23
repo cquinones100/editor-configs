@@ -168,7 +168,7 @@ means reading what changed and putting the new commit in `plugins.txt`.
 
 ## Key bindings and the M-p palette
 
-`C-l` puts lazygit in the pane's place without touching the rest of the window (`tmux/lazygit-pane.sh`): lazygit starts in a window of its own and `swap-pane` trades places, the pane waiting in that window, marked `@pane_parked` so the sidebar gives it no sidebar and lists it as no tab, and lazygit's pane naming it in `@parked_pane`. lazygit's command swaps it back when it exits, and `confirm.sh` swaps back any `@parked_pane` before it kills a pane, so closing lazygit with `C-l` or `M-w` never strands it. Anything else that stands one pane in for another should do the same.
+`C-l` puts lazygit in the pane's place without touching the rest of the window (`tmux/lazygit-pane.sh`): lazygit starts in a window of its own and `swap-pane` trades places, the pane waiting in that window, marked `@pane_parked` so the sidebar gives it no sidebar and lists it as no tab, and lazygit's pane naming it in `@parked_pane`. lazygit's command swaps it back when it exits, and `confirm.sh` swaps back any `@parked_pane` before it kills a pane, so closing lazygit's pane with `M-w` never strands it (`C-l` in lazygit quits it, as `C-c` does). Anything else that stands one pane in for another should do the same.
 
 `M-p` opens `tmux/palette.sh`, an fzf list of the custom bindings that picks
 one and presses its key. The list is read from tmux, not kept anywhere: a

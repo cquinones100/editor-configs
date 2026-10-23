@@ -29,7 +29,7 @@ Usually run with no argument: the ticket comes from this session. A Linear ticke
 
 2. Check that this session is running in tmux: `$TMUX_PANE` must be set. If it is not, there is no pane to hand over. Tell the user to run `wt <ID>` themselves and stop.
 
-3. Clear the tab's name, whether `shape` set it ("Shaping: …") or the user did with M-n:
+3. Clear the tab's name, whether `shape` set it ("Shaping: …") or the user did with "Rename the tab" in M-p:
 
    ```
    tmux set-option -wu -t "$TMUX_PANE" @tab_name

@@ -28,7 +28,7 @@ tmux set-option -w -t "$TMUX_PANE" @tab_name 'Shaping ABC-123: Show which phase 
   ~/.config/tmux/window-names.sh "$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}')"
 ```
 
-This sets the same `@tab_name` that `M-n` and `bin/shape` set, and renames the tabs straight away rather than on the next focus. If it fails, carry on: a name is no reason to stop.
+This sets the same `@tab_name` that renaming the tab in `M-p` and `bin/shape` set, and renames the tabs straight away rather than on the next focus. If it fails, carry on: a name is no reason to stop.
 
 ## Given a ticket
 

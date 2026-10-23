@@ -131,7 +131,7 @@ from idea to PR.
 - Fetches first and warns when the local main is behind its upstream, because
   Claude reads the files on disk. It never pulls.
 - Inside tmux, names the tab "Shaping: <first words>" through the same
-  `@tab_name` option `M-n` sets, and the skill names it again as
+  `@tab_name` option `M-p`'s "Rename the tab" sets, and the skill names it again as
   "Shaping <ID>: <title>" once there is a ticket (read, or just created). The
   skill does this itself, so `/shape` typed into a session already running
   names its tab too. `/wt` clears that name, or one you set
@@ -803,7 +803,7 @@ In the DM:
   Claude tab at once: one line each, most urgent first (waiting on you, then
   stuck or failing, working, finished, idle)
 - `rename <name>` in a tab's thread, or Rename on its screen or thread, names
-  the tab as `M-n` does: the tab bar, the second status line and its thread
+  the tab as `M-p`'s "Rename the tab" does: the tab bar, the second status line and its thread
   all show it. `rename` alone clears it, so the tab goes back to its ticket's
   or directory's name
 - **Close**, on a tab's screen on the Home tab and its thread, closes it.

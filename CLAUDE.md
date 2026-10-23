@@ -165,6 +165,7 @@ Plugins load only when named in `~/.config/tmux-sidebar/config.json`, from
 `test/tmux-sidebar.test.js`, run against a throwaway tmux server and a
 temporary HOME under `/tmp`, since a Unix socket's path can't be over 104 bytes
 on macOS. Document it in `bin/README.md`.
+`lib/sidebar/text.js`'s `width` must count what a terminal draws as two columns as two (wide characters, emoji-presentation symbols, a symbol followed by U+FE0F); one counted short shifts every border after it on a mission control line.
 
 ## tmux plugins
 

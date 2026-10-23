@@ -569,6 +569,27 @@ test("mission control packs its stages side by side, each block under its own he
   assert.match(text[0], /⋯ 4/, "the header counts the loops as working");
 });
 
+test("mission control's cards are as tall as their fullest one needs, emoji count as terminals draw them, and links show as their names", () => {
+  const tabs = [1, 2].map((index) => ({ session: "$1", panes: [], sidebars: [], command: "zsh", id: `@${index}`, index, name: `quiet ${index}`, state: "idle", path: "/work" }));
+  const mission = sidebar.missionLines({ tabs, sections: [], cols: 3 * config.cardWidth, rows: 60, view: { view: 0, cursor: 0, frame: 0 }, config });
+  mission.forEach((line) => assert.equal(sidebar.width(line), 3 * config.cardWidth));
+  const text = mission.map((line) => line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").trimEnd());
+  assert.equal(text.findIndex((line) => /^╰─+╯/.test(line)), 8, "a shelf of quiet tabs is as short as a card can be, not stretched down the screen");
+  assert.ok(text.slice(9, -1).every((line) => line === ""));
+  assert.equal(sidebar.width("✅ done ⚠️"), 10, "symbols drawn as emoji take two columns, with or without their selector");
+  assert.equal(
+    sidebar.unlinked("Closed [ABC-2204](https://linear.app/acme/issue/ABC-2204/old) after [#4321](https://github.com/acme/app/pull/4321), see <https://acme.slack.com/archives/D0/p1> and https://linear.app/acme/issue/abc-7/x."),
+    "Closed ABC-2204 after #4321, see acme.slack.com and ABC-7.",
+  );
+});
+
+test("an idle Claude tab says only how long, and a PR its name already shows isn't said again", () => {
+  const tab = { id: "@9", index: 9, session: "$1", panes: [], sidebars: [], name: "Fix #12 regressions", pr: "12", state: "idle", claude: { sessionId: "s" }, since: Math.floor(Date.now() / 1000) - 300 };
+  assert.equal(sidebar.stateWords(tab), "idle for 5m");
+  const { lines } = sidebar.sidebarLines({ tabs: [tab], sections: [], cols: 40, rows: 10, view: { focused: false, cursor: tab.id, frame: 0, here: tab.id } });
+  assert.equal(lines.join("\n").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").match(/#12/g).length, 1);
+});
+
 test("a tab says what Claude is doing and what it waits on, as its hooks recorded them", async () => {
   const window = tmux("new-window", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
   const pane = tmux("display", "-p", "-t", window, "#{pane_id}");
@@ -1037,7 +1058,87 @@ test("the work map adds wt-revive's worktrees with when and what you last asked 
   assert.equal(client.ended, true, "Esc closes the picker");
 });
 
-test("the activity feed records what changed across the tabs, newest first, and keeps it across a restart", () => {
+test("the work map lists every open tab, lines its rows up in columns, and keeps merged work under a header, removable with x", async (t) => {
+  const repo = path.join(tmp, "workmerged-repo");
+  const git = (...args) => execFileSync("git", ["-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { stdio: "ignore" });
+  fs.mkdirSync(repo, { recursive: true });
+  git("init", "-q", "-b", "main");
+  git("commit", "-q", "--allow-empty", "-m", "start");
+  git("remote", "add", "origin", "git@github.com:acme/workmerged.git");
+  const working = path.join(repo, ".claude/worktrees/abc-30-going");
+  const done = path.join(repo, ".claude/worktrees/abc-31-done");
+  git("worktree", "add", "-q", "-b", "abc-30-going", working);
+  git("worktree", "add", "-q", "-b", "abc-31-done", done);
+  sidebar.known.set("acme/workmerged@abc-31-done", { pr: "51", merge: "merged" });
+  const plainDir = path.join(tmp, "no-repo-here");
+  fs.mkdirSync(plainDir, { recursive: true });
+  // A tab in a subdirectory of its worktree, and one in no repository.
+  fs.mkdirSync(path.join(working, "src"), { recursive: true });
+  const inWork = tmux("new-window", "-d", "-t", "test", "-c", path.join(working, "src"), "-P", "-F", "#{window_id}");
+  const loose = tmux("new-window", "-d", "-t", "test", "-c", plainDir, "-P", "-F", "#{window_id}");
+  tmux("setw", "-t", inWork, "@tab_label", "ABC-30: Going");
+  tmux("setw", "-t", loose, "@tab_label", "Slack relay");
+  t.after(() => {
+    sidebar.known.delete("acme/workmerged@abc-31-done");
+    [inWork, loose].forEach((w) => { try { tmux("kill-window", "-t", w); } catch {} });
+  });
+  await sidebar.refresh();
+  await sidebar.refreshWorktrees(sidebar.state.tabs);
+  const rows = sidebar.workMap(sidebar.state.tabs).filter((r) => r.group || r.title === "Slack relay" || (r.tab?.path ?? r.dir)?.startsWith(repo));
+  assert.deepEqual(rows.map((r) => [r.group ? "header" : r.title, r.merged]), [
+    ["ABC-30  Going", false],
+    ["Slack relay", false],
+    ["header", undefined],
+    ["ABC-31  done", true],
+  ], "a tab in its worktree's subdirectory is that worktree's; one in no repository is a row of its own; merged work last, under its header");
+  assert.deepEqual(rows[3].cells.map((c) => c.replace(tmp, "TMP")), ["ABC-31", "done", "no tab", "#51 merged", ""]);
+
+  // M-j lists every open tab, the one in no repository too.
+  const client = { kind: "mission", socket: { write() {}, end() {} }, view: { view: 1, cursor: 0 }, cols: 160, rows: 40, tmuxClient: "none", scope: "tabs" };
+  assert.ok(sidebar.viewsFor(client)[0].items.some((i) => i.title === "Slack relay"));
+
+  // The Work map itself: merged work hidden until Enter on its header.
+  client.scope = undefined;
+  const workMap = () => sidebar.viewsFor(client)[0].items;
+  assert.ok(!workMap().some((i) => i.dir === done), "merged work starts hidden");
+  client.view.cursor = workMap().findIndex((i) => i.group === "merged");
+  assert.match(workMap()[client.view.cursor].title, /^▸ Merged, can be removed$/);
+  await sidebar.missionKey(client, { key: "Enter" });
+  assert.match(workMap()[client.view.cursor].title, /^▾ /);
+  client.view.cursor = workMap().findIndex((i) => i.dir === done);
+  assert.ok(client.view.cursor > 0, "and shown once opened");
+
+  // Columns line up, and only the chosen row says where it is.
+  const text = sidebar.missionLines({ tabs: sidebar.state.tabs, sections: sidebar.viewsFor(client), cols: 160, rows: 40, view: { ...client.view }, config }).map((line) => line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""));
+  const chosen = text.find((line) => line.includes("ABC-31"));
+  const other = text.find((line) => line.includes("ABC-30"));
+  assert.equal(chosen.indexOf("done"), other.indexOf("Going"), "titles start in the same column");
+  assert.ok(chosen.includes(done.replace(home, "~")) && !other.includes(working.replace(home, "~")), "the directory on the chosen row only");
+
+  // x asks first, and git keeps a worktree with a file it doesn't track.
+  fs.writeFileSync(path.join(done, "notes.txt"), "keep me");
+  await sidebar.missionKey(client, { key: "x" });
+  assert.match(client.confirm.text, /Remove this merged worktree\?/);
+  await sidebar.missionKey(client, { key: "y" });
+  assert.match(client.note, /^Kept abc-31-done: /);
+  assert.ok(fs.existsSync(done));
+  fs.rmSync(path.join(done, "notes.txt"));
+  await sidebar.missionKey(client, { key: "x" });
+  await sidebar.missionKey(client, { key: "n" });
+  assert.ok(fs.existsSync(done), "n keeps it");
+  await sidebar.missionKey(client, { key: "x" });
+  await sidebar.missionKey(client, { key: "y" });
+  assert.equal(client.note, "Removed abc-31-done.");
+  assert.ok(!fs.existsSync(done));
+});
+
+test("the activity view puts each event's time first", () => {
+  const section = { title: "Activity", items: [{ title: "worked 3m · finished 7 feed tab", detail: "", state: "attention", time: Date.now() - 120_000 }], loaded: true, builtIn: true, timeFirst: true };
+  const text = sidebar.missionLines({ tabs: [], sections: [section], cols: 80, rows: 10, view: { view: 1, cursor: 0, frame: 0 }, config }).map((line) => line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""));
+  assert.match(text[1], /^\s+2m ● worked 3m · finished 7 feed tab/);
+});
+
+test("the activity feed records what changed across the tabs, newest first, a turn as one line, and keeps it across a restart", () => {
   fs.rmSync(path.join(sidebar.STATE_DIR, "activity.jsonl"), { force: true });
   sidebar.resetActivity();
   const tab = (extra) => ({ id: "@70", index: 7, name: "feed tab", state: "idle", ...extra });
@@ -1057,9 +1158,8 @@ test("the activity feed records what changed across the tabs, newest first, and 
     ["merged 7 feed tab", "#12", "idle"],
     ["checks failing 7 feed tab", "✗2 on #12", "attention"],
     ["started working 7 feed tab", "", "active"],
-    ["finished 7 feed tab", "", "attention"],
+    ["worked <1m · finished 7 feed tab", "Run the test suite", "attention"],
     ["waiting on you 7 feed tab", "asks: Ship it?", "attention"],
-    ["started working 7 feed tab", "Run the test suite", "active"],
   ];
   assert.deepEqual(feed([]), expected);
   assert.equal(sidebar.activityItems([{ id: "@71" }])[1].tab?.id, "@71", "an open tab's event goes to it with Enter");

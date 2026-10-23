@@ -16,7 +16,7 @@ const fs = require("node:fs");
 
 // Shorter in the tests, through the environment.
 const POLL_MS = Number(process.env.NOTE_WATCH_POLL_MS) || 2_000;
-const SETTLE_MS = Number(process.env.NOTE_WATCH_SETTLE_MS) || 6_000;
+const SETTLE_MS = Number(process.env.NOTE_WATCH_SETTLE_MS) || 20_000;
 const ITEM = /^\s*[-*+]\s+\[ \]\s+(\S.*?)\s*$/;
 
 const file = process.argv[2];

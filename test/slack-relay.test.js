@@ -12,7 +12,7 @@
 
 const { test, after, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -1367,7 +1367,7 @@ test("Claude started under a Node wrapper, as claude-here starts it, is still th
   fs.writeFileSync(sessionFile, JSON.stringify({ pid: Number(claudePid), sessionId: "wrapped" }));
   fs.writeFileSync(path.join(home, ".claude/projects/-work/wrapped.jsonl"), "");
   const hook = path.join(__dirname, "../tmux/agent-state.sh");
-  const env = { ...process.env, HOME: home, TMUX_PANE: pane };
+  const env = { ...process.env, HOME: home, TMUX_PANE: pane, AGENT_SEEN_DELAY: "0" };
   try {
     assert.equal(tmux("display", "-p", "-t", window, "#{pane_current_command}"), "node");
     const tab = relay.claudeTabs().find((t) => t.id === window);
@@ -1387,6 +1387,46 @@ test("Claude started under a Node wrapper, as claude-here starts it, is still th
     fs.rmSync(sessionFile, { force: true });
     [window, plain].forEach((id) => tmux("kill-window", "-t", id));
   }
+});
+
+test("a done tab stays done when passed over, and is seen once it stays in front", async (t) => {
+  // A client attached, as when you are looking at it. Control mode needs no
+  // terminal.
+  const viewer = spawn("tmux", ["-S", socket, "-C", "attach"], { stdio: ["pipe", "ignore", "ignore"] });
+  t.after(() => viewer.kill());
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.notEqual(tmux("display", "-p", "#{session_attached}"), "0");
+  const home2 = tmux("display", "-p", "#{window_id}");
+  const window = tmux("new-window", "-P", "-F", "#{window_id}", fakeClaude);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const [pane, tty] = tmux("display", "-p", "-t", window, "#{pane_id}\t#{pane_tty}").split("\t");
+  const claudePid = execFileSync("ps", ["-t", tty.replace("/dev/", ""), "-o", "pid=,comm="], { encoding: "utf8" })
+    .split("\n")
+    .find((line) => line.trim().endsWith("2.1.0"))
+    .trim()
+    .split(/\s+/)[0];
+  const sessionFile = path.join(home, ".claude/sessions", `${claudePid}.json`);
+  fs.writeFileSync(sessionFile, JSON.stringify({ pid: Number(claudePid), sessionId: "passed-over" }));
+  t.after(() => {
+    fs.rmSync(sessionFile, { force: true });
+    tmux("kill-window", "-t", window);
+  });
+  tmux("set", "-p", "-t", pane, "@agent_state", "done");
+  tmux("set", "-p", "-t", pane, "@agent_since", "1");
+  const hook = path.join(__dirname, "../tmux/agent-state.sh");
+  const env = { ...process.env, HOME: home, AGENT_SEEN_DELAY: "0.3" };
+
+  // Focused, then left within the delay: still done.
+  const passing = spawn("bash", [hook, "seen", window], { env });
+  tmux("select-window", "-t", home2);
+  await new Promise((resolve) => passing.on("exit", resolve));
+  assert.equal(tmux("display", "-p", "-t", window, "#{@agent_state}"), "done");
+
+  // Focused and kept in front: seen.
+  tmux("select-window", "-t", window);
+  execFileSync("bash", [hook, "seen", window], { env });
+  assert.equal(tmux("display", "-p", "-t", window, "#{@agent_state}"), "");
+  tmux("select-window", "-t", home2);
 });
 
 test("a tab goes by its whole name, not the one cut short to fit the tab bar", async () => {

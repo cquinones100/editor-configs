@@ -101,8 +101,10 @@ its version, but Claude started by `claude-here` runs as a Node script's child
 and the pane reads `node`. A pane counts as Claude when a foreground process on
 its terminal has a session file in `~/.claude/sessions/`.
 
-"done" means finished and not yet seen: the pane-focus-in hook clears it, and a
-session that finishes in the tab you are looking at never gets it. A pane that
+"done" means finished and not yet seen: the pane-focus-in hook clears it once
+the tab is still in front a second later, so passing over a tab, as moving the
+sidebar's cursor does, leaves it, and a session that finishes in the tab you
+are looking at never gets it. A pane that
 is no longer running Claude loses its state on the next focus, so a session
 that died without `SessionEnd` leaves nothing behind. `M-a` walks the tabs that
 need you, waiting first and then done, oldest first; `wt-jump` and the second

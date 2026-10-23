@@ -25,8 +25,10 @@
 # run by the Skill tool, until a new prompt or session: the turns between a
 # loop's rounds are the loop's too.
 #
-# "done" means finished and not yet looked at: focusing the tab clears it, and
-# a session that finishes in the tab you are already looking at never gets it.
+# "done" means finished and not yet looked at: a tab still in front a second
+# after it was focused loses it (AGENT_SEEN_DELAY, in seconds), so passing over
+# it, as the sidebar does while you browse, leaves it, and a session that
+# finishes in the tab you are already looking at never gets it.
 #
 # Claude Code waits on its hooks, so everything here is a few tmux calls and
 # nothing else: no network, nothing slow. Hooks must not print either, since
@@ -268,6 +270,10 @@ case "${1:-}" in
   seen)
     window=${2:-}
     [ -n "$window" ] || exit 0
+    # The pane-focus-in hook runs this in the background, so the wait holds
+    # nothing up.
+    sleep "${AGENT_SEEN_DELAY:-1}"
+    [ "$(tmux display -p -t "$window" '#{&&:#{window_active},#{session_attached}}' 2>/dev/null)" = 1 ] &&
     while IFS=$'\t' read -r pane state; do
       [ "$state" = done ] && tmux set -pu -t "$pane" @agent_state && tmux set -pu -t "$pane" @agent_since
     done < <(tmux list-panes -t "$window" -F $'#{pane_id}\t#{@agent_state}' 2>/dev/null)

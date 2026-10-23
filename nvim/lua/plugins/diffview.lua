@@ -12,6 +12,11 @@
 -- The highlighting is quieter than Vim's (see minimal_highlights): only
 -- changed words, and faint added and removed lines.
 --
+-- It opens on the first file someone wrote, not one a tool made (a lockfile,
+-- a migration snapshot, a minified or built file; see generated()), and shows
+-- an added file alone, on one side, and a deleted one as it was, rather than
+-- beside an empty half.
+--
 -- Moving the cursor in the file tree shows that file's diff, as the tmux
 -- sidebar shows a tab, with the cursor left in the tree. c lists the branch's
 -- commits (`:DiffviewFileHistory` over them), each showing its changes the
@@ -73,6 +78,66 @@ local function follow()
       end
     end)
   )
+end
+
+-- Files a tool writes, which a reader skips: lockfiles, ORM migration
+-- snapshots (Drizzle's meta/*.json), test snapshots, minified, source-mapped
+-- and built or generated output.
+local lockfiles = {
+  ["pnpm-lock.yaml"] = true, ["package-lock.json"] = true, ["yarn.lock"] = true, ["bun.lockb"] = true,
+  ["Cargo.lock"] = true, ["Gemfile.lock"] = true, ["poetry.lock"] = true, ["uv.lock"] = true,
+  ["Pipfile.lock"] = true, ["composer.lock"] = true, ["go.sum"] = true, ["flake.lock"] = true, ["mix.lock"] = true,
+}
+local generated_patterns = {
+  "/meta/[^/]+%.json$", "_snapshot%.json$", "%.snap$", "%.min%.[jc]ss?$", "%.map$",
+  "^dist/", "/dist/", "^build/", "/build/", "/generated/", "/__generated__/", "%.generated%.", "%.pb%.go$",
+}
+local function generated(path)
+  if lockfiles[vim.fs.basename(path)] then return true end
+  for _, pattern in ipairs(generated_patterns) do
+    if ("/" .. path):match(pattern) then return true end
+  end
+  return false
+end
+
+-- An added or deleted file on one side only: diffview's single-window layout
+-- (Diff1) showing the new file, or for a deleted one the old file in its
+-- place. Returns whether the entry changed.
+local function one_sided(entry)
+  local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
+  if not entry.layout or entry.layout:instanceof(Diff1) then return false end
+  if entry.status == "A" or entry.status == "?" then
+    entry:convert_layout(Diff1)
+    return true
+  elseif entry.status == "D" and entry.layout.a then
+    entry.layout = Diff1({ b = entry.layout.a.file })
+    return true
+  end
+  return false
+end
+
+-- Once diffview has listed the files: added and deleted ones on one side, and,
+-- the first time, the first file that isn't generated chosen in place of the
+-- first in the list.
+local function on_files(view)
+  local current = view.cur_entry
+  local reopen = false
+  for _, entry in ipairs(view.panel:ordered_file_list()) do
+    if one_sided(entry) and entry == current then reopen = true end
+  end
+  if not view.picked_first then
+    view.picked_first = true
+    for _, entry in ipairs(view.panel:ordered_file_list()) do
+      if not generated(entry.path) then
+        if entry ~= current then
+          view:set_file(entry, false, true)
+          return
+        end
+        break
+      end
+    end
+  end
+  if reopen then view:set_file(current, false) end
 end
 
 -- Quieter highlighting, in diffview's windows only, so what changed stands
@@ -137,7 +202,13 @@ return {
   "sindrets/diffview.nvim",
   cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewFileHistory" },
   opts = {
+    file_panel = { win_config = { width = 40 } },
     hooks = {
+      view_opened = function(view)
+        if view.panel and view.panel.ordered_file_list and view.emitter then
+          view.emitter:on("files_updated", function() on_files(view) end)
+        end
+      end,
       diff_buf_win_enter = function(_, winid, ctx)
         vim.wo[winid].winhighlight = minimal_for(ctx and ctx.symbol)
         vim.wo[winid].fillchars = "diff: "

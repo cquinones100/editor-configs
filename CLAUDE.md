@@ -26,6 +26,8 @@ hosts, usernames, personal paths, tokens.
 
 `M-d` runs diffview in a Neovim of its own, `nvim -u ~/.config/nvim/diff.lua --noplugin`: only diffview, tokyonight and the icons, taken from lazy.nvim's directory and set up by calling their specs' `config` in `lua/plugins/`, so it starts in about a second with no language servers, Copilot or gitsigns. lazy.nvim must have installed them first, from a normal `nvim`. A plugin diffview comes to depend on goes in `diff.lua`'s list.
 
+diffview opens on the first file that isn't generated (`generated()` in `nvim/lua/plugins/diffview.lua`: lockfiles, migration snapshots, minified and built output), and shows an added file, or a deleted one as it was, alone in a single pane rather than beside an empty half. A new kind of generated file goes in that list.
+
 ## Window names and accent colors
 
 `tmux/accent-color.sh` produces two different strings from the same directory.

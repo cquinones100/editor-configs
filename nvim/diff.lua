@@ -20,6 +20,9 @@ vim.o.mouse = "a"
 vim.o.number = false
 vim.o.signcolumn = "no"
 vim.o.laststatus = 0
+-- diffview opens in a tab of its own; the empty one it came from would only add
+-- a tabline naming it.
+vim.o.showtabline = 0
 vim.o.showmode = false
 vim.o.swapfile = false
 vim.o.shadafile = "NONE"

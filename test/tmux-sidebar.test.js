@@ -10,7 +10,7 @@
 
 const { test, after, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawn } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -793,15 +793,36 @@ test("the daemon draws the tabs in each sidebar and moves between them with the 
   assert.ok(screen.indexOf("bravo") < screen.indexOf("alpha"));
   assert.match(screen, /waiting on you 1m/);
 
-  // Into the sidebar from alpha: the cursor starts on the first tab (bravo),
-  // so Enter goes there with no move.
+  // A client attached, as when you are looking at it: without one the daemon
+  // hands a sidebar's focus back to its window's main pane. Control mode
+  // needs no terminal.
+  const viewer = spawn("tmux", ["-S", socket, "-C", "attach", "-t", "test"], { stdio: ["pipe", "ignore", "ignore"] });
+  t.after(() => viewer.kill());
+  assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{session_attached}") !== "0"), true);
+
+  // Into the sidebar from alpha: the cursor starts on the first tab (bravo).
   tmux("select-pane", "-t", pane);
   await wait(100);
   await sidebar.refresh();
-  tmux("send-keys", "-t", pane, "Enter");
-  assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{window_id}") === second), true);
+  // Browsing shows each tab as the cursor reaches it: j to the next tab (alpha,
+  // or a window an earlier test left), which comes to the front, then k back
+  // to bravo, whose window comes to the front with focus in its own sidebar
+  // and the cursor still on bravo.
+  const session = tmux("display", "-p", "-t", second, "#{session_id}");
+  tmux("send-keys", "-t", pane, "j");
+  assert.equal(await until(() => sidebar.state.cursors.get(session) !== second), true);
+  assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{window_id}") === sidebar.state.cursors.get(session)), true, "the next tab is in front");
+  tmux("send-keys", "-t", tmux("display", "-p", "-t", "test", "#{pane_id}"), "k");
+  assert.equal(await until(() => tmux("display", "-p", "-t", "test", "#{window_id}") === second), true, "bravo is in front");
+  assert.equal(await until(() => tmux("display", "-p", "-t", second, "#{@sidebar}") === "1"), true, "focus is in bravo's sidebar");
+  await sidebar.refresh();
+  assert.equal(sidebar.state.cursors.get(session), second, "the cursor stayed on bravo");
+  // Enter drops into bravo's pane.
+  const bravoSidebar = tmux("display", "-p", "-t", second, "#{pane_id}");
+  tmux("send-keys", "-t", bravoSidebar, "Enter");
   // Focus went to bravo's main pane, and alpha's sidebar gave it back too.
-  assert.equal(tmux("display", "-p", "-t", second, "#{@sidebar}"), "");
+  assert.equal(await until(() => tmux("display", "-p", "-t", second, "#{@sidebar}") === ""), true);
+  assert.equal(tmux("display", "-p", "-t", "test", "#{window_id}"), second);
   assert.equal(tmux("display", "-p", "-t", first, "#{@sidebar}"), "");
 
   // Mission control lists both, the waiting one first; l and Enter go to the other.

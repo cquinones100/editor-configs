@@ -713,6 +713,22 @@ test("/ filters mission control's cards, and X closes every merged tab and remov
   }
 });
 
+test("a tab in a removed worktree takes its branch's PR, unless its name is about another ticket", () => {
+  const repo = path.join(tmp, "gone-repo");
+  fs.mkdirSync(repo, { recursive: true });
+  execFileSync("git", ["-C", repo, "init", "-q", "-b", "main"]);
+  execFileSync("git", ["-C", repo, "remote", "add", "origin", "git@github.com:acme/gone.git"]);
+  const gone = path.join(repo, ".claude/worktrees/abc-5-old-work");
+  sidebar.known.set("acme/gone@abc-5-old-work", { pr: "50", merge: "merged" });
+  try {
+    assert.equal(sidebar.mergeOf({ path: gone, name: "ABC-5: Old work" }).merge, "merged", "its own ticket");
+    assert.equal(sidebar.mergeOf({ path: gone, name: "a plain name" }).merge, "merged", "no ticket named");
+    assert.deepEqual(sidebar.mergeOf({ path: gone, name: "Shaping ABC-9: New work" }), {}, "shaping another ticket now");
+  } finally {
+    sidebar.known.delete("acme/gone@abc-5-old-work");
+  }
+});
+
 test("the work map lists every worktree in the tabs' repositories, with its tab or none, its ticket and its PR", async () => {
   const repo = path.join(tmp, "workmap-repo");
   const git = (...args) => execFileSync("git", ["-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { stdio: "ignore" });

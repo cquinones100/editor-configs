@@ -8,7 +8,7 @@
 
 const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -671,3 +671,28 @@ test("bin/notes adds the plugin after your config loads, which lazy.nvim's reset
   assert.match(script, /-c "set rtp\^=\$here\/notes" -c "runtime plugin\/notes\.lua" -c "Notes"/);
   assert.doesNotMatch(script, /--cmd "set rtp/);
 });
+
+test("note-watch's watcher reports an item added to a note once its text settles, and the note going away", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "note-watch-"));
+  const note = path.join(dir, "Plan.md");
+  fs.writeFileSync(note, "# Plan\n\n- [ ] already here\n- [x] done\n");
+  const watcher = spawn(process.execPath, [path.join(__dirname, "../claude/skills/note-watch/scripts/watch-note.js"), note], { env: { ...process.env, NOTE_WATCH_POLL_MS: "50", NOTE_WATCH_SETTLE_MS: "200" } });
+  let out = "";
+  watcher.stdout.on("data", (data) => (out += data));
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  try {
+    await pause(150);
+    // Half typed, then whole: only the whole one, once it has stopped changing.
+    fs.writeFileSync(note, "# Plan\n\n- [ ] already here\n- [ ] \n- [ ] half\n- [x] done\n");
+    await pause(120);
+    fs.writeFileSync(note, "# Plan\n\n- [ ] already here\n- [ ] \n- [ ] half typed, now whole\n- [x] done\n");
+    await pause(600);
+    fs.rmSync(note);
+    await new Promise((resolve) => watcher.on("exit", resolve));
+  } finally {
+    watcher.kill();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  assert.deepEqual(out.trim().split("\n").map((line) => line.split(":")[0] + (line.startsWith("NEW") ? line.slice(3) : "")), ["NEW: half typed, now whole", "GONE"]);
+});
+

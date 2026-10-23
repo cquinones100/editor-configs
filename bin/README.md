@@ -1225,6 +1225,12 @@ already cover each, suggests tickets for the rest, and creates only the ones
 you pick. Afterwards it puts each ticket's ID at the end of its item, if you agree, so
 the next run skips it. It reads only the notes you name.
 
+`/note-watch [note]` in Claude watches one note while the session runs: it
+asks you to confirm the note first (or pick one from a list of titles), then
+works each checklist item you add, once you have stopped typing it, and ticks
+it when done. It runs as a Monitor, started again when it expires, until you
+say to stop.
+
 A note changed from outside the app, by the skill, a script or another
 editor, shows the change while it is open, without a save or a keypress. If
 you have typed something not yet saved, the two are merged line by line, so

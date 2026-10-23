@@ -6,6 +6,7 @@
 #
 # Usage: notes-open.sh <client_name>            M-N: its own tab, or go to it
 #        notes-open.sh side <client_name> <pane> M-e: to the right of <pane>
+#        notes-open.sh away <client_name> <pane> M-w on Notes: back to its own tab
 #
 # The notes pane is found by its @notes_pane option, which this sets, so it is
 # found wherever it has been moved, and renaming its tab doesn't lose it; a
@@ -53,6 +54,24 @@ own_tab() {
   "${0%/*}/window-names.sh" "$session"
 }
 
+# Puts the notes pane back in a tab of its own, unless it is alone in its tab
+# already (beside the sidebar). Returns whether it moved.
+put_away() {
+  local pane=$1 window
+  [ "$(tmux list-panes -t "$pane" -F '#{?@sidebar,,x}' | grep -c x)" -gt 1 ] || return 1
+  window=$(tmux break-pane -d -s "$pane" -P -F '#{window_id}') && own_tab "$window"
+}
+
+# M-w on the notes pane: back to its own tab; alone in it already, asked
+# about and closed as any pane is (confirm.sh, with @confirm_pane M-w set).
+if [ "${1:-}" = away ]; then
+  client=${2:-} pane=${3:-}
+  [ -n "$pane" ] || exit 0
+  put_away "$pane" && exit 0
+  tmux display-popup -c "$client" -E -w 60 -h 6 "~/.config/tmux/confirm.sh 'Close pane?'"
+  exit 0
+fi
+
 if [ "${1:-}" = side ]; then
   client=${2:-} here=${3:-}
   [ -n "$here" ] || exit 0
@@ -65,8 +84,7 @@ if [ "${1:-}" = side ]; then
   tmux set-option -p -t "$existing" @notes_pane 1
   if [ "$(tmux display -p -t "$existing" '#{window_id}')" = "$(tmux display -p -t "$here" '#{window_id}')" ]; then
     # Alone in its own tab (beside the sidebar) it is already put away.
-    [ "$(tmux list-panes -t "$existing" -F '#{?@sidebar,,x}' | grep -c x)" -gt 1 ] || exit 0
-    window=$(tmux break-pane -d -s "$existing" -P -F '#{window_id}') && own_tab "$window"
+    put_away "$existing"
     exit 0
   fi
   # Its old tab is no longer the notes tab, whatever is left in it.

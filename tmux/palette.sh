@@ -100,6 +100,8 @@ show_key='
 # any other word, so a search can name what a command is about rather than
 # its wording. The rows go to a file so every keystroke can rank them again
 # (see --rank); --no-sort keeps that order instead of fzf's own.
+# --exact matches each word typed as it is written, not as letters scattered
+# through a row ("shape" in "Close the pane"), and each still has to be there.
 # --no-hscroll keeps each row at the start of its description: fzf otherwise
 # slides a row sideways to show the match, so a tag at its end that matched
 # would push the description out of sight.
@@ -114,7 +116,7 @@ bindings | awk -F'\t' '$1 != "M-p"' | sort -t$'\t' -k2,2 |
   }' > "$rows"
 
 choice=$(
-  fzf --ansi --delimiter=$'\t' --with-nth=2 --no-sort --no-hscroll \
+  fzf --ansi --delimiter=$'\t' --with-nth=2 --no-sort --no-hscroll --exact \
     --bind "change:reload('$0' --rank '$rows' {q})" \
     --prompt='action> ' --layout=reverse --border=rounded --height=100% < "$rows" |
     cut -f1

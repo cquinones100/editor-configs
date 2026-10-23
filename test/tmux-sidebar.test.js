@@ -301,7 +301,13 @@ test("the tabs' PRs are asked about in one query, a gone worktree's by its branc
   const answer = { data: { r0: {
     a0: { number: 12, state: "OPEN", mergeQueueEntry: { position: 2 } },
     a1: { number: 13, state: "MERGED", mergeQueueEntry: null },
-    a2: { number: 14, state: "OPEN", mergeQueueEntry: null },
+    a2: {
+      number: 14, state: "OPEN", mergeQueueEntry: null, reviewDecision: "APPROVED", additions: 340, deletions: 80,
+      commits: { nodes: [{ commit: { statusCheckRollup: { contexts: {
+        checkRunCountsByState: [{ state: "SUCCESS", count: 10 }, { state: "SKIPPED", count: 2 }, { state: "FAILURE", count: 1 }, { state: "IN_PROGRESS", count: 3 }],
+        statusContextCountsByState: [{ state: "PENDING", count: 0 }],
+      } } } }] },
+    },
     a3: { nodes: [{ number: 15, state: "MERGED", mergeQueueEntry: null }] },
   } } };
   fs.writeFileSync(path.join(bin, "gh"), `#!/bin/sh\nprintf '%s\\n' "$@" > '${asked}'\necho '${JSON.stringify(answer)}'\n`, { mode: 0o755 });
@@ -321,7 +327,10 @@ test("the tabs' PRs are asked about in one query, a gone worktree's by its branc
   assert.equal(changed, 1);
   assert.deepEqual(sidebar.mergeOf(tabs[0]), { merge: "queued", position: 2 });
   assert.deepEqual(sidebar.mergeOf(tabs[1]), { merge: "merged" });
-  assert.deepEqual(sidebar.mergeOf(tabs[2]), {});
+  // Its checks counted by outcome, its review and its size, for the cards.
+  const facts = sidebar.mergeOf(tabs[2]);
+  assert.deepEqual(facts, { checks: { pass: 12, fail: 1, pending: 3 }, review: "APPROVED", size: { additions: 340, deletions: 80 } });
+  assert.deepEqual(sidebar.prFacts(facts), ["✓12 ✗1 ⏳3", "approved", "+340 −80"]);
   assert.deepEqual(sidebar.mergeOf(gone), { merge: "merged", pr: "15" }, "found by its branch, PR and all");
   // Shown with that PR, the tab is still found by its branch next time.
   assert.deepEqual(sidebar.mergeOf({ ...gone, pr: "15" }), { merge: "merged", pr: "15" });
@@ -331,7 +340,7 @@ test("the tabs' PRs are asked about in one query, a gone worktree's by its branc
 
   assert.equal(
     sidebar.queryFor(['acme/widgets#1) { x } #', 'a"b/c#2', "acme/widgets@x\" }", "acme/widgets#7"]).query,
-    'query { r0: repository(owner: "acme", name: "widgets") { a0: pullRequest(number: 7) { number state mergeQueueEntry { position } } } }',
+    `query { r0: repository(owner: "acme", name: "widgets") { a0: pullRequest(number: 7) { ${sidebar.PR_FIELDS} } } }`,
   );
 });
 

@@ -543,6 +543,39 @@ test("a waiting tab is answered from mission control: its options shown, a numbe
   }
 });
 
+test("Space peeks at a tab from mission control: its screen, or its whole last turn, without going there", async () => {
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", "sh -c 'seq 1 60; exec cat'");
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 100, rows: 20, tmuxClient: "none" };
+  try {
+    await wait(300);
+    await sidebar.refresh();
+    client.view.cursor = sidebar.missionGrid(sidebar.state.tabs).order.findIndex((t) => t.id === window);
+    // No Claude there: its screen, scrolled to the end, and up with k.
+    await sidebar.missionKey(client, { key: "Space" });
+    assert.equal(client.peek.mode, "screen");
+    assert.match(plain(sent.at(-1)), /PEEK.*60/s);
+    await sidebar.missionKey(client, { key: "g" });
+    assert.match(plain(sent.at(-1)), /PEEK +\d+ .* 1 +2 +3 /s, "g goes to the top");
+    await sidebar.missionKey(client, { key: "Escape" });
+    assert.equal(client.peek, undefined);
+    assert.equal(tmux("display", "-p", "#{window_id}") === window, false, "never went there");
+  } finally {
+    tmux("kill-window", "-t", window);
+  }
+
+  // A Claude tab: its whole last turn, however long.
+  const file = path.join(home, ".claude/projects/-work/peeked.jsonl");
+  const reply = Array.from({ length: 30 }, (_, i) => `line ${i + 1} of the reply`).join("\n");
+  fs.writeFileSync(file, [
+    JSON.stringify({ type: "user", message: { content: "explain the change" } }),
+    JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: reply }] } }),
+  ].join("\n") + "\n");
+  const tab = { id: "@99", index: 9, name: "peeked", state: "done", claude: { sessionId: "peeked", cwd: "/work" }, panes: [], sidebars: [] };
+  const top = sidebar.peekLines({ tab, mode: "turn", scroll: 0 }, 80, 40).lines.map(plain).join("\n");
+  assert.match(top, /› explain the change[\s\S]*line 1 of the reply[\s\S]*line 30 of the reply/, "the reply in full, not cut to a card");
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

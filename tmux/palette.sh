@@ -94,13 +94,21 @@ show_key='
   }'
 
 # The palette itself is left out: picking it would only reopen it.
-# Shown as "<description>  <key>", sorted by description, with the key dimmed.
-# The rows go to a file so every keystroke can rank them again (see --rank);
-# --no-sort keeps that order instead of fzf's own.
+# Shown as "<description>  <tags>  <key>", sorted by description, with the
+# tags and the key dimmed. A binding's tags end its description in tmux.conf,
+# as #words ("Open lazygit ... #git #commit"); they are matched and ranked as
+# any other word, so a search can name what a command is about rather than
+# its wording. The rows go to a file so every keystroke can rank them again
+# (see --rank); --no-sort keeps that order instead of fzf's own.
 rows=$(mktemp)
 trap 'rm -f "$rows"' EXIT
 bindings | awk -F'\t' '$1 != "M-p"' | sort -t$'\t' -k2,2 |
-  awk -F'\t' "$show_key"'{ printf "%s\t%-48s \033[38;5;244m%s\033[0m\n", $1, $2, shown($1) }' > "$rows"
+  awk -F'\t' "$show_key"'{
+    text = $2; tags = ""
+    at = index(text, " #")
+    if (at) { tags = substr(text, at + 1); text = substr(text, 1, at - 1) }
+    printf "%s\t%-48s \033[38;5;240m%-30s\033[38;5;244m%s\033[0m\n", $1, text, tags, shown($1)
+  }' > "$rows"
 
 choice=$(
   fzf --ansi --delimiter=$'\t' --with-nth=2 --no-sort \

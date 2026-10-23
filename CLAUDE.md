@@ -193,7 +193,9 @@ Lazygit (in `M-p`, with no hotkey) and `M-d` (diffview.nvim, `nvim/lua/plugins/d
 `M-p` opens `tmux/palette.sh`, an fzf list of the custom bindings that picks
 one and presses its key. The list is read from tmux, not kept anywhere: a
 binding shows up when `tmux.conf` gives it a description with
-`bind -N "<what it does>"`, so every new custom binding needs one. In the
+`bind -N "<what it does> #tag #tag"`, so every new custom binding needs one,
+ending in tags: a few `#words` for what it is about (`#git`, `#pr`, `#tabs`),
+which the palette shows dimmed and matches and ranks as any other word. In the
 prefix table only keys `tmux.conf` binds with `-N` are listed, since tmux's own
 prefix bindings carry descriptions too. A command that belongs in the palette
 but has no hotkey is bound with `-N` in the `palette` key table, which no key

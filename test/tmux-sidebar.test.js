@@ -928,6 +928,7 @@ test("the daemon draws the tabs in each sidebar and moves between them with the 
   received = "";
   client.write("?");
   assert.ok(await until(() => plain(received).includes("choose a card")), "the keys are shown");
+  assert.match(plain(received), /MISSION CONTROL[\s\S]*╭─ Keys/, "in a box over mission control, which stays drawn");
   received = "";
   client.write("x");
   assert.ok(await until(() => plain(received).includes("MISSION CONTROL")), "and put away");

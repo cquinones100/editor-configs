@@ -128,7 +128,7 @@ it typed into a tab has been answered, even by a session outside tmux.
 ## The sidebar and mission control
 
 `bin/tmux-sidebar` (code in `lib/sidebar/`) is one daemon that draws a sidebar
-pane on the left of every window, reached with `M-h` from any pane or `C-w h`
+pane on the left of every window, reached with `M-s` from any pane or `C-w h`
 from the one beside it, and the mission control popup (`M-Space`). Every sidebar pane and the popup run `tmux/sidebar-pane.zsh`, which
 uses only zsh builtins so a sidebar starts no processes however long it runs;
 keep it that way. The daemon reads tmux in one `list-panes` per refresh and

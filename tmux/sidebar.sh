@@ -7,7 +7,7 @@
 #   sidebar.sh start              start the daemon unless it is running, and lay
 #                                 out the status line for the sidebar
 #   sidebar.sh nudge              tell the daemon something changed
-#   sidebar.sh focus <window>     M-h: put the cursor in the window's sidebar
+#   sidebar.sh focus <window>     M-s: put the cursor in the window's sidebar
 #   sidebar.sh mission <client> [work:tabs|work:untabbed]
 #                                 M-Space: open mission control on that client;
 #                                 M-j, M-o: on the Work map as a picker

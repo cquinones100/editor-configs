@@ -170,6 +170,10 @@ means reading what changed and putting the new commit in `plugins.txt`.
 
 `test/tmux-conf.test.js` loads `tmux.conf` into a throwaway server and checks it loads without an error and that every `bind` runs as many commands as the file gives it, which a `\;` that lost its backslash breaks silently. The file skips what reaches beyond that server (starting the sidebar daemon, the plugins, the theme) while `@conf_check` is set, inside `%if`; anything new it runs at load belongs inside one too.
 
+## Context use, for the sidebar
+
+`claude/statusline-command.sh` writes each session's context use and model, which Claude Code gives only to the statusline, to `~/.local/state/tmux-sidebar/context/<session id>` (`<percent>\t<model>`), when they change, for mission control's Sessions view (`lib/sidebar/sessions.js`). A change to that line's shape belongs in both.
+
 ## The health light
 
 `tmux/health.sh` runs from `#()` in `status-left` (set in both `tmux.conf` and `update-colors.sh`, which rewrites it) and prints nothing while all is well, or a red mark naming what quietly stopped: tmux-continuum's saves older than five minutes, the sidebar daemon gone while the sidebar is on, or the relay crashed (its events file left with no process). It runs every `status-interval`, so it is one tmux call and file checks. Anything else that can stop without a word belongs in it.

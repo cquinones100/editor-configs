@@ -734,6 +734,30 @@ test("the PR board puts each PR in the column for where it stands, and h and l m
   assert.equal(views[at - 1].items[client.view.cursor].title, "#2 PR 2");
 });
 
+test("the Sessions view lists each Claude session by how full its context is, as the statusline recorded it", () => {
+  // The statusline, given what Claude Code gives it, records the context and model.
+  const statusline = path.join(__dirname, "../claude/statusline-command.sh");
+  const input = JSON.stringify({ session_id: "sess-full", model: { display_name: "Opus" }, workspace: { current_dir: tmp }, context_window: { used_percentage: 86.4 } });
+  execFileSync("bash", [statusline], { input, env: { ...process.env, HOME: home } });
+  const recorded = path.join(home, ".local/state/tmux-sidebar/context/sess-full");
+  assert.equal(fs.readFileSync(recorded, "utf8"), "86.4\tOpus");
+  // The sidebar reads them from its own state directory.
+  const contextDir = path.join(sidebar.STATE_DIR, "context");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.copyFileSync(recorded, path.join(contextDir, "sess-full"));
+  fs.writeFileSync(path.join(contextDir, "sess-light"), "12\tSonnet");
+  const hour = Date.now() - 3_600_000;
+  const tabs = [
+    { id: "@81", index: 1, name: "light", state: "working", claude: { sessionId: "sess-light", cwd: "/work", startedAt: hour } },
+    { id: "@82", index: 2, name: "full", state: "working", claude: { sessionId: "sess-full", cwd: "/work", startedAt: hour } },
+    { id: "@83", index: 3, name: "no claude", state: "idle" },
+  ];
+  assert.deepEqual(sidebar.sessionItems(tabs).map((i) => [i.title, i.detail, i.state]), [
+    ["2 full", "context 86% · Opus · up 1h", "attention"],
+    ["1 light", "context 12% · Sonnet · up 1h", "active"],
+  ], "fullest first, a full one needing you, a tab without Claude left out");
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

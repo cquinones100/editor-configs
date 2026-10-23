@@ -6,6 +6,18 @@ raw_cwd=$(echo "$input" | jq -r '.workspace.current_dir')
 cwd=$(echo "$raw_cwd" | sed "s|^$HOME|~|")
 used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 
+# The session's context use and model, for the sidebar's Sessions view
+# (lib/sidebar/sessions.js), which has no other way to know them: one small
+# file per session, written only when it changes.
+session=$(echo "$input" | jq -r '.session_id // empty')
+if [[ $session =~ ^[A-Za-z0-9-]+$ && -n $used ]]; then
+  context_dir=~/.local/state/tmux-sidebar/context
+  line=$(printf '%s\t%s' "$used" "$model")
+  if [ "$(cat "$context_dir/$session" 2>/dev/null)" != "$line" ]; then
+    mkdir -p "$context_dir" && printf '%s' "$line" >"$context_dir/$session"
+  fi
+fi
+
 branch=$(git -C "$raw_cwd" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null)
 
 # Derive a deterministic accent color from the directory + git context.

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # A tool in a pane's place, leaving the rest of the window, sidebar included,
 # as it is; quitting the tool puts the pane back. M-p's lazygit opens this way,
-# M-d diffview.nvim (nvim/lua/plugins/diffview.lua).
+# M-d diffview.nvim (nvim/lua/plugins/diffview.lua), in the stripped-down
+# Neovim nvim/diff.lua sets up.
 #
 # Usage:
 #   pane-in-place.sh open <lazygit|diffview> <pane> <dir>   start the tool in <dir> in <pane>'s place
@@ -50,7 +51,7 @@ tool_command() {
       # A repository with no origin compares with its own branch.
       ref=origin/$base
       git -C "$dir" rev-parse --verify --quiet "$ref" >/dev/null || ref=$base
-      echo "nvim --cmd 'let g:diff_pane = 1' --cmd 'let g:diff_base = \"$ref\"' -c 'DiffviewOpen $ref...HEAD'"
+      echo "nvim -u ~/.config/nvim/diff.lua --noplugin --cmd 'let g:diff_pane = 1' --cmd 'let g:diff_base = \"$ref\"' -c 'DiffviewOpen $ref...HEAD'"
       ;;
   esac
 }

@@ -24,6 +24,8 @@ hosts, usernames, personal paths, tokens.
 
 `nvim/lazy-lock.json` is committed, so a new machine gets the same plugin commits (`:Lazy restore`), and `nvim/init.lua` clones lazy.nvim itself at the commit the lockfile records, not its `stable` branch; when lazy.nvim updates itself, bump that commit with the lockfile. The language servers Mason installs (`nvim/lua/plugins/lsp.lua`) are left unpinned, at whatever npm and PyPI hold: pinning them would mean chasing every release for little gain.
 
+`M-d` runs diffview in a Neovim of its own, `nvim -u ~/.config/nvim/diff.lua --noplugin`: only diffview, tokyonight and the icons, taken from lazy.nvim's directory and set up by calling their specs' `config` in `lua/plugins/`, so it starts in about a second with no language servers, Copilot or gitsigns. lazy.nvim must have installed them first, from a normal `nvim`. A plugin diffview comes to depend on goes in `diff.lua`'s list.
+
 ## Window names and accent colors
 
 `tmux/accent-color.sh` produces two different strings from the same directory.

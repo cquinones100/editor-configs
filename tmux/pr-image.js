@@ -11,7 +11,9 @@
 // page with GitHub's dark stylesheet and Mermaid drawing each diagram,
 // opened in a headless Chrome: mermaid-cli's puppeteer, found from its global
 // install, since this repository installs no packages for it. The page is
-// screenshotted a pane-sized page at a time, and each page shown through the
+// screenshotted a pane-sized page at a time, at its own size (from the cell
+// size the terminal reports), breaking between blocks, a diagram taller than
+// a page drawn smaller to fit one, and each page shown through the
 // kitty graphics protocol, which Ghostty speaks, passed through tmux (the
 // pane's allow-passthrough). j, k, the arrows, Space and b page; g and G go
 // to the ends; q closes it.
@@ -120,8 +122,38 @@ const show = (png, cols, rows) => {
   process.stdout.write(`${out}\x1b[39m`);
 };
 
+// The terminal's cell size in pixels (CSI 16 t, answered as CSI 6 ; h ; w t),
+// or undefined when it doesn't say within a moment. Ghostty on a Retina screen
+// reports physical pixels, two to a CSS pixel; a cell under 14 pixels wide is
+// taken as already in CSS pixels.
+const cellSize = () =>
+  new Promise((resolve) => {
+    if (!process.stdin.isTTY) return resolve(undefined);
+    process.stdin.setRawMode(true);
+    const done = (size) => {
+      clearTimeout(timer);
+      process.stdin.off("data", onData);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      resolve(size);
+    };
+    const onData = (data) => {
+      const m = /\x1b\[6;(\d+);(\d+)t/.exec(data.toString());
+      if (!m) return;
+      const [h, w] = [Number(m[1]), Number(m[2])];
+      done(w >= 14 ? { w: w / 2, h: h / 2 } : { w, h });
+    };
+    const timer = setTimeout(() => done(undefined), 500);
+    process.stdin.on("data", onData);
+    process.stdin.resume();
+    process.stdout.write("\x1b[16t");
+  });
+
 const main = async () => {
   const dir = path.resolve(process.argv[2] ?? process.cwd());
+  // Taken first, before anything else reads the keyboard. A guess at a
+  // 13-point font when the terminal doesn't say.
+  const cell = (await cellSize()) ?? { w: 8, h: 17 };
   process.stdout.write("\n  \x1b[38;5;244mReading the PR…\x1b[0m");
   let pr;
   try {
@@ -149,24 +181,45 @@ const main = async () => {
   await page.setViewport({ width: WIDTH, height: 800, deviceScaleFactor: 2 });
   await page.goto(`file://${file}`, { waitUntil: "networkidle0" });
   await page.waitForSelector("body[data-done]", { timeout: 15_000 }).catch(() => {});
-  const height = await page.evaluate(() => document.querySelector(".markdown-body").getBoundingClientRect().height);
-
-  // A page is as tall as the pane, by the pane's shape in cells, a cell about
-  // twice as tall as it is wide.
-  const cols = process.stdout.columns || 80;
+  // Shown at its own size, a CSS pixel to a CSS pixel of the screen: as many
+  // columns as the page is wide in cells (or the pane, if narrower), and a page
+  // as tall as the pane. Each page ends where a block does, and a diagram taller
+  // than a page is drawn smaller, to fit one, so it is never cut in two.
+  const cols = Math.min(process.stdout.columns || 80, Math.round(WIDTH / cell.w));
   const rows = (process.stdout.rows || 24) - 1;
-  const pageHeight = Math.max(200, Math.round((WIDTH * rows * 2.1) / cols));
-  const pages = Math.max(1, Math.ceil(height / pageHeight));
+  const pageHeight = Math.max(100, Math.floor((rows * cell.h * WIDTH) / (cols * cell.w)));
+  await page.addStyleTag({ content: `pre.mermaid svg { max-height: ${pageHeight - 40}px; max-width: 100%; height: auto; }` });
+  // Where each block of the description starts and ends, to break pages
+  // between them.
+  const { height, blocks } = await page.evaluate(() => {
+    const body = document.querySelector(".markdown-body");
+    const top = body.getBoundingClientRect().top;
+    return {
+      height: body.getBoundingClientRect().height,
+      blocks: [...body.children].map((el) => ({ top: el.getBoundingClientRect().top - top, bottom: el.getBoundingClientRect().bottom - top })),
+    };
+  });
+
+  const cuts = [0];
+  while (cuts.at(-1) + pageHeight < height) {
+    const start = cuts.at(-1);
+    const fits = blocks.filter((b) => b.top > start && b.top <= start + pageHeight).map((b) => b.top);
+    cuts.push(fits.length ? Math.max(...fits) : start + pageHeight);
+  }
+  cuts.push(height);
   const shots = [];
-  for (let i = 0; i < pages; i++) {
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const h = cuts[i + 1] - cuts[i];
     // A Buffer: puppeteer returns a plain Uint8Array, whose toString ignores
     // "base64" and lists its bytes instead.
-    shots.push(Buffer.from(await page.screenshot({ clip: { x: 0, y: i * pageHeight, width: WIDTH, height: Math.min(pageHeight, height - i * pageHeight) }, type: "png" })));
+    const png = Buffer.from(await page.screenshot({ clip: { x: 0, y: cuts[i], width: WIDTH, height: h }, type: "png" }));
+    shots.push({ png, rows: Math.max(1, Math.round((h / pageHeight) * rows)) });
   }
+  const pages = shots.length;
   await browser.close();
   // For checking the drawing without a terminal: the pages as PNGs, and out.
   if (process.env.PR_IMAGE_DUMP) {
-    shots.forEach((png, i) => fs.writeFileSync(path.join(process.env.PR_IMAGE_DUMP, `page-${i + 1}.png`), png));
+    shots.forEach((shot, i) => fs.writeFileSync(path.join(process.env.PR_IMAGE_DUMP, `page-${i + 1}.png`), shot.png));
     process.exit(0);
   }
 
@@ -175,7 +228,7 @@ const main = async () => {
   // ESC _G i=<id>;<message> ESC \.
   let said = "";
   const draw = () => {
-    show(shots[at], cols, rows);
+    show(shots[at].png, cols, shots[at].rows);
     process.stdout.write(`\x1b[${rows + 1};1H\x1b[2K\x1b[38;5;244m page ${at + 1}/${pages}   j k space b: page   r: redraw   q: close${said ? `   \x1b[31m${said}` : ""}\x1b[0m`);
   };
   process.stdin.setRawMode(true);

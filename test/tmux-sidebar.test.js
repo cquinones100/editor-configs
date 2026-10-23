@@ -709,6 +709,9 @@ test("Notes taken from its own tab leaves the tab saying where it went, and come
   assert.equal(tmux("display", "-p", "-t", notesTab, "#{@notes}"), "1");
   await wait(300);
   assert.match(tmux("capture-pane", "-p", "-t", standIn), /Notes is beside tab \d+/, "saying which tab has it");
+  const tabs = sidebar.tabsFrom(await sidebar.snapshot());
+  const beside = tabs.find((x) => x.id === here);
+  assert.equal(sidebar.stateWords(tabs.find((x) => x.id === notesTab)), `Notes is beside tab ${beside.index} · ${beside.name}`, "and its line in the sidebar says so too");
 
   execFileSync("bash", [script, "away", "none", notes], { env });
   assert.equal(tmux("display", "-p", "-t", notes, "#{window_id}"), notesTab, "put away, it goes back into its tab");

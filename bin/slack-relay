@@ -10,6 +10,11 @@
 //   slack-relay stop     stop it
 //   slack-relay run      the relay itself, restarted if it crashes; `start`
 //                        runs this in the new tab
+//   slack-relay notify [--from <name>] [<text>]
+//                        post <text> (else what comes on stdin) in the DM as
+//                        the app, so Slack notifies you, through the running
+//                        relay; exits 0 once it is posted, 1 if it wasn't
+//                        (see outbox.js)
 //
 // What you can send in the DM:
 //   a reply in a tab's thread   typed into that tab's Claude (a tab is never
@@ -66,6 +71,7 @@ const parts = Object.assign({},
   require("../lib/slack-relay/lifecycle"),
   require("../lib/slack-relay/milestones"),
   require("../lib/slack-relay/offline"),
+  require("../lib/slack-relay/outbox"),
   require("../lib/slack-relay/places"),
   require("../lib/slack-relay/post"),
   require("../lib/slack-relay/presence"),
@@ -86,13 +92,26 @@ const parts = Object.assign({},
 
 if (require.main === module) {
   const { start, stop } = parts;
-  const { fail, supervise, relay } = parts;
+  const { fail, supervise, relay, notify } = parts;
   const command = process.argv[2] ?? "start";
   if (command === "start") start();
   else if (command === "stop") stop();
   else if (command === "run") supervise().catch((err) => fail(err.message));
   else if (command === "relay") relay().catch((err) => fail(err.message));
-  else fail(`unknown command "${command}"; use start, stop, or run`);
+  else if (command === "notify") {
+    const args = process.argv.slice(3);
+    const at = args.indexOf("--from");
+    const from = at === -1 ? undefined : args.splice(at, 2)[1];
+    const text = args.length ? args.join(" ") : require("node:fs").readFileSync(0, "utf8");
+    // Not fail(): that writes to the relay's log, which is the relay's own.
+    notify(text, { from }).then(
+      (ts) => console.log(`posted ${ts}`),
+      (err) => {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+      },
+    );
+  } else fail(`unknown command "${command}"; use start, stop, run or notify`);
 } else {
   module.exports = parts;
 }

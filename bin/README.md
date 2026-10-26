@@ -745,7 +745,11 @@ own location.
 slack-relay          open it in a tab named "slack-relay", or go to that tab
                      (starting it again there if it has stopped)
 slack-relay stop     stop it (or C-M-s, `stop` in the DM, or Ctrl-C in its tab)
+slack-relay notify [--from <name>] [<text>]
+                     post a notice in the DM, from <text> or stdin
 ```
+
+`slack-relay notify` is how something else on this Mac reaches you through the relay, such as the `oncall` skill: the notice goes out as the app's bot, under a 🔔 and the `--from` name, so Slack notifies you, which it never does for anything posted as you, a self-DM or a channel of your own included. It is queued in `~/.local/state/slack-relay/outbox/`, posted by the running relay within a second whether or not you're at the computer, and `notify` waits for it: it exits 0 once posted and 1 if it wasn't (the relay isn't running, or Slack refused), so a caller knows you weren't reached. It only ever posts in the DM, as the relay does.
 
 `slack-relay` works from outside tmux too (a Claude job, ssh): it uses the
 running tmux server, putting a new tab in its most recently used session.

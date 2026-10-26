@@ -3492,3 +3492,30 @@ test("rename in a tab's thread names it as M-n does, and clears it", async () =>
   assert.match(posts.at(-1).body, /has its own name again/);
   tmux("kill-window", "-t", window);
 });
+
+test("notify waits for the relay to post a notice in the DM as the app, at the top level, and says when it failed", async () => {
+  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {} };
+  fs.writeFileSync(relay.LOCK_FILE, `${process.pid} slack-relay\n`);
+  const relayLoop = setInterval(() => relay.deliverOutbox(state), 50);
+  try {
+    const ts = await relay.notify("Triggered: disk usage on db-1", { from: "oncall" });
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].ts, ts);
+    assert.equal(posts[0].thread, undefined);
+    assert.equal(posts[0].body, "🔔 **oncall**\nTriggered: disk usage on db-1");
+    assert.deepEqual(fs.readdirSync(relay.OUTBOX_DIR), []);
+
+    answers["chat.postMessage"] = () => {
+      throw new Error("chat.postMessage: ratelimited");
+    };
+    await assert.rejects(relay.notify("again", { from: "oncall" }), /ratelimited/);
+    await assert.rejects(relay.notify("x", { from: "oncall; rm" }), /--from/);
+  } finally {
+    clearInterval(relayLoop);
+  }
+
+  // No relay running: refused at once, with nothing left queued.
+  fs.rmSync(relay.LOCK_FILE);
+  await assert.rejects(relay.notify("hello"), /isn't running/);
+  assert.deepEqual(fs.readdirSync(relay.OUTBOX_DIR), []);
+});

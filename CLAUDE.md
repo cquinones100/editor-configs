@@ -2,6 +2,8 @@
 
 Dotfiles for the tools listed by directory. `sync.sh` symlinks them into place, always through its `put_link`, which moves a real file or directory already in the way to `<name>.bak.<time>` rather than overwriting or deleting it.
 
+`setup.sh` sets up the tmux workspace on someone else's Mac (see `bin/README.md`): it checks what the workspace needs, installs what is missing with Homebrew after asking, runs `sync.sh` for tmux, Neovim, lazygit and `bin/`, and reports the optional parts. A new tool the tmux scripts call belongs in its `PACKAGES`, and a new optional part in its list. It never links `claude/`, which holds this machine's own settings.
+
 The global `~/.gitconfig` isn't kept here: it holds a machine's git identity and paths, which don't belong in a public repo. `./sync.sh git` only sets this clone's `core.hooksPath`.
 
 Nothing here runs code that another repository supplies unless you have trusted that repository. Trusted directories are listed in `~/.config/editor-configs/trusted-dirs`, one absolute or `~/` path per line (blank lines and lines starting with `#` ignored), which is yours, never committed, and never written for you; a missing file trusts nothing. A directory counts only when its real path equals a listed one's exactly, so trusting `~/code` doesn't trust what is under it. Nothing needs it today, since the workspace layout that ran a directory's own `worktree` script is gone. Any new script that would execute something from a repository checks this file the same way, inline.

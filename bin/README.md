@@ -3,6 +3,16 @@
 `./sync.sh bin` symlinks every executable here into `~/.local/bin`. To install
 just one, pass its name instead: `./sync.sh worktree-from-ticket`.
 
+On a new Mac, `./setup.sh` sets up the whole tmux workspace these scripts
+belong to: it checks for macOS, zsh, the repo at `~/editor-configs`,
+Homebrew's `tmux jq fzf gh glow lazygit neovim` (tmux 3.8 or newer), Node
+from nvm and `~/.local/bin` on the PATH, links the tmux, Neovim and lazygit
+configs and these scripts, and installs Neovim's pinned plugins, asking
+before each install or change to `~/.zshrc`. It then lists the optional parts
+(GitHub, the Linear key, Claude Code's hooks, slack-relay) and the keys each
+one is for. `./setup.sh --check` only reports. It never links
+`claude/settings.json`, since that holds its owner's own settings.
+
 ## worktree-from-ticket
 
 Creates a git worktree on a branch named after a Linear ticket, then opens

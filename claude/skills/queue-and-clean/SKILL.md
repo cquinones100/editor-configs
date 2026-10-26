@@ -1,15 +1,15 @@
 ---
 name: queue-and-clean
-description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, fix what stops it merging (failing checks, conflicts, being dropped from the merge queue), and once it merges make sure its Linear ticket is done and its item in your notes ticked, then remove this worktree and its local branch.
+description: Queue the current branch's PR for merge if it is not queued already, watch it in the background, fix what stops it merging (failing checks, conflicts, being dropped from the merge queue), and once it merges wait for it to deploy, test the feature in a real browser and record a video of the test, and once you approve the test make sure its Linear ticket is done and its item in your notes ticked, then remove this worktree and its local branch.
 argument-hint: "[PR number]"
 disable-model-invocation: true
 ---
 
 # Queue and clean
 
-Queue this worktree's PR for merge, in the merge queue or with auto-merge, unless it is already queued. Then watch the PR without blocking the conversation. When something the branch can fix stops it merging (a required check fails, it has merge conflicts, or the merge queue drops it), fix it, push, queue it again and go back to watching, as described in "Fixing". When it merges, remove the worktree and its local branch. If it closes without merging, or stops for something you can't fix, leave everything as it is.
+Queue this worktree's PR for merge, in the merge queue or with auto-merge, unless it is already queued. Then watch the PR without blocking the conversation. When something the branch can fix stops it merging (a required check fails, it has merge conflicts, or the merge queue drops it), fix it, push, queue it again and go back to watching, as described in "Fixing". When it merges, wait until the merge has deployed, test the feature on the deployed site in a real browser, recording a video of the test, and ask the user to approve it ("Deploy and test"). Once they approve, remove the worktree and its local branch. If it closes without merging, or stops for something you can't fix, leave everything as it is.
 
-When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged and the cleanup finished; if you fixed anything on the way, say what in a few words after it, as `queue-and-clean: success (fixed: <what>)`, for example `queue-and-clean: success (fixed: lint error in api.ts; reran a flaky e2e job)`. What "Closing out" did goes in the same brackets, after anything fixed. `fail` means the PR could not be queued, closed without merging, stopped for something "Fixing" leaves alone or still failed after its last round, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`), and what you tried when you tried fixing it. The questions in "Before watching", the merge method question in "Queuing", the questions in "Fixing", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
+When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged, the user approved the test (or chose to clean up without one) and the cleanup finished; if you fixed anything on the way, say what in a few words after it, as `queue-and-clean: success (fixed: <what>)`, for example `queue-and-clean: success (fixed: lint error in api.ts; reran a flaky e2e job)`. What "Deploy and test" and "Closing out" did goes in the same brackets, after anything fixed: `queue-and-clean: success (tested: <video>; ticket ABC-123 done)`. `fail` means the PR could not be queued, closed without merging, failed to deploy, had its test turned down, stopped for something "Fixing" leaves alone or still failed after its last round, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`), and what you tried when you tried fixing it. The questions in "Before watching", the merge method question in "Queuing", the questions in "Fixing", the questions and the approval in "Deploy and test", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
 
 Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 
@@ -36,11 +36,21 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
    - The PR is `CLOSED`.
    - The PR is a draft. Queuing it would mean marking it ready for review, which is the user's call.
 
-   If the PR is already `MERGED`, skip the queue and the watch and go straight to cleanup.
+   If the PR is already `MERGED`, skip the queue and the watch and go straight to "Deploy and test".
 
 4. Settle the ticket and the note now, so finishing up later asks nothing:
    - **The ticket**: the Linear ticket the branch names (an ID like `ABC-123` at the start of the branch name), else one the PR's title or body names. None is fine: then there is no ticket to close out.
    - **The note**: which of the user's notes holds this work's checklist item, settled as `~/.claude/skills/note-watch/pick-note.md` says, with **No note** as an option, since not every PR has one. Remember the answer; read the note only at "Closing out".
+   - **The deploy**: what shows the base branch has deployed, and the URL to test it at. Look, in this order: the repository's `CLAUDE.md`, `AGENTS.md` and README for how and where it deploys; the GitHub environments its recent deploys went to, with their URLs,
+
+     ```
+     gh api 'repos/<owner>/<repo>/deployments?ref=<baseRefName>&per_page=20' --jq '[.[].environment] | unique'
+     gh api 'repos/<owner>/<repo>/deployments?environment=<env>&per_page=1' --jq '.[0].id' |
+       xargs -I{} gh api 'repos/<owner>/<repo>/deployments/{}/statuses?per_page=1' --jq '.[0].environment_url'
+     ```
+
+     and the workflows that run on pushes to the base branch, for one that deploys (`gh run list --branch <baseRefName> --event push --limit 30 --json workflowName --jq 'map(.workflowName) | unique'`). Prefer the environment the merge reaches first and that people use, usually production or staging, over previews. When one answer is plain, use it and say in a line which; otherwise ask, with **No deploy to wait for** (test what is already live, or nothing) and **Skip the deploy and the test** as options.
+   - **The test**: what the PR changes that a person could see in a browser, from its description, the ticket's acceptance criteria and the diff. A backend, infrastructure, tooling or library change may have nothing to see; then there is no browser test, and "Deploy and test" says so when it asks for approval.
 
 ## Queuing
 
@@ -116,7 +126,7 @@ When it exits:
   If GitHub refuses because a required check hasn't passed after all (one that appeared late), start the wait again, up to three times in all. If it refuses because of a required review or anything else that isn't a check, reply `queue-and-clean: fail: <GitHub's error message>`. If the branch moved while you waited, the head check makes it refuse; that is the right outcome, since the new commits are not the ones that were checked: report it as any other failure.
 - `failed`: required checks failed. Go to "Fixing".
 - `conflicts`: the PR has merge conflicts. Go to "Fixing".
-- `merged` or `closed`: someone else finished it. Go to cleanup for `merged`; reply `queue-and-clean: fail: PR closed without merging` for `closed`.
+- `merged` or `closed`: someone else finished it. Go to "Deploy and test" for `merged`; reply `queue-and-clean: fail: PR closed without merging` for `closed`.
 
 ### Any other failure
 
@@ -152,7 +162,7 @@ A failed request is retried rather than read as a result, so a network blip neve
 
 When it exits:
 
-- `merged`: clean up.
+- `merged`: go to "Deploy and test".
 - `closed`: leave the worktree alone and reply `queue-and-clean: fail: PR closed without merging`.
 - `failed`: a required check failed while auto-merge waited. Go to "Fixing".
 - `dequeued`: find out why the PR left the queue. GitHub records it:
@@ -177,9 +187,56 @@ When it hands back:
 
 Hand the PR over at most three times in one run, since each requeue can fail again on a newer base branch. After the third, reply `queue-and-clean: fail: <what still fails>, after <what was tried>`.
 
+## Deploy and test
+
+After the PR merges, and before anything is removed: the worktree stays until the user has seen the feature work where it was deployed, so a fix can start from it if it doesn't.
+
+### Waiting for the deploy
+
+Skip this when the deploy settled before watching was **No deploy to wait for** or **Skip the deploy and the test**. Otherwise read the merge commit, `gh pr view <number> --json mergeCommit --jq .mergeCommit.oid`, and start the watch with the Bash tool's `run_in_background`, as with the merge watch; you are re-invoked when it exits:
+
+```
+node ~/.claude/skills/queue-and-clean/scripts/wait-deploy.js --repo <owner>/<repo> --sha <merge commit> \
+  --environment <env>                                   # a GitHub environment, or
+  --workflow <workflow> --branch <baseRefName>          # a deploy workflow on the base branch
+```
+
+It counts a deploy of the merge commit or of any later commit that includes it, and prints one line:
+
+- `deployed <sha> <url>`: go on to the test. A URL other than `-` is where that deploy went, and wins over the one settled before watching when they differ only by a preview's address.
+- `failed <url>`: every deploy that includes the merge failed. Leave everything as it is and reply `queue-and-clean: fail: deploy failed: <url>`.
+- `timeout`: nothing deployed it in 45 minutes. Ask whether to keep waiting (run it again), test what is live anyway, or stop, which leaves everything as it is and replies `queue-and-clean: fail: no deploy after 45 minutes`.
+
+### Testing in a browser
+
+Skip this when there is nothing a browser can show, or the test was skipped, and go to "Approval". Otherwise the scripts need their packages: if `~/.claude/skills/queue-and-clean/scripts/node_modules` is missing, run `npm ci --prefix ~/.claude/skills/queue-and-clean/scripts`. Recording needs Playwright's own ffmpeg too; if a run says it is missing, run `node ~/.claude/skills/queue-and-clean/scripts/node_modules/playwright/cli.js install ffmpeg`.
+
+1. **Write the test** in the session's scratchpad, `<scratchpad>/queue-and-clean-<number>/steps.js`, exporting one async function given `{ page, step, expect }` (`record.js` has an example). Walk through the change as a person would: go where the feature is, do what the acceptance criteria describe, and `expect` what should be on screen. Start each part with `step("<what this shows>")`, which captions the video, so the user can follow it without the code. Prefer roles and visible text to CSS selectors. Keep it under a minute.
+2. **Change nothing real.** This is the deployed site, often production, with real people's data. Look, navigate, open and fill in what you need to, but don't submit what saves, sends, deletes, pays for or emails anything, unless the environment is plainly a test one (staging, a preview) or the user says so when asked. When the feature can only be seen by changing data, ask first, saying what the test would change. A feature behind a flag that is off is something to report, not to turn on.
+3. **Record it:**
+
+   ```
+   node ~/.claude/skills/queue-and-clean/scripts/record.js <scratchpad>/queue-and-clean-<number>/steps.js \
+     --url <url> --out <scratchpad>/queue-and-clean-<number>
+   ```
+
+   It runs the test headless in the system Chrome and prints `{ passed, video, screenshot, log, error }`. Look at the screenshot and the log (each step, console errors, and responses of 500 and up) as well as `passed`.
+4. **Signing in.** Each site keeps its own Chrome profile under `~/.cache/queue-and-clean/profiles/`. If the test lands on a sign-in page, ask the user to sign in, then run `node ~/.claude/skills/queue-and-clean/scripts/record.js --login --url <url>` in the background: it opens a visible window, and they close it once signed in. Then record again. Never type a password or a code yourself.
+5. **When it fails**, decide whether the test or the feature is wrong. Fix a test that was wrong (a selector, a timing, a step in the wrong place) and record again, at most three times. A feature that doesn't do what it should is the answer, not something to fix here: take that video to "Approval".
+
+### Approval
+
+Open the video with `open <video>`, so it plays in QuickTime, and ask with `AskUserQuestion`. Say in the question what the test showed, in a line, whether it passed, anything the log caught, and the video's full path; or, when there was no test, why not. The options:
+
+- **Approve and clean up**: go to "Cleanup".
+- **Record again**: with what the user says to change (their notes on the option), change the test and go back to recording.
+- **Keep the worktree**: the feature isn't right. Leave everything as it is, the ticket and the note included, and reply `queue-and-clean: fail: test not approved: <their reason, or what the test showed>`.
+
+Keep the video's path for the final message, as `tested: <path>`, or `not tested: <why>`.
+
 ## Cleanup
 
-Only after GitHub reports the PR `MERGED`. If any command in steps 2 to 4 errors, stop there and reply `queue-and-clean: fail: <command>: <its error message>`.
+Only after GitHub reports the PR `MERGED` and the user has approved in "Approval". If any command in steps 2 to 4 errors, stop there and reply `queue-and-clean: fail: <command>: <its error message>`.
 
 1. Make sure nothing would be lost. Stop and ask if either check fails. Never reach for `--force` to get past one.
    - `git -C <worktree> status --porcelain` must print nothing.

@@ -71,6 +71,9 @@ local function follow()
       local item = view.panel:get_item_at_cursor()
       if not item or item == view.followed then return end
       view.followed = item
+      -- Going from a file on one side to one on two, or back, makes new
+      -- windows, which takes the cursor; file_open_post gives it back.
+      view.keep_panel = true
       if item.files then
         if item.files[1] then view:set_file(item.files[1], false) end
       elseif type(item.collapsed) ~= "boolean" then
@@ -116,28 +119,31 @@ local function one_sided(entry)
   return false
 end
 
--- Once diffview has listed the files: added and deleted ones on one side, and,
--- the first time, the first file that isn't generated chosen in place of the
--- first in the list.
-local function on_files(view)
-  local current = view.cur_entry
-  local reopen = false
-  for _, entry in ipairs(view.panel:ordered_file_list()) do
-    if one_sided(entry) and entry == current then reopen = true end
-  end
-  if not view.picked_first then
-    view.picked_first = true
-    for _, entry in ipairs(view.panel:ordered_file_list()) do
-      if not generated(entry.path) then
-        if entry ~= current then
-          view:set_file(entry, false, true)
-          return
+-- Before diffview opens a file after listing them: added and deleted ones put
+-- on one side, and, the first time, the first file that isn't generated
+-- chosen in place of the first in the list. It has to be before: diffview
+-- opens the file without waiting, so changing layouts or the file once it
+-- reports the list (files_updated) pulled the layout out from under the open
+-- still under way, and every startup ended in errors. The entry already shown
+-- is left as it is, for the same reason; a new or changed one is a new entry.
+local function wrap_set_file(view)
+  local set_file = view.set_file
+  view.set_file = function(self, file, focus, highlight)
+    local files = self.panel:ordered_file_list()
+    for _, entry in ipairs(files) do
+      if entry ~= self.cur_entry then one_sided(entry) end
+    end
+    if not self.picked_first and #files > 0 then
+      self.picked_first = true
+      for _, entry in ipairs(files) do
+        if not generated(entry.path) then
+          file, highlight = entry, true
+          break
         end
-        break
       end
     end
+    return set_file(self, file, focus, highlight)
   end
-  if reopen then view:set_file(current, false) end
 end
 
 -- Quieter highlighting, in diffview's windows only, so what changed stands
@@ -205,8 +211,12 @@ return {
     file_panel = { win_config = { width = 40 } },
     hooks = {
       view_opened = function(view)
-        if view.panel and view.panel.ordered_file_list and view.emitter then
-          view.emitter:on("files_updated", function() on_files(view) end)
+        if view.panel and view.panel.ordered_file_list then wrap_set_file(view) end
+        if view.emitter then
+          view.emitter:on("file_open_post", function()
+            if view.keep_panel and view.panel:is_open() then view.panel:focus() end
+            view.keep_panel = false
+          end)
         end
       end,
       diff_buf_win_enter = function(_, winid, ctx)

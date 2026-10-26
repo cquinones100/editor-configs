@@ -1344,3 +1344,23 @@ test("the daemon draws the tabs in each sidebar and moves between them with the 
   await until(() => client.destroyed || client.readableEnded);
   client.destroy();
 });
+
+test("a self-paced /loop counts as looping until its next wakeup is overdue, and a stop ends it", () => {
+  const file = path.join(home, ".claude/projects/-work/loop.jsonl");
+  const now = Date.now();
+  const at = (ms) => new Date(now - ms).toISOString();
+  const wakeup = (ms, input) => ({ type: "assistant", timestamp: at(ms), message: { content: [{ type: "tool_use", id: `s${ms}`, name: "ScheduleWakeup", input }] } });
+  fs.writeFileSync(file, JSON.stringify(wakeup(60_000, { delaySeconds: 900, prompt: "/loop /oncall", reason: "quiet" })) + "\n");
+  assert.deepEqual(sidebar.backgroundWork(file, now - 120_000), { count: 0, monitors: [], scheduled: { prompt: "/loop /oncall", at: now - 60_000 + 900_000 } });
+  assert.deepEqual(sidebar.backgroundWork(file, now - 30_000), { count: 0, monitors: [] }, "scheduled by an earlier process");
+
+  fs.appendFileSync(file, JSON.stringify(wakeup(20_000, { stop: true })) + "\n");
+  assert.deepEqual(sidebar.backgroundWork(file, now - 120_000), { count: 0, monitors: [] }, "stopped");
+
+  fs.writeFileSync(file, JSON.stringify(wakeup(30 * 60_000, { delaySeconds: 600, prompt: "/loop /oncall" })) + "\n");
+  assert.deepEqual(sidebar.backgroundWork(file, now - 60 * 60_000), { count: 0, monitors: [] }, "overdue, so the loop ended");
+
+  const tab = { id: "@9", index: 9, name: "on call", state: "background", background: 0, monitors: [], loop: { kind: "scheduled", prompt: "/loop /oncall", at: now + 7 * 60_000 + 5_000 }, session: "$1", panes: [], sidebars: [] };
+  assert.equal(sidebar.staged([tab])[0].key, "scheduled");
+  assert.equal(sidebar.stateWords(tab), "/oncall · next in 7m");
+});

@@ -85,6 +85,12 @@ A review loop's reviewer (Codex) never sees these rules. When a review loop cove
 - Don't repeat standing caveats I already know (an unpushed commit count, an uncommitted change being left out) unless they changed or matter to the action.
 - Proposals and reviews: numbered one-line items, no rationale paragraphs; I'll ask about the ones I want explained.
 
+## Clipboard
+
+- When you suggest a command for me to run in the session with the `! ` prefix, copy it to my clipboard with `pbcopy`, prefix included (`! gcloud auth login`), and say in a few words that it's on the clipboard.
+- When you create a ticket (Linear or elsewhere) and show me its ID, copy the ID to my clipboard with `pbcopy`, and say in a few words that it's on the clipboard.
+- Pipe the text in without a trailing newline (`printf '%s' '...' | pbcopy`), so pasting it doesn't run the command.
+
 
 # General
 

@@ -8,6 +8,8 @@
 #                                 out the status line for the sidebar
 #   sidebar.sh nudge              tell the daemon something changed
 #   sidebar.sh focus <window>     M-s: put the cursor in the window's sidebar
+#   sidebar.sh refocus <window>   the tab in front closed: the same, if the
+#                                 sidebar is on
 #   sidebar.sh mission <client> [work:tabs|work:untabbed]
 #                                 M-Space: open mission control on that client;
 #                                 M-j, M-o: on the Work map as a picker
@@ -90,6 +92,18 @@ case "${1:-}" in
       sleep 0.1
     done
     tmux display-message "The sidebar isn't running; see $state_dir/daemon.log."
+    ;;
+  refocus)
+    # Unlike focus, never turns the sidebar on, and says nothing when there is
+    # none: closing a tab isn't asking for one.
+    window=${2:-}
+    [ -n "$window" ] && [ "$(tmux show -gqv @sidebar_on)" != off ] && running || exit 0
+    # The sidebar follows the tab in front, so it may still be on its way.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      pane=$(tmux list-panes -t "$window" -F '#{pane_id} #{@sidebar}' 2>/dev/null | awk '$2 == "1" { print $1; exit }')
+      [ -n "$pane" ] && { tmux select-pane -t "$pane"; exit 0; }
+      sleep 0.1
+    done
     ;;
   mission)
     start

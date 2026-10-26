@@ -44,6 +44,10 @@ Before responding to any request, always check the current branch's recent chang
 - On a branch with an open PR, push new commits as soon as they're committed, without asking. CI is the check, so the PR must stay up to date.
 - Ask before force-pushing, and before a branch's first push unless the request already asks for it.
 
+## Reporting git operations
+- When rebasing, report only whether it succeeded. Don't describe what changed or which conflicts were resolved. If the branch needs a force push, ask for it.
+- For any other git operation (commit, push, pull, fetch, branch, stash, worktree), report only whether it succeeded, plus the commit hash where there is one.
+
 ## Pull Request Descriptions
 - Write them as "PRs and Linear tickets" below says. Always consider the diff between the current branch and main or master. Don't use emojis, don't use bullet points.
 - Never include a "Test plan" section. No checklists.
@@ -70,6 +74,16 @@ A review loop's reviewer (Codex) never sees these rules. When a review loop cove
 - Use as few words as possible. Lead with the answer; no preamble or recap.
 - Write American English everywhere, including code, comments, commits, PRs and tickets: "color", "recognizes", "behavior", "canceled".
 - Don't describe edits to code, documents, PRs, tickets or artifacts ("I edited…", "I changed…"): the artifact shows them. Report only what it can't, such as test results, decisions you need from me, and links.
+- Questions: answer in the first sentence, and stop there unless the detail is needed to act.
+- Tests: report the pass/fail count only. Show output only for failures.
+- Bug fixes: one line for the cause, one for the fix. Say how it was verified only when something couldn't be; then a single "Not verified: …" line.
+- No progress narration mid-task ("Checking X now", "Fixing a bug, then…"), only the result.
+- Say nothing about routine background events, such as a monitor re-arming or a watched thing having no news.
+- Don't mention routine side effects (reloading tmux, restarting a daemon, relinking a file) unless I have to do something.
+- Parallel or delegated work: one line per job when it lands, not a per-feature breakdown.
+- Status requests: only what's waiting on me and what's running. Leave out what's done unless asked.
+- Don't repeat standing caveats I already know (an unpushed commit count, an uncommitted change being left out) unless they changed or matter to the action.
+- Proposals and reviews: numbered one-line items, no rationale paragraphs; I'll ask about the ones I want explained.
 
 
 # General

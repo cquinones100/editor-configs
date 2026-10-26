@@ -1351,7 +1351,7 @@ test("a self-paced /loop counts as looping until its next wakeup is overdue, and
   const at = (ms) => new Date(now - ms).toISOString();
   const wakeup = (ms, input) => ({ type: "assistant", timestamp: at(ms), message: { content: [{ type: "tool_use", id: `s${ms}`, name: "ScheduleWakeup", input }] } });
   fs.writeFileSync(file, JSON.stringify(wakeup(60_000, { delaySeconds: 900, prompt: "/loop /oncall", reason: "quiet" })) + "\n");
-  assert.deepEqual(sidebar.backgroundWork(file, now - 120_000), { count: 0, monitors: [], scheduled: { prompt: "/loop /oncall", at: now - 60_000 + 900_000 } });
+  assert.deepEqual(sidebar.backgroundWork(file, now - 120_000), { count: 0, monitors: [], scheduled: { prompt: "/oncall", at: now - 60_000 + 900_000 } });
   assert.deepEqual(sidebar.backgroundWork(file, now - 30_000), { count: 0, monitors: [] }, "scheduled by an earlier process");
 
   fs.appendFileSync(file, JSON.stringify(wakeup(20_000, { stop: true })) + "\n");
@@ -1360,7 +1360,31 @@ test("a self-paced /loop counts as looping until its next wakeup is overdue, and
   fs.writeFileSync(file, JSON.stringify(wakeup(30 * 60_000, { delaySeconds: 600, prompt: "/loop /oncall" })) + "\n");
   assert.deepEqual(sidebar.backgroundWork(file, now - 60 * 60_000), { count: 0, monitors: [] }, "overdue, so the loop ended");
 
-  const tab = { id: "@9", index: 9, name: "on call", state: "background", background: 0, monitors: [], loop: { kind: "scheduled", prompt: "/loop /oncall", at: now + 7 * 60_000 + 5_000 }, session: "$1", panes: [], sidebars: [] };
+  const tab = { id: "@9", index: 9, name: "on call", state: "background", background: 0, monitors: [], loop: { kind: "scheduled", prompt: "/oncall", at: now + 7 * 60_000 + 5_000 }, session: "$1", panes: [], sidebars: [] };
   assert.equal(sidebar.staged([tab])[0].key, "scheduled");
-  assert.equal(sidebar.stateWords(tab), "/oncall · next in 7m");
+  assert.equal(sidebar.stateWords(tab), "next in 7m · /oncall");
+});
+
+test("a cron job Claude created is a loop until CronDelete names it, shown by its prompt's first sentence and next run", () => {
+  const file = path.join(home, ".claude/projects/-work/cron.jsonl");
+  const now = Date.now();
+  const at = (ms) => new Date(now - ms).toISOString();
+  const prompt = "Watch the reply to the DM. Read the channel, and act on it.";
+  const entries = [
+    { type: "assistant", timestamp: at(60_000), message: { content: [{ type: "tool_use", id: "c1", name: "CronCreate", input: { cron: "*/5 * * * *", recurring: true, prompt } }] } },
+    { type: "user", timestamp: at(60_000), message: { content: [{ type: "tool_result", tool_use_id: "c1", content: "Scheduled recurring job a03c0408 (*/5 * * * *). Next run: soon. Session-only." }] } },
+  ];
+  fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+  const work = sidebar.backgroundWork(file, now - 120_000);
+  assert.equal(work.scheduled.prompt, "Watch the reply to the DM.");
+  assert.equal(work.scheduled.at, sidebar.nextCron("*/5 * * * *", now));
+  assert.ok(work.scheduled.at > now && work.scheduled.at <= now + 5 * 60_000);
+
+  fs.appendFileSync(file, JSON.stringify({ type: "assistant", timestamp: at(1_000), message: { content: [{ type: "tool_use", id: "c2", name: "CronDelete", input: { id: "a03c0408" } }] } }) + "\n");
+  assert.deepEqual(sidebar.backgroundWork(file, now - 120_000), { count: 0, monitors: [] }, "deleted");
+
+  const nine = new Date(2026, 9, 26, 8, 59, 30).getTime();
+  assert.equal(sidebar.nextCron("0 9 * * 1-5", nine), new Date(2026, 9, 26, 9, 0).getTime());
+  assert.equal(sidebar.nextCron("3-59/5 * * * *", new Date(2026, 9, 26, 16, 9).getTime()), new Date(2026, 9, 26, 16, 13).getTime());
+  assert.equal(sidebar.loopName("/loop 5m /babysit-prs"), "/babysit-prs");
 });

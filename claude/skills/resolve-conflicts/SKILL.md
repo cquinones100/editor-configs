@@ -25,6 +25,8 @@ Only when no rebase, merge or cherry-pick is in progress (`git status` says so).
    git fetch origin
    ```
 
+   Then record where the branch's own remote copy is, for the push at the end: `git rev-parse --verify --quiet origin/<branch>`, with `<branch>` from `git branch --show-current`. Nothing printed means the branch has never been pushed.
+
 - **Stop if it is current.** If the branch already contains `<base>` (`git merge-base --is-ancestor <base> HEAD` succeeds), it is up to date: say so and stop, unless there are conflicts to resolve for some other reason.
 - **Rebase.** Record the tip before rebasing (`git rev-parse HEAD`), then rebase onto `<base>` with the editor disabled:
 
@@ -35,7 +37,7 @@ Only when no rebase, merge or cherry-pick is in progress (`git status` says so).
    Rebase onto the remote branch itself, not the local `main`: the local one may be behind, or checked out in another worktree where it can't be moved.
 - **Then:** if it finishes without conflicts, go to step 7 of Resolving with the tip you recorded. If it stops on conflicts, work through Resolving from step 1; the tip you recorded is the pre-rebase tip step 7 compares against.
 
-The branch now has new commits, so its remote copy needs a force push. Don't push; say that it needs one, and ask.
+The branch now has new commits, so its remote copy needs a force push, which "Pushing" below does without asking.
 
 ## Resolving
 
@@ -76,4 +78,21 @@ Stop and ask instead of continuing when:
 - The same commit conflicts again after a continue, which usually means the previous resolution was wrong.
 - The only way forward is `--abort` or `--skip`, or dropping a commit's changes entirely.
 
-Never run `git push` and never `--abort` without asking first.
+Never `--abort` without asking first.
+
+## Pushing
+
+Once a rebase has finished and step 7 found nothing lost, force-push the branch to its own remote copy without asking: the user has said this skill may. Only with a lease on the remote tip recorded after fetching, so a push someone else made since is refused rather than overwritten:
+
+```
+git push --force-with-lease=<branch>:<recorded remote tip> origin HEAD:<branch>
+```
+
+Don't push, and say why, when:
+
+- Step 7 showed content that should have survived but didn't, or anything else you asked about: the user decides first.
+- The branch has no remote copy yet (nothing was recorded). A branch's first push is still asked for.
+- The branch is `<base>`'s branch (`main`, `master`), or the operation was a merge or cherry-pick, which needs no force.
+- The lease refuses the push: someone pushed to the branch meanwhile. Report it; never retry with `--force`.
+
+Report the push as the user's CLAUDE.md asks of git operations: that it succeeded, and the new commit hash.

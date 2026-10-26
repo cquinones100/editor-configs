@@ -42,10 +42,10 @@ Before responding to any request, always check the current branch's recent chang
 
 ## Pushing
 - On a branch with an open PR, push new commits as soon as they're committed, without asking. CI is the check, so the PR must stay up to date.
-- Ask before force-pushing, and before a branch's first push unless the request already asks for it.
+- Ask before force-pushing, and before a branch's first push unless the request already asks for it. The exception is `/resolve-conflicts`, which force-pushes a rebased branch with a lease, as its skill says.
 
 ## Reporting git operations
-- When rebasing, report only whether it succeeded. Don't describe what changed or which conflicts were resolved. If the branch needs a force push, ask for it.
+- When rebasing, report only whether it succeeded. Don't describe what changed or which conflicts were resolved. If the branch needs a force push, ask for it, except under `/resolve-conflicts`, which pushes it itself.
 - For any other git operation (commit, push, pull, fetch, branch, stash, worktree), report only whether it succeeded, plus the commit hash where there is one.
 
 ## Pull Request Descriptions

@@ -133,13 +133,54 @@ else
   optional "Linear, for M-i, M-l and ticket titles in tab names: a personal API key from Linear's settings, then security add-generic-password -a \"\$USER\" -s linear-api-key -w"
 fi
 
-# Without these hooks every tab shows idle, and M-a has nothing to walk.
-if grep -qs 'agent-state.sh' ~/.claude/settings.json; then
+# Without these hooks every tab shows idle, and M-a has nothing to walk. Only
+# the hooks that run agent-state.sh are added to your own settings, beside
+# what is there, and the statusline (which gives the sidebar each session's
+# context use) only when you have none: the rest of claude/settings.json is
+# its owner's.
+if [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */editor-configs/claude/settings.json ]]; then
+  ok "Claude Code, with this repo's whole setup"
+elif grep -qs 'agent-state.sh' ~/.claude/settings.json; then
   ok "Claude Code's hooks (tab states, the sidebar's Needs you, M-a)"
-elif command -v claude >/dev/null; then
-  optional "Claude Code's hooks, for tab states and M-a: copy the \"hooks\" block from $REPO_DIR/claude/settings.json into ~/.claude/settings.json (./sync.sh claude would bring the rest of its owner's settings too)"
-else
+elif ! command -v claude >/dev/null; then
   optional "Claude Code, for tab states, the sidebar's sessions and M-a: https://claude.com/claude-code"
+elif ask "Add Claude Code's hooks for tab states and M-a to your ~/.claude/settings.json?"; then
+  mkdir -p ~/.claude
+  [[ -f ~/.claude/settings.json ]] || echo '{}' > ~/.claude/settings.json
+  cp ~/.claude/settings.json ~/.claude/settings.json.bak."$(date +%Y%m%d%H%M%S)"
+  [[ -e ~/.claude/statusline-command.sh ]] || ln -s ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
+  merged=$(jq --slurpfile repo "$REPO_DIR/claude/settings.json" '
+    ($repo[0].hooks | map_values(
+      map(.hooks |= map(select(.command | contains("agent-state.sh")))) | map(select(.hooks | length > 0))
+    ) | with_entries(select(.value | length > 0))) as $ours
+    | .hooks = reduce ($ours | keys[]) as $k (.hooks // {}; .[$k] = ((.[$k] // []) + $ours[$k]))
+    | .statusLine //= $repo[0].statusLine
+  ' ~/.claude/settings.json) && printf '%s\n' "$merged" > ~/.claude/settings.json &&
+    ok "added Claude Code's hooks; your old settings are beside them as settings.json.bak.*" ||
+    todo "adding Claude Code's hooks to ~/.claude/settings.json failed"
+else
+  optional "Claude Code's hooks, for tab states and M-a: ./setup.sh adds them when you say yes"
+fi
+
+# Everything in claude/: its owner's CLAUDE.md, settings (telemetry included),
+# skills, commands and hooks, linked in place of yours, which sync.sh moves
+# aside. Asked only once Claude Code is there, and never assumed.
+if [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */editor-configs/claude/settings.json ]] || ! command -v claude >/dev/null; then
+  :
+elif ask "Also replace your Claude Code setup with this repo's whole one (CLAUDE.md, settings with its owner's telemetry, skills, commands, hooks)? Yours is moved aside, not deleted."; then
+  "$REPO_DIR/sync.sh" claude && ok "linked this repo's Claude Code setup" || todo "./sync.sh claude failed"
+else
+  optional "this repo's whole Claude Code setup, skills included: ./sync.sh claude, which replaces yours"
+fi
+
+# Only for committing to this clone: its pre-commit hook keeps machine-specific
+# Claude settings out of commits.
+if [[ $(git -C "$REPO_DIR" config core.hooksPath) == .githooks ]]; then
+  ok "this clone's git hooks"
+elif ask "Use this repo's git hooks in this clone (only matters if you commit to it)?"; then
+  "$REPO_DIR/sync.sh" git && ok "set this clone's git hooks" || todo "./sync.sh git failed"
+else
+  optional "this clone's git hooks, if you commit to it: ./sync.sh git"
 fi
 
 if [[ -f ~/.config/slack-relay/config.json ]]; then

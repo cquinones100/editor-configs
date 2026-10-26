@@ -8,10 +8,14 @@ belong to: it checks for macOS, zsh, the repo at `~/editor-configs`,
 Homebrew's `tmux jq fzf gh glow lazygit neovim` (tmux 3.8 or newer), Node
 from nvm and `~/.local/bin` on the PATH, links the tmux, Neovim and lazygit
 configs and these scripts, and installs Neovim's pinned plugins, asking
-before each install or change to `~/.zshrc`. It then lists the optional parts
-(GitHub, the Linear key, Claude Code's hooks, slack-relay) and the keys each
-one is for. `./setup.sh --check` only reports. It never links
-`claude/settings.json`, since that holds its owner's own settings.
+before each install or change to `~/.zshrc`. Then come the optional parts, each asked for
+and off unless you say yes: Claude Code's hooks for tab states and `M-a`
+(only those hooks, added to your own settings, plus the statusline if you
+have none), this repo's whole Claude Code setup in place of yours (`./sync.sh
+claude`, its owner's settings and telemetry included), and this clone's git
+hooks (`./sync.sh git`, for committing to it). It also lists GitHub, the
+Linear key and slack-relay, with the keys each one is for. `./setup.sh
+--check` only reports.
 
 ## worktree-from-ticket
 

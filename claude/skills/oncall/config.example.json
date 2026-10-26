@@ -1,0 +1,10 @@
+{
+  "channels": [
+    { "id": "C0000000001", "name": "#alerts-high", "urgent": "A monitor in its alert state here pages." },
+    { "id": "C0000000002", "name": "#alerts-low" },
+    { "id": "C0000000003", "name": "#alerts-staging", "watch": "Only the deploy workflow's failure posts." }
+  ],
+  "rules": "~/code/your-repo/docs/oncall-rules.md",
+  "repo": "your-org/your-repo",
+  "from": "oncall"
+}

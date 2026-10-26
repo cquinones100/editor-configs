@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Queue this worktree's PR for merge, in the merge queue or with auto-merge, unless it is already queued. Then watch the PR without blocking the conversation. When something the branch can fix stops it merging (a required check fails, it has merge conflicts, or the merge queue drops it), fix it, push, queue it again and go back to watching, as described in "Fixing". When it merges, wait until the merge has deployed, test the feature on the deployed site in a real browser, recording a video of the test, and ask the user to approve it ("Deploy and test"). Once they approve, remove the worktree and its local branch. If it closes without merging, or stops for something you can't fix, leave everything as it is.
 
-When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged, the user approved the test (or chose to clean up without one) and the cleanup finished; if you fixed anything on the way, say what in a few words after it, as `queue-and-clean: success (fixed: <what>)`, for example `queue-and-clean: success (fixed: lint error in api.ts; reran a flaky e2e job)`. What "Deploy and test" and "Closing out" did goes in the same brackets, after anything fixed: `queue-and-clean: success (tested: <video>; ticket ABC-123 done)`. `fail` means the PR could not be queued, closed without merging, failed to deploy, had its test turned down, stopped for something "Fixing" leaves alone or still failed after its last round, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`), and what you tried when you tried fixing it. The questions in "Before watching", the merge method question in "Queuing", the questions in "Fixing", the questions and the approval in "Deploy and test", and the questions in cleanup step 1 are still asked, because they pause the work rather than end it.
+When the work is done, the final message is either `queue-and-clean: success` or `queue-and-clean: fail: <reason>` and nothing else: no summary of what was checked or what was removed. `success` means the PR merged, the user approved the test (or chose to clean up without one) and the cleanup finished; if you fixed anything on the way, say what in a few words after it, as `queue-and-clean: success (fixed: <what>)`, for example `queue-and-clean: success (fixed: lint error in api.ts; reran a flaky e2e job)`. What "Deploy and test" and "Closing out" did goes in the same brackets, after anything fixed: `queue-and-clean: success (tested: <video>; ticket ABC-123 done)`. `fail` means the PR could not be queued, closed without merging, failed to deploy, had its test turned down, stopped for something "Fixing" leaves alone or still failed after its last round, or a cleanup command errored, and the reason is one line saying which, with the error message when a command failed (for example `queue-and-clean: fail: git worktree remove: '<path>' contains modified or untracked files`), and what you tried when you tried fixing it. The questions in "Before watching", the merge method question in "Queuing", the questions in "Fixing", the questions and the approval in "Deploy and test", and the questions in clean-worktree's step 2 are still asked, because they pause the work rather than end it.
 
 Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 
@@ -22,7 +22,7 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
    gh repo view --json owner,name --jq '.owner.login + " " + .name'
    ```
 
-2. Record the paths the cleanup needs now, while the worktree still exists:
+2. Record the paths the cleanup needs now, while the worktree still exists, as step 1 of `~/editor-configs/claude/skills/clean-worktree/SKILL.md` finds them:
 
    ```
    git rev-parse --show-toplevel
@@ -187,28 +187,12 @@ After the PR merges, and before anything is removed, follow `~/editor-configs/cl
 
 ## Cleanup
 
-Only after GitHub reports the PR `MERGED` and the user has approved in "Approval". If any command in steps 2 to 4 errors, stop there and reply `queue-and-clean: fail: <command>: <its error message>`.
+Only after GitHub reports the PR `MERGED` and the user has approved in "Approval". Follow `~/editor-configs/claude/skills/clean-worktree/SKILL.md` from step 2, with the paths recorded before watching and the PR's number (it is `disable-model-invocation`, so read it rather than invoking it).
 
-1. Make sure nothing would be lost. Stop and ask if either check fails. Never reach for `--force` to get past one.
-   - `git -C <worktree> status --porcelain` must print nothing.
-   - `git -C <worktree> rev-parse HEAD` must equal the PR's final head. Get it again with `gh pr view <number> --json headRefOid`, because the queue may have updated the branch after you first read it. A difference means there are local commits the merge did not include.
-2. Remove the worktree from the main clone, so nothing runs from inside the directory being deleted:
+- `clean-worktree: success`: close out the ticket and the note, as "Closing out" says, then reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
+- `clean-worktree: fail: <reason>`: reply `queue-and-clean: fail: <reason>`, closing out nothing.
 
-   ```
-   git -C <main-clone> worktree remove <worktree>
-   ```
-
-3. Delete the local branch. It has to be `-D`: a squash or rebase merge leaves the branch looking unmerged to git, and step 1 already showed GitHub has every commit on it.
-
-   ```
-   git -C <main-clone> branch -D <branch>
-   ```
-
-4. Run `git -C <main-clone> fetch --prune origin` so the deleted remote branch stops showing up. Do not check anything out or pull in the main clone. Its working tree is not yours to change.
-5. Close out the ticket and the note, as "Closing out" says.
-6. Reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
-
-The only pushes are `/ci-loop`'s fix commits (see "Fixing"), to the PR's own branch, and never a force-push. Never delete the remote branch: GitHub or the repo's settings handle that.
+The only pushes are `/ci-loop`'s fix commits (see "Fixing"), to the PR's own branch, and never a force-push.
 
 ## Closing out
 

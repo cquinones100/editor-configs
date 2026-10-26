@@ -41,16 +41,7 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 4. Settle the ticket and the note now, so finishing up later asks nothing:
    - **The ticket**: the Linear ticket the branch names (an ID like `ABC-123` at the start of the branch name), else one the PR's title or body names. None is fine: then there is no ticket to close out.
    - **The note**: which of the user's notes holds this work's checklist item, settled as `~/.claude/skills/note-watch/pick-note.md` says, with **No note** as an option, since not every PR has one. Remember the answer; read the note only at "Closing out".
-   - **The deploy**: what shows the base branch has deployed, and the URL to test it at. Look, in this order: the repository's `CLAUDE.md`, `AGENTS.md` and README for how and where it deploys; the GitHub environments its recent deploys went to, with their URLs,
-
-     ```
-     gh api 'repos/<owner>/<repo>/deployments?ref=<baseRefName>&per_page=20' --jq '[.[].environment] | unique'
-     gh api 'repos/<owner>/<repo>/deployments?environment=<env>&per_page=1' --jq '.[0].id' |
-       xargs -I{} gh api 'repos/<owner>/<repo>/deployments/{}/statuses?per_page=1' --jq '.[0].environment_url'
-     ```
-
-     and the workflows that run on pushes to the base branch, for one that deploys (`gh run list --branch <baseRefName> --event push --limit 30 --json workflowName --jq 'map(.workflowName) | unique'`). Prefer the environment the merge reaches first and that people use, usually production or staging, over previews. When one answer is plain, use it and say in a line which; otherwise ask, with **No deploy to wait for** (test what is already live, or nothing) and **Skip the deploy and the test** as options.
-   - **The test**: what the PR changes that a person could see in a browser, from its description, the ticket's acceptance criteria and the diff. A backend, infrastructure, tooling or library change may have nothing to see; then there is no browser test, and "Deploy and test" says so when it asks for approval.
+   - **The deploy and the test**: settle both as "Settling" in `~/editor-configs/claude/skills/deploy-test/SKILL.md` says, so nothing after the merge has to ask.
 
 ## Queuing
 
@@ -189,50 +180,10 @@ Hand the PR over at most three times in one run, since each requeue can fail aga
 
 ## Deploy and test
 
-After the PR merges, and before anything is removed: the worktree stays until the user has seen the feature work where it was deployed, so a fix can start from it if it doesn't.
+After the PR merges, and before anything is removed, follow `~/editor-configs/claude/skills/deploy-test/SKILL.md` from "Waiting for the deploy", with what was settled before watching (it is `disable-model-invocation`, so read it rather than invoking it). The worktree stays until the user has approved, so a fix can start from it if the feature isn't right.
 
-### Waiting for the deploy
-
-Skip this when the deploy settled before watching was **No deploy to wait for** or **Skip the deploy and the test**. Otherwise read the merge commit, `gh pr view <number> --json mergeCommit --jq .mergeCommit.oid`, and start the watch with the Bash tool's `run_in_background`, as with the merge watch; you are re-invoked when it exits:
-
-```
-node ~/.claude/skills/queue-and-clean/scripts/wait-deploy.js --repo <owner>/<repo> --sha <merge commit> \
-  --environment <env>                                   # a GitHub environment, or
-  --workflow <workflow> --branch <baseRefName>          # a deploy workflow on the base branch
-```
-
-It counts a deploy of the merge commit or of any later commit that includes it, and prints one line:
-
-- `deployed <sha> <url>`: go on to the test. A URL other than `-` is where that deploy went, and wins over the one settled before watching when they differ only by a preview's address.
-- `failed <url>`: every deploy that includes the merge failed. Leave everything as it is and reply `queue-and-clean: fail: deploy failed: <url>`.
-- `timeout`: nothing deployed it in 45 minutes. Ask whether to keep waiting (run it again), test what is live anyway, or stop, which leaves everything as it is and replies `queue-and-clean: fail: no deploy after 45 minutes`.
-
-### Testing in a browser
-
-Skip this when there is nothing a browser can show, or the test was skipped, and go to "Approval". Otherwise the scripts need their packages: if `~/.claude/skills/queue-and-clean/scripts/node_modules` is missing, run `npm ci --prefix ~/.claude/skills/queue-and-clean/scripts`. Recording needs Playwright's own ffmpeg too; if a run says it is missing, run `node ~/.claude/skills/queue-and-clean/scripts/node_modules/playwright/cli.js install ffmpeg`.
-
-1. **Write the test** in the session's scratchpad, `<scratchpad>/queue-and-clean-<number>/steps.js`, exporting one async function given `{ page, step, expect }` (`record.js` has an example). Walk through the change as a person would: go where the feature is, do what the acceptance criteria describe, and `expect` what should be on screen. Start each part with `step("<what this shows>")`, which captions the video, so the user can follow it without the code. Prefer roles and visible text to CSS selectors. Keep it under a minute.
-2. **Change nothing real.** This is the deployed site, often production, with real people's data. Look, navigate, open and fill in what you need to, but don't submit what saves, sends, deletes, pays for or emails anything, unless the environment is plainly a test one (staging, a preview) or the user says so when asked. When the feature can only be seen by changing data, ask first, saying what the test would change. A feature behind a flag that is off is something to report, not to turn on.
-3. **Record it:**
-
-   ```
-   node ~/.claude/skills/queue-and-clean/scripts/record.js <scratchpad>/queue-and-clean-<number>/steps.js \
-     --url <url> --out <scratchpad>/queue-and-clean-<number>
-   ```
-
-   It runs the test headless in the system Chrome and prints `{ passed, video, screenshot, log, error }`. Look at the screenshot and the log (each step, console errors, and responses of 500 and up) as well as `passed`.
-4. **Signing in.** Each site keeps its own Chrome profile under `~/.cache/queue-and-clean/profiles/`. If the test lands on a sign-in page, ask the user to sign in, then run `node ~/.claude/skills/queue-and-clean/scripts/record.js --login --url <url>` in the background: it opens a visible window, and they close it once signed in. Then record again. Never type a password or a code yourself.
-5. **When it fails**, decide whether the test or the feature is wrong. Fix a test that was wrong (a selector, a timing, a step in the wrong place) and record again, at most three times. A feature that doesn't do what it should is the answer, not something to fix here: take that video to "Approval".
-
-### Approval
-
-Open the video with `open <video>`, so it plays in QuickTime, and ask with `AskUserQuestion`. Say in the question what the test showed, in a line, whether it passed, anything the log caught, and the video's full path; or, when there was no test, why not. The options:
-
-- **Approve and clean up**: go to "Cleanup".
-- **Record again**: with what the user says to change (their notes on the option), change the test and go back to recording.
-- **Keep the worktree**: the feature isn't right. Leave everything as it is, the ticket and the note included, and reply `queue-and-clean: fail: test not approved: <their reason, or what the test showed>`.
-
-Keep the video's path for the final message, as `tested: <path>`, or `not tested: <why>`.
+- `deploy-test: approved (…)`: go to "Cleanup", and keep what is in the brackets for the final message.
+- `deploy-test: fail: <reason>`: leave everything as it is, the ticket and the note included, and reply `queue-and-clean: fail: <reason>`.
 
 ## Cleanup
 

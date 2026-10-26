@@ -16,7 +16,7 @@
 // video says what each part shows, and logs it. expect is Playwright's.
 //
 // Each site keeps its own Chrome profile in
-// ~/.cache/queue-and-clean/profiles/<host>, so a site that needs signing in
+// ~/.cache/deploy-test/profiles/<host>, so a site that needs signing in
 // is signed into once, with --login, which opens a visible window at the URL
 // and waits for you to close it; tests after that run headless with that
 // session. The profile is never in a repository.
@@ -45,7 +45,7 @@ if (!url || (!login && (!stepsFile || !out))) {
 }
 
 const size = { width: 1280, height: 800 };
-const profile = path.join(os.homedir(), ".cache/queue-and-clean/profiles", new URL(url).host);
+const profile = path.join(os.homedir(), ".cache/deploy-test/profiles", new URL(url).host);
 fs.mkdirSync(profile, { recursive: true });
 
 const signIn = async () => {
@@ -77,7 +77,7 @@ const record = async () => {
   const showCaption = () =>
     page
       .evaluate((text) => {
-        const id = "__queue_and_clean_caption";
+        const id = "__deploy_test_caption";
         const box = document.getElementById(id) ?? document.body.appendChild(Object.assign(document.createElement("div"), { id }));
         Object.assign(box.style, {
           position: "fixed", left: "0", right: "0", bottom: "0", zIndex: "2147483647", pointerEvents: "none",

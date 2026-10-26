@@ -292,6 +292,55 @@ case "${1:-}" in
     ;;
 
   next)
+    # The sidebar's Needs you, as its daemon writes it (lib/sidebar/daemon.js,
+    # writeNeeds), when the daemon runs: flagged tabs first, then waiting and
+    # done, and none that only looks done here while it works in the
+    # background or loops, which only the daemon can tell from the transcript.
+    # Each press goes to the tab after this one there, wrapping at the end; a
+    # done tab leaves the list once seen, so pressed again from it, the walk
+    # carries on with the tabs that were after it (@agent_walk_rest).
+    needs_file=~/.local/state/tmux-sidebar/needs
+    daemon=$(cat ~/.local/state/tmux-sidebar/daemon.pid 2>/dev/null)
+    if [ -n "$daemon" ] && kill -0 "$daemon" 2>/dev/null && [ -f "$needs_file" ]; then
+      here=$(tmux display -p '#{window_id}')
+      windows=() panes=() sessions=()
+      while IFS=$'\t' read -r w p s; do
+        [ -n "$w" ] && windows+=("$w") && panes+=("$p") && sessions+=("$s")
+      done <"$needs_file"
+      n=${#windows[@]}
+      if [ "$n" -eq 0 ]; then
+        tmux display-message "Nothing needs you."
+        exit 0
+      fi
+      at=-1
+      for i in "${!windows[@]}"; do [ "${windows[$i]}" = "$here" ] && at=$i; done
+      if [ "$at" -ge 0 ]; then
+        if [ "$n" -eq 1 ]; then
+          tmux display-message "This is the only tab that needs you."
+          exit 0
+        fi
+        to=$(( (at + 1) % n ))
+      else
+        to=0
+        if [ "$(tmux show -gqv @agent_walk_window)" = "$here" ]; then
+          for id in $(tmux show -gqv @agent_walk_rest); do
+            found=-1
+            for i in "${!windows[@]}"; do [ "${windows[$i]}" = "$id" ] && found=$i; done
+            if [ "$found" -ge 0 ]; then
+              to=$found
+              break
+            fi
+          done
+        fi
+      fi
+      tmux set -g @agent_walk_window "${windows[$to]}"
+      tmux set -g @agent_walk_rest "${windows[*]:$((to + 1))}"
+      tmux select-window -t "${windows[$to]}"
+      [ "${panes[$to]}" != - ] && tmux select-pane -t "${panes[$to]}"
+      [ "${sessions[$to]}" != "$(tmux display -p '#{session_id}')" ] && tmux switch-client -t "${sessions[$to]}"
+      exit 0
+    fi
+    # Without the sidebar's daemon, from the panes' own states:
     # Everything that needs you, in order: waiting first, then done, oldest
     # first within each. A node pane counts too, as Claude may be running under
     # claude-here there; one that isn't loses its state when it is next focused.

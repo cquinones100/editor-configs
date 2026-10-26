@@ -116,9 +116,15 @@ the tab is still in front a second later, so passing over a tab, as moving the
 sidebar's cursor does, leaves it, and a session that finishes in the tab you
 are looking at never gets it. A pane that
 is no longer running Claude loses its state on the next focus, so a session
-that died without `SessionEnd` leaves nothing behind. `M-a` walks the tabs that
-need you, waiting first and then done, oldest first; `wt-jump` and the second
-status line show the same state.
+that died without `SessionEnd` leaves nothing behind. `M-a` walks the sidebar's
+Needs you in its order (flagged, then waiting, then done), from the list the
+sidebar daemon writes to `~/.local/state/tmux-sidebar/needs` whenever it
+changes, since only the daemon knows a tab that looks done is still looping
+or working in the background; without the daemon it falls back to the panes'
+own states. `agent-state.sh` runs before every tool call of every Claude
+session, so a syntax error in it blocks them all, the fix included: check a
+change with `bash -n` on a copy before it replaces the file. `wt-jump` and the
+second status line show the same state.
 
 Claude Code waits on these hooks, so the script only makes tmux calls: no
 network, and no output, since Claude Code adds `UserPromptSubmit` and

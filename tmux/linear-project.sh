@@ -6,7 +6,7 @@
 #
 # Unlike linear-ticket.sh, the URL can't be built from the branch: the project
 # is only known to Linear, so this asks its API, with the key worktree-from-ticket
-# uses (from $LINEAR_API_KEY or its config file). The binding runs it in the
+# uses (from $LINEAR_API_KEY, the Keychain or its config file). The binding runs it in the
 # background, so the wait never holds up tmux.
 
 set -u
@@ -40,8 +40,9 @@ ticket=$(printf '%s' "$branch" | grep -ioE '[a-z][a-z0-9]*-[0-9]+' | head -1 | t
 [ -n "$ticket" ] || { explain "The branch $branch doesn't name a Linear ticket, so there's no project to open."; exit 0; }
 
 config="${XDG_CONFIG_HOME:-$HOME/.config}/worktree-from-ticket/config.json"
-key="${LINEAR_API_KEY:-$(jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
-[ -n "$key" ] || { explain "There's no Linear API key: set LINEAR_API_KEY, or linearApiKey in $config."; exit 0; }
+# The macOS Keychain (service linear-api-key), else the config file's linearApiKey.
+key="${LINEAR_API_KEY:-$(security find-generic-password -s linear-api-key -w 2>/dev/null || jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
+[ -n "$key" ] || { explain "There's no Linear API key: set LINEAR_API_KEY, or store it in the Keychain as linear-api-key."; exit 0; }
 
 tmux display-message -c "$client" "Looking up the Linear project for $ticket..."
 

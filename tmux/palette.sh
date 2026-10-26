@@ -21,6 +21,8 @@
 # rest follow alphabetically.
 
 set -u
+# What it keeps names your branches, tickets and prompts: yours alone.
+umask 077
 
 # Orders the rows in <file> for <query>, best first, for fzf to show as is.
 # fzf's own scoring rates characters, not words: "pr" scores as well at the

@@ -45,13 +45,15 @@ and splits open in the worktree too — and you're still there after claude exit
    <https://linear.app/settings/api>, then:
 
    ```sh
+   security add-generic-password -U -a "$USER" -s linear-api-key -w   # asks for the key
    mkdir -p ~/.config/worktree-from-ticket
-   printf '{"linearApiKey":"lin_api_...","linearWorkspace":"your-workspace"}' > ~/.config/worktree-from-ticket/config.json
-   chmod 600 ~/.config/worktree-from-ticket/config.json
+   printf '{"linearWorkspace":"your-workspace"}' > ~/.config/worktree-from-ticket/config.json
    ```
 
-   `LINEAR_API_KEY` in the environment also works and takes precedence, but the
-   config file keeps the secret out of your shell config.
+   The key lives in the macOS Keychain, as the relay's Slack tokens do, rather
+   than in a file any program you run can read. `LINEAR_API_KEY` in the
+   environment also works and takes precedence; a `linearApiKey` in the config
+   file is still read, after the Keychain, for a machine set up before.
 
    `linearWorkspace` is the slug in your Linear URLs
    (`linear.app/<workspace>/issue/...`). `worktree-from-ticket` does not need it,

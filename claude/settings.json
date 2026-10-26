@@ -61,6 +61,12 @@
       "Bash(git pull *)",
       "Bash(git pull)"
     ],
+    "ask": [
+      "Bash(find * -delete*)",
+      "Bash(find * -exec*)",
+      "Bash(find * -ok*)",
+      "Bash(find * -fprint*)"
+    ],
     "defaultMode": "auto"
   },
   "model": "claude-fable-5-1[1m]",

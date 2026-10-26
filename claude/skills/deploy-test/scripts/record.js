@@ -46,7 +46,11 @@ if (!url || (!login && (!stepsFile || !out))) {
 
 const size = { width: 1280, height: 800 };
 const profile = path.join(os.homedir(), ".cache/deploy-test/profiles", new URL(url).host);
-fs.mkdirSync(profile, { recursive: true });
+// Playwright runs Chrome with a stand-in keychain, so its cookies are as good
+// as unencrypted: signed-in sessions, readable by no one else.
+fs.mkdirSync(profile, { recursive: true, mode: 0o700 });
+fs.chmodSync(path.dirname(profile), 0o700);
+fs.chmodSync(profile, 0o700);
 
 const signIn = async () => {
   const context = await chromium.launchPersistentContext(profile, { channel: "chrome", headless: false, viewport: size });

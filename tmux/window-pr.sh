@@ -11,6 +11,8 @@
 # windows instant; asking gh inline would cost a second per window, every time.
 
 set -u
+# What it keeps names your branches, tickets and prompts: yours alone.
+umask 077
 
 path="${1:-}"
 [ -n "$path" ] && [ -d "$path" ] || exit 0

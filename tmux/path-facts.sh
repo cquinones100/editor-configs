@@ -19,6 +19,8 @@
 # the tabs, so a PR number or title still shows up as soon as it is known.
 
 set -u
+# What it keeps names your branches, tickets and prompts: yours alone.
+umask 077
 
 path="${1:-}"
 [ -n "$path" ] || exit 0

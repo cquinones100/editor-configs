@@ -51,8 +51,9 @@ case "${1:-}" in
     }
     command -v glow >/dev/null || wait_key "${red}glow isn't installed.${reset} Install it with: brew install glow"
     config="${XDG_CONFIG_HOME:-$HOME/.config}/worktree-from-ticket/config.json"
-    key="${LINEAR_API_KEY:-$(jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
-    [ -n "$key" ] || wait_key "${red}No Linear API key${reset} (LINEAR_API_KEY, or linearApiKey in $config)."
+    # The macOS Keychain (service linear-api-key), else the config file's linearApiKey.
+    key="${LINEAR_API_KEY:-$(security find-generic-password -s linear-api-key -w 2>/dev/null || jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
+    [ -n "$key" ] || wait_key "${red}No Linear API key${reset} (LINEAR_API_KEY, or the Keychain's linear-api-key)."
     printf '\n  %sReading %s...%s' "$dim" "$id" "$reset"
     query='query($id: String!) { issue(id: $id) {
       identifier title url description createdAt updatedAt priorityLabel estimate

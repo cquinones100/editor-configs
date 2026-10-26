@@ -7,7 +7,7 @@
 // repo root so this works from inside an existing worktree.
 //
 // Needs a Linear personal API key (https://linear.app/settings/api), from
-// either LINEAR_API_KEY or ~/.config/worktree-from-ticket/config.json.
+// LINEAR_API_KEY, the Keychain (service linear-api-key), or ~/.config/worktree-from-ticket/config.json.
 //
 //   worktree-from-ticket ABC-123          creates the worktree, opens claude
 //   worktree-from-ticket init zsh         prints the `wt` shell function
@@ -114,6 +114,13 @@ const slugify = (text) =>
 
 const readApiKey = () => {
   if (process.env.LINEAR_API_KEY) return process.env.LINEAR_API_KEY;
+  // The macOS Keychain, where the key belongs, then the config file.
+  try {
+    const fromKeychain = require("node:child_process")
+      .execFileSync("security", ["find-generic-password", "-s", "linear-api-key", "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+      .trim();
+    if (fromKeychain) return fromKeychain;
+  } catch {}
 
   const fromConfig = (() => {
     try {
@@ -127,7 +134,9 @@ const readApiKey = () => {
   fail(
     "no Linear API key found. Create a personal key at\n" +
       "  https://linear.app/settings/api\n" +
-      "then either export it:\n" +
+      "then store it in the Keychain (it asks for the key):\n" +
+      '  security add-generic-password -U -a "$USER" -s linear-api-key -w\n' +
+      "or export it:\n" +
       '  export LINEAR_API_KEY="lin_api_..."\n' +
       `or save it to ${CONFIG_PATH}:\n` +
       `  mkdir -p ${path.dirname(CONFIG_PATH)}\n` +

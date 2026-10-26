@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# What it keeps (context use, model) is yours alone.
+umask 077
 
 input=$(cat)
 model=$(echo "$input" | jq -r '.model.display_name')

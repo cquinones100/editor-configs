@@ -7,9 +7,11 @@
 #
 # Same rule as window-pr.sh: answer from a cache, never wait on the network,
 # refresh in the background when the answer has gone stale. The API key is the
-# one worktree-from-ticket uses, from $LINEAR_API_KEY or its config file.
+# one worktree-from-ticket uses, from $LINEAR_API_KEY, the Keychain or its config file.
 
 set -u
+# What it keeps names your branches, tickets and prompts: yours alone.
+umask 077
 
 id="${1:-}"
 [ -n "$id" ] || exit 0
@@ -48,7 +50,8 @@ mkdir "$lock" 2>/dev/null || exit 0
   trap 'rmdir "$lock" 2>/dev/null' EXIT
 
   config="${XDG_CONFIG_HOME:-$HOME/.config}/worktree-from-ticket/config.json"
-  key="${LINEAR_API_KEY:-$(jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
+  # The macOS Keychain (service linear-api-key), else the config file's linearApiKey.
+  key="${LINEAR_API_KEY:-$(security find-generic-password -s linear-api-key -w 2>/dev/null || jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
   [ -n "$key" ] || exit 0
 
   body=$(jq -nc --arg id "$id" \

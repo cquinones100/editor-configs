@@ -11,6 +11,8 @@
 # wait on the network.
 
 set -u
+# What it keeps names your branches, tickets and prompts: yours alone.
+umask 077
 
 pane="${1:-}" path="${2:-}" command="${3:-}" tty="${4:-}" sidebar="${5:-}"
 [ -n "$pane" ] || exit 0

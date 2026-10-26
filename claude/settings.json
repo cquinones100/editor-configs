@@ -50,7 +50,8 @@
       "Bash(ls *)",
       "Bash(tmux show-options *)",
       "Bash(tmux set-option -wu *)",
-      "Bash(tmux respawn-pane *)"
+      "Bash(tmux respawn-pane *)",
+      "Bash(slack-relay notify *)"
     ],
     "deny": [
       "Read(.env)",

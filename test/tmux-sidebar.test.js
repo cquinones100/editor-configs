@@ -1464,3 +1464,13 @@ test("a tab whose transcript can't be read is still listed, and the others with 
     fs.rmSync(path.join(home, ".claude/projects/-work/broken.jsonl"), { recursive: true });
   }
 });
+
+test("a merged tab's badge says merged while Claude is marked working, and waiting still wins", async () => {
+  const snap = await sidebar.snapshot();
+  const [tab] = sidebar.tabsFrom(snap);
+  const badgeOf = (t) => sidebar.sidebarLines({ tabs: [t], sections: [], cols: 40, rows: 10, view: { focused: false, cursor: t.id, frame: 0, here: t.id } }).lines.join("");
+  assert.match(badgeOf({ ...tab, state: "working", merge: "merged" }), /◆/);
+  assert.doesNotMatch(badgeOf({ ...tab, state: "working", merge: "merged" }), /⠋/);
+  assert.doesNotMatch(badgeOf({ ...tab, state: "waiting", merge: "merged" }), /◆/);
+  assert.match(badgeOf({ ...tab, state: "working", merge: "queued" }), /⠋/, "a tab in the merge queue keeps its working spinner");
+});

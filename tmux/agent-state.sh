@@ -184,6 +184,11 @@ set_state() {
     tmux set -p -t "$pane" @agent_since "$(date +%s)"
   fi
   refresh "$window"
+  # The first tab to wait on you while you look elsewhere brings the tip on
+  # M-a (tip.sh), once: the format starts nothing after it has been shown.
+  if [ "$state" = waiting ]; then
+    tmux if -F -t "$pane" '#{&&:#{!:#{@tip_seen_waiting}},#{!:#{&&:#{window_active},#{session_attached}}}}' "run-shell -b '~/.config/tmux/tip.sh show waiting'" 2>/dev/null
+  fi
 }
 
 # The hook's event and tool, and in a few words what the tool call does and,

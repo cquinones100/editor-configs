@@ -122,6 +122,13 @@
     "default": true
   },
   {
+    "key": "tips",
+    "category": "Help",
+    "label": "Tips",
+    "description": "A box in the top-right corner, once each, when a key would help (M-a, M-j, putting a pane back); any key closes it",
+    "default": true
+  },
+  {
     "key": "update_check",
     "category": "Updates",
     "label": "Update check",

@@ -81,6 +81,8 @@ case "${1:-}" in
     [ "$tool" = pr-image ] && tmux set -p -t "$tool_pane" allow-passthrough on
     tmux swap-pane -d -s "$tool_pane" -t "$pane"
     tmux select-pane -t "$tool_pane"
+    # How to get the pane back, the first time (tmux/tip.sh).
+    ~/.config/tmux/tip.sh show in-place "$client"
     ;;
   popup)
     tool=$2 dir=$3 client=$4

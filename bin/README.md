@@ -37,6 +37,12 @@ mission control and the tab names, so nothing asks that service. They are kept i
 defaults in `tmux/settings.json`, and a change made by hand there takes
 effect at once too.
 
+New to it, you get a tip in the top-right corner the first time a key would
+help: when a tab first waits on you (`M-a`), once you have five tabs or
+more (`M-j`), and when a tool first takes a pane's place. Any key closes
+it and still does what it would have done. Tips are in Settings, and "Show
+the tips again" in `M-p` brings them back.
+
 Once set up, tmux keeps the clone up to date: each time it opens, and once an
 hour after that, `tmux/repo-update.sh` checks GitHub, and when `main` there
 has new commits it lists them in a popup and asks whether to update. Yes

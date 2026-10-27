@@ -516,6 +516,17 @@ else
   optional "slack-relay, to use the tabs from Slack: see slack-relay in bin/README.md"
 fi
 
+# A sidebar daemon started before its code last changed keeps running the old
+# code, so a pull that adds to it shows nothing until it restarts. Its pid file
+# is written as it starts, so a newer file under lib/ means it is stale.
+pidfile=~/.local/state/tmux-sidebar/daemon.pid
+if ! $CHECK && read -r pid 2>/dev/null <"$pidfile" && kill -0 "$pid" 2>/dev/null &&
+  [[ -n $(find "$REPO_DIR/lib" "$REPO_DIR/bin/tmux-sidebar" -newer "$pidfile" -print -quit 2>/dev/null) ]]; then
+  kill "$pid"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
+  ~/.config/tmux/sidebar.sh start && ok "restarted the sidebar daemon, for its new code"
+fi
+
 echo ""
 if (( problems )); then
   echo "$problems thing(s) left above. Run ./setup.sh again once they're done."

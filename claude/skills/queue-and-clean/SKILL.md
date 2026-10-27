@@ -189,7 +189,7 @@ After the PR merges, and before anything is removed, follow `~/switchboard/claud
 
 Only after GitHub reports the PR `MERGED` and the user has approved in "Approval". Follow `~/switchboard/claude/skills/clean-worktree/SKILL.md` from step 2, with the paths recorded before watching and the PR's number (it is `disable-model-invocation`, so read it rather than invoking it).
 
-- `clean-worktree: success`: close out the ticket and the note, as "Closing out" says, then reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
+- `clean-worktree: success`: close out the ticket and the note, as "Closing out" says, then move the tab to the main clone, as "Back to the repository" says. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
 - `clean-worktree: fail: <reason>`: reply `queue-and-clean: fail: <reason>`, closing out nothing.
 
 The only pushes are `/ci-loop`'s fix commits (see "Fixing"), to the PR's own branch, and never a force-push.
@@ -202,3 +202,19 @@ After the cleanup, with the ticket and note settled before watching:
 2. **The note.** Read only the note settled before watching. Find the checklist item for this work: one naming the ticket's ID or link, or the PR's number or link, else one whose words plainly match the ticket's or PR's title. Tick it (`- [x]`) and move it under the unticked items in its list, with anything indented under it, as the user's CLAUDE.md says for notes, changing those lines and nothing else. When no item matches, or more than one might, tick nothing and say so.
 
 Neither step fails the run: the PR merged and the cleanup finished. Add what they did to the success line, `queue-and-clean: success (ticket ABC-123 done; note: ticked "…")`, or what they couldn't (`note: no item for ABC-123`).
+
+## Back to the repository
+
+Once the worktree is gone, this session runs in a directory that no longer exists, and so does the tab: tmux, the tab's name and color, and any split or new tab all follow the pane's directory, which a `cd` from inside this session can't change. So after a cleanup that succeeded, hand the pane to a shell in the main clone, as `/wt` hands its pane over. This ends the session, so the final line goes to the new shell, which prints it first.
+
+Only when `$TMUX_PANE` is set and this session was running in the worktree just removed. Otherwise, reply with the final line as usual and stop here.
+
+1. Write the final line, `queue-and-clean: success (…)` as above, with a newline, to `$HOME/.local/state/queue-and-clean/<pane>` with the Write tool, where `<pane>` is `$TMUX_PANE` without its `%` (`%28` gives `28`), so nothing in the line passes through a shell.
+2. If the main clone's path contains a single quote, reply with the final line and stop: it goes into the command below between single quotes.
+3. As your final action, on its own and not chained to anything:
+
+   ```
+   tmux respawn-pane -k -t "$TMUX_PANE" -c '<main-clone>' "zsh -i -c 'f=~/.local/state/queue-and-clean/${TMUX_PANE#%}; cat \$f; rm -f \$f; exec zsh -i'"
+   ```
+
+   `-k` stops this session and starts a shell in the main clone in its place, which prints the final line and stays open. Run nothing after it.

@@ -100,9 +100,11 @@ else
   todo "~/.local/bin on your PATH, in ~/.zshrc"
 fi
 
-# The links, the pinned tmux plugins and mermaid-ascii, and the scripts.
+# The links, the pinned tmux plugins and mermaid-ascii, and the scripts. Once
+# tmux.conf and nvim are linked the configs were taken already, so the sync
+# runs again without asking, for the scripts added since.
 if [[ -L ~/.config/tmux/tmux.conf && -L ~/.config/nvim ]]; then
-  ok "the configs are linked"
+  "$REPO_DIR/sync.sh" tmux neovim lazygit bin >/dev/null && ok "the configs are linked" || todo "./sync.sh tmux neovim lazygit bin failed"
 elif ask "Link the tmux and Neovim configs and the scripts in bin/ (./sync.sh tmux neovim lazygit bin)?"; then
   "$REPO_DIR/sync.sh" tmux neovim lazygit bin && ok "linked the configs" || todo "./sync.sh tmux neovim lazygit bin failed"
 else

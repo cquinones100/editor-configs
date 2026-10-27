@@ -60,18 +60,18 @@ test("settings.sh sets every option from its default or your file, and set write
   assert.deepEqual(Object.fromEntries(read).notifications, true);
 });
 
-test("with the github setting off, keys tagged #github do nothing and leave the palette, and #linear ones are kept", () => {
+test("with the github setting off, keys tagged #github only say why, once, and leave the palette, and #linear ones are kept", () => {
   const tmux = (...args) => execFileSync("tmux", ["-S", socket, ...args], { encoding: "utf8" }).trim();
   fs.writeFileSync(file, "{}");
   tmux("bind", "-N", "View the PR #github #pr", "-n", "M-v", "display-message", "pr");
   tmux("bind", "-N", "View the ticket #linear #ticket", "-n", "M-i", "display-message", "ticket");
   tmux("bind", "-T", "palette", "-N", "Copy the PR number #github #copy", "p", "display-message", "copied");
   execFileSync("bash", [path.join(repo, "tmux/settings.sh"), "apply", "--load"], { env });
-  assert.match(tmux("list-keys", "-T", "root", "M-v"), /display-message pr/);
+  assert.match(tmux("list-keys", "-T", "root"), /M-v +display-message pr/);
 
   execFileSync("bash", [path.join(repo, "tmux/settings.sh"), "set", "github", "off"], { env, stdio: "ignore" });
-  assert.match(tmux("list-keys", "-T", "root", "M-v"), /M-v refresh-client -S$/);
-  assert.match(tmux("list-keys", "-T", "palette", "p"), /p refresh-client -S$/);
+  assert.match(tmux("list-keys", "-T", "root"), /M-v +if-shell -F "#\{@tip_seen_github_off\}" '' "run-shell -b '~\/\.config\/tmux\/tip\.sh show github_off/);
+  assert.match(tmux("list-keys", "-T", "palette"), / p +if-shell -F "#\{@tip_seen_github_off\}"/);
   assert.doesNotMatch(tmux("list-keys", "-N", "-T", "root"), /#github/);
-  assert.match(tmux("list-keys", "-T", "root", "M-i"), /display-message ticket/);
+  assert.match(tmux("list-keys", "-T", "root"), /M-i +display-message ticket/);
 });

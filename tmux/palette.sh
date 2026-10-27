@@ -157,6 +157,9 @@ choice=$(
 
 if [ -n "$choice" ]; then
   tmux set -g @palette_choice "$choice"
+  # A command with a hotkey of its own: once the palette, and anything the
+  # command opens, have closed, a tip names the key (tip.sh), once for each.
+  tmux run-shell -b -d 1 "~/.config/tmux/tip.sh key $(printf %q "$choice" | sed 's/#/##/g')"
   mkdir -p "${recent_file%/*}"
   { printf '%s\n' "$choice"; grep -vxF -- "$choice" "$recent_file" 2>/dev/null; } | head -n "$RECENT_MAX" > "$recent_file.$$" &&
     mv "$recent_file.$$" "$recent_file"

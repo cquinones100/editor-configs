@@ -38,8 +38,12 @@ defaults in `tmux/settings.json`, and a change made by hand there takes
 effect at once too.
 
 New to it, you get a tip in the top-right corner the first time a key would
-help: when a tab first waits on you (`M-a`), once you have five tabs or
-more (`M-j`), and when a tool first takes a pane's place. Any key closes
+help: when a tab first waits on you or finishes (`M-a`), once you have five
+tabs or more (`M-j`), when a tool first takes a pane's place, a PR first
+merges, a tab first loops, you first pin a tab or focus the sidebar, Claude
+first starts in a worktree, an update first arrives, a key of a service you
+turned off is pressed, and after you pick a command from `M-p` that has a
+key of its own. Any key closes
 it and still does what it would have done. Tips are in Settings, and "Show
 the tips again" in `M-p` brings them back.
 

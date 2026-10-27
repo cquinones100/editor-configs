@@ -106,7 +106,8 @@ apply() {
 # With the github or linear setting off, every key whose description carries
 # that service's tag (#github, #linear) is bound again to do nothing, in the
 # root, prefix and palette tables, so pressing it neither asks the service nor
-# reaches the pane. Bound without a note, it also drops out of the palette.
+# reaches the pane, but says why the first time (tip.sh). Bound without a
+# note, it also drops out of the palette.
 disable_services() {
   local service table key
   for service in github linear; do
@@ -114,7 +115,7 @@ disable_services() {
     for table in root prefix palette; do
       tmux list-keys -N -T "$table" -P '' 2>/dev/null | grep -E " #$service( |$)" | awk '{ print $1 }' |
         while read -r key; do
-          tmux bind -T "$table" "$key" refresh-client -S
+          tmux bind -T "$table" "$key" if -F "#{@tip_seen_${service}_off}" "" "run-shell -b '~/.config/tmux/tip.sh show ${service}_off #{q:client_name}'"
         done
     done
   done

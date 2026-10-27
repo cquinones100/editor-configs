@@ -184,10 +184,11 @@ set_state() {
     tmux set -p -t "$pane" @agent_since "$(date +%s)"
   fi
   refresh "$window"
-  # The first tab to wait on you while you look elsewhere brings the tip on
-  # M-a (tip.sh), once: the format starts nothing after it has been shown.
-  if [ "$state" = waiting ]; then
-    tmux if -F -t "$pane" '#{&&:#{!:#{@tip_seen_waiting}},#{!:#{&&:#{window_active},#{session_attached}}}}' "run-shell -b '~/.config/tmux/tip.sh show waiting'" 2>/dev/null
+  # The first tab to wait on you, or to finish, while you look elsewhere
+  # brings its tip on M-a (tip.sh), once: the format starts nothing after it
+  # has been shown.
+  if [ "$state" = waiting ] || [ "$state" = done ]; then
+    tmux if -F -t "$pane" "#{&&:#{!:#{@tip_seen_$state}},#{!:#{&&:#{window_active},#{session_attached}}}}" "run-shell -b '~/.config/tmux/tip.sh show $state'" 2>/dev/null
   fi
 }
 
@@ -259,6 +260,11 @@ case "${1:-}" in
     [ "${event:-}:${tool:-}" = PreToolUse:AskUserQuestion ] && state=waiting
     set_state "$TMUX_PANE" "$state"
     details "$TMUX_PANE" "$state" "${event:-}" "${activity:-}" "${wait:-}" "${loop:-}"
+    # The first Claude to start in a worktree brings the tip on its PR's keys
+    # (tip.sh), with GitHub on.
+    if [ "${event:-}" = SessionStart ]; then
+      tmux if -F -t "$TMUX_PANE" '#{&&:#{&&:#{!:#{@tip_seen_worktree}},#{!=:#{@setting_github},off}},#{m:*/.claude/worktrees/*,#{pane_current_path}}}' "run-shell -b '~/.config/tmux/tip.sh show worktree'" 2>/dev/null
+    fi
     ;;
 
   notification)

@@ -62,6 +62,8 @@ case "${1:-}" in
     [ -n "$client" ] || exit 0
     echo "$tip" > "$STATE/update-offered"
     tmux display-popup -c "$client" -E -w 90 -h 85% -T ' editor-configs ' "$0 prompt"
+    # How updates also arrive, once (tip.sh).
+    [ -x ~/.config/tmux/tip.sh ] && ~/.config/tmux/tip.sh show updates "$client"
     ;;
 
   prompt)

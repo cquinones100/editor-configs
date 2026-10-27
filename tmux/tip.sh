@@ -8,6 +8,8 @@
 #   tip.sh show <tip> [<client>]   show a tip, unless it has been shown or the
 #                                  tips setting is off; on <client>, or the
 #                                  client used last
+#   tip.sh key <keys> [<client>]   the palette's "next time, press <keys>",
+#                                  once for each key
 #   tip.sh seen <tip>              mark it shown without showing it (doing what
 #                                  a tip teaches, such as pressing M-a, does)
 #   tip.sh load                    mark the tips shown before, at tmux start
@@ -29,6 +31,16 @@ text_of() {
     waiting) printf '%s\n' "A tab is waiting on you." "" "M-a  jump to it, then to each tab" "     that needs you after it" ;;
     jump) printf '%s\n' "Lots of tabs?" "" "M-j  find one by typing its name" "M-a  go to whichever needs you" ;;
     in-place) printf '%s\n' "This took your pane's place." "" "Quit it, or press the same key" "again, and your pane comes back." ;;
+    done) printf '%s\n' "A tab finished." "" "Its mark clears once you look at it;" "M-a  visits each finished tab" ;;
+    merged) printf '%s\n' "A tab's PR has merged." "" "/queue-and-clean  cleans up after a merge" "x  in mission control's Work map removes" "   a merged worktree" ;;
+    pinned) printf '%s\n' "Pinned." "" "It stays at the top of Needs you" "until you press M-f in it again." ;;
+    worktree) printf '%s\n' "Claude in a worktree." "" "M-v  the PR's description" "M-d  its diff, as GitHub shows it" "M-m  whether it can merge" ;;
+    sidebar) printf '%s\n' "The sidebar." "" "Enter  go to a tab     a  answer it" "Space  peek at it      ?  every key" ;;
+    loop) printf '%s\n' "A tab is looping." "" "It runs again on its own. Mission" "control (M-Space) shows when, under Loops." ;;
+    updates) printf '%s\n' "Updates." "" "A git pull links what it adds too," "and the update check is in Settings." ;;
+    github_off) printf '%s\n' "GitHub is off in Settings." "" "Its keys do nothing until it is on" "again: M-p, then Settings." ;;
+    linear_off) printf '%s\n' "Linear is off in Settings." "" "Its keys do nothing until it is on" "again: M-p, then Settings." ;;
+    key-*) printf '%s\n' "Next time, press ${TIP_KEY:-its key}" "" "for what you just picked from M-p." ;;
     *) return 1 ;;
   esac
 }
@@ -37,6 +49,11 @@ mark() {
   mkdir -p "${SEEN%/*}"
   grep -qx "$1" "$SEEN" 2>/dev/null || echo "$1" >>"$SEEN"
   tmux set -g "@tip_seen_$1" 1
+}
+unmark() {
+  [ -f "$SEEN" ] && grep -vx "$1" "$SEEN" >"$SEEN.$$" && mv "$SEEN.$$" "$SEEN"
+  [ -f "$SEEN.$$" ] && rm -f "$SEEN.$$"
+  tmux set -gu "@tip_seen_$1"
 }
 
 # The key read from the box, in tmux's own names, for send-keys -K: Escape
@@ -76,13 +93,26 @@ case "${1:-}" in
     # its lines, the footer and the border.
     lines=$(text_of "$tip" | wc -l)
     width=$(( $( { text_of "$tip"; echo "$FOOTER"; } | awk '{ if (length > n) n = length } END { print n }') + 4 ))
-    tmux display-popup -c "$client" -E -x R -y 0 -w "$width" -h $(( lines + 4 )) -b rounded -T ' tip ' "$0 box $(printf '%q %q' "$tip" "$client")"
+    # A client shows one popup at a time: a tip that couldn't open, behind
+    # another popup, is left to show another time.
+    tmux display-popup -c "$client" -e "TIP_KEY=${TIP_KEY:-}" -E -x R -y 0 -w "$width" -h $(( lines + 4 )) -b rounded -T ' tip ' "$0 box $(printf '%q %q' "$tip" "$client")" ||
+      unmark "$tip"
+    ;;
+  # A key picked from the palette that has a hotkey of its own: the key as the
+  # palette shows it (Shift spelled out, M-S-W), once for each key.
+  key)
+    choice=${2:-}
+    [ -n "$choice" ] && [[ $choice != @palette* ]] || exit 0
+    tip="key-$(printf '%s' "$choice" | sed 's/[A-Z]/s&/g' | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-')"
+    TIP_KEY=$(printf '%s' "$choice" | sed -E 's/(^|[ -])([A-Z])( |$)/\1S-\2\3/g')
+    export TIP_KEY
+    exec "$0" show "$tip" ${3:+"$3"}
     ;;
   seen) [ -n "${2:-}" ] && mark "$2" ;;
   load)
     [ -f "$SEEN" ] || exit 0
     while read -r tip; do
-      [[ $tip =~ ^[a-z-]+$ ]] && tmux set -g "@tip_seen_$tip" 1
+      [[ $tip =~ ^[a-z0-9_-]+$ ]] && tmux set -g "@tip_seen_$tip" 1
     done <"$SEEN"
     ;;
   reset)

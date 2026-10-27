@@ -938,7 +938,7 @@ test("M-w on a tool in a pane's place closes the tool and brings the pane back, 
   try {
     // M-w names the pane in @confirm_pane, since its popup can't pass it.
     tmux("set", "-gF", "@confirm_pane", tool);
-    execFileSync("bash", [path.join(__dirname, "../tmux/confirm.sh"), "Close pane?"], { input: "y", env: { ...process.env, TERM: "xterm" }, stdio: ["pipe", "ignore", "ignore"] });
+    execFileSync("bash", [path.join(__dirname, "../tmux/confirm.sh"), "Close pane?"], { input: "\n", env: { ...process.env, TERM: "xterm" }, stdio: ["pipe", "ignore", "ignore"] });
     const panes = tmux("list-panes", "-t", window, "-F", "#{pane_id}").split("\n");
     assert.deepEqual(panes, [own], "your pane is back in its tab, and the tool is gone");
   } finally {
@@ -1293,8 +1293,8 @@ test("the work map lists every open tab, lines its rows up in columns, and keeps
   assert.ok(fs.existsSync(done), "n keeps it");
   await sidebar.missionKey(client, { key: "Enter" });
   await sidebar.missionKey(client, { key: "x" });
-  await sidebar.missionKey(client, { key: "y" });
-  assert.equal(client.note, "Removed abc-31-done.");
+  await sidebar.missionKey(client, { key: "Enter" });
+  assert.equal(client.note, "Removed abc-31-done.", "Enter confirms as y does");
   assert.ok(!fs.existsSync(done));
 });
 

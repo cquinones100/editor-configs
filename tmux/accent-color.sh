@@ -3,12 +3,12 @@
 # Derives a deterministic accent color from directory + git context, and the
 # name tmux puts in the window tab.
 #
-# Same HSL logic (S=80%, L=45%) and color key as session_title.py and
-# statusline-command.sh, so tmux, iTerm tabs, and Claude statusline
-# all agree on the color for a given project/branch.
+# Same HSL logic (S=80%, L=45%) and color key as statusline-command.sh, so
+# tmux and the Claude statusline agree on the color for a given
+# project/branch.
 #
 # The color key and the window name are separate strings. The key is hashed, so
-# it has to stay byte-identical to the one those two build, which is why it
+# it has to stay byte-identical to the one the statusline builds, which is why it
 # spells out "worktree:" and repeats the name. Nobody reads it. The window name
 # is only read, so it says each thing once.
 #
@@ -54,7 +54,7 @@ if $name_only; then
 fi
 
 # One gray for every project with the accent_colors setting off
-# (tmux/settings.sh). Only tmux reads it; iTerm and the statusline keep theirs.
+# (tmux/settings.sh). Only tmux reads it; the statusline keeps its colors.
 if [ "$(tmux show -gqv @setting_accent_colors 2>/dev/null)" = off ]; then
   printf '8a8a8a'
   exit 0

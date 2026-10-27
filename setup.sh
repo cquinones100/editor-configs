@@ -10,7 +10,7 @@
 #                            what is missing after asking, links the configs,
 #                            and asks about each optional part
 #   ./setup.sh <part>...     only those parts, without questions: lazygit,
-#                            neovim, git, claude, iterm, karabiner, tmux,
+#                            neovim, git, claude, karabiner, tmux,
 #                            ghostty, pgcli, bin, or the name of one script in
 #                            bin/ to link just that one
 #   --check                  with either: say what would change, change nothing
@@ -40,8 +40,8 @@ case "$(uname -s)" in
 esac
 if [[ $OS == macos ]]; then
   LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
-  # iTerm and Karabiner only exist on macOS.
-  PARTS=(lazygit neovim git claude iterm karabiner tmux ghostty pgcli bin)
+  # Karabiner only exists on macOS.
+  PARTS=(lazygit neovim git claude karabiner tmux ghostty pgcli bin)
 else
   LAZYGIT_DIR="$HOME/.config/lazygit"
   PARTS=(lazygit neovim git claude tmux ghostty pgcli bin)
@@ -134,12 +134,6 @@ part_claude() {
   for hook in "$SRC"/claude/hooks/*; do
     put_link "$hook" ~/.claude/hooks/
   done
-}
-
-part_iterm() {
-  local dest="$HOME/Library/Application Support/iTerm2/Scripts/AutoLaunch"
-  dir "$dest"
-  put_link "$SRC/iterm/Scripts/AutoLaunch/session_title.py" "$dest/session_title.py"
 }
 
 part_karabiner() {

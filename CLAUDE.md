@@ -34,9 +34,8 @@ diffview opens on the first file that isn't generated (`generated()` in `nvim/lu
 
 `tmux/accent-color.sh` produces two different strings from the same directory.
 The color key is hashed into the accent color, and `claude/statusline-command.sh`
-and `iterm/Scripts/AutoLaunch/session_title.py` build the same key independently,
-so changing its shape in one place silently gives tmux, the iTerm tab, and the
-Claude statusline three different colors for one project. The window name is
+builds the same key independently, so changing its shape in one place silently
+gives tmux and the Claude statusline two different colors for one project. The window name is
 only ever read, so it is free to change.
 
 `tmux/window-names.sh` owns the tab: the label from `tmux/tab-label.sh`, cut to

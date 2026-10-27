@@ -23,8 +23,8 @@ fi
 branch=$(git -C "$raw_cwd" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null)
 
 # Derive a deterministic accent color from the directory + git context.
-# Same HSL logic as the iTerm tab color script (S=80%, L=45%).
-# Uses the same color key as session_title.py: dirname + branch/worktree.
+# Same HSL logic (S=80%, L=45%) and color key (dirname + branch/worktree) as
+# tmux/accent-color.sh.
 dirname=$(basename "$raw_cwd")
 color_key="$dirname"
 if [ -n "$branch" ]; then

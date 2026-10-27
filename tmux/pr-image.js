@@ -2,7 +2,8 @@
 
 // The PR view as GitHub draws it, as images in the pane: a trial beside
 // tmux/pr-view.sh (M-v), which draws it as text. Run in a pane by
-// tmux/pr-image.sh, from the M-p palette.
+// tmux/pane-in-place.sh in place of the pane it is asked from, from the M-p
+// palette, with passthrough on for that pane alone.
 //
 //   pr-image.js [<dir>]   the PR of <dir>'s branch (default: the current directory)
 //

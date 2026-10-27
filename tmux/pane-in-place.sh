@@ -2,13 +2,14 @@
 # A tool in a pane's place, leaving the rest of the window, sidebar included,
 # as it is; quitting the tool puts the pane back. M-p's lazygit opens this way,
 # M-d diffview.nvim (nvim/lua/plugins/diffview.lua), in the stripped-down
-# Neovim nvim/diff.lua sets up.
+# Neovim nvim/diff.lua sets up, and M-p's PR description as an image
+# (tmux/pr-image.js), whose pane alone lets images through to the terminal.
 #
 # Usage:
-#   pane-in-place.sh open <lazygit|diffview> <pane> <dir> <client>
+#   pane-in-place.sh open <lazygit|diffview|pr-image> <pane> <dir> <client>
 #                                                           start the tool in <dir> in <pane>'s place
 #   pane-in-place.sh back <pane>                            from the tool's pane as it exits: swap <pane> back
-#   pane-in-place.sh popup <lazygit|diffview> <dir> <client> the tool in <dir> in a popup on <client>, for a
+#   pane-in-place.sh popup <lazygit|diffview|pr-image> <dir> <client> the tool in <dir> in a popup on <client>, for a
 #                                                           worktree no tab is in (the sidebar's d and L)
 #
 # The tool starts in a window of its own, and swap-pane trades places: the
@@ -30,6 +31,8 @@ tool_command() {
   local tool=$1 dir=$2 client=$3 base ref
   case $tool in
     lazygit) echo lazygit ;;
+    # Under an interactive zsh, for the PATH (node, gh) the tmux server lacks.
+    pr-image) echo "zsh -i -c 'node ~/.config/tmux/pr-image.js'" ;;
     # GitHub's "Files changed": the branch's commits since it left its PR's
     # base branch (origin's default branch without a PR, main where origin
     # doesn't say), as origin has that branch now, so it is fetched first: a
@@ -74,6 +77,8 @@ case "${1:-}" in
     tmux set -w -t "$tool_pane" @pane_parked 1
     tmux set -p -t "$tool_pane" @parked_pane "$pane"
     tmux set -p -t "$tool_pane" @in_place "$tool"
+    # The image view draws through tmux's passthrough, for its pane alone.
+    [ "$tool" = pr-image ] && tmux set -p -t "$tool_pane" allow-passthrough on
     tmux swap-pane -d -s "$tool_pane" -t "$pane"
     tmux select-pane -t "$tool_pane"
     ;;

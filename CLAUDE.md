@@ -192,10 +192,12 @@ key and laid out by `pr-view.js ticket`: the facts from its side panel, the
 description, sub-issues, related tickets, links, and the comments with their
 replies. Both draw with `tmux/glow-style.json`, glow's dark style without the #s before headings, and show a link as its text alone: `pr-view.js` hands glow the text between Private Use markers and splice makes it an OSC 8 link again, since glow prints a link's URL after its text. `pr-view.sh page` runs less in the background under a WINCH trap, so a resize lays the description out again at the new width and reopens it at the line that was on top; the image view (`pr-image.js`) keeps its headless Chrome open to do the same with its pages. `mermaid-ascii` is pinned the same way, by version and checksum in
 `setup.sh` (`mermaid_ascii`), which `./setup.sh tmux` installs. A trial beside it, `M-p`'s "View the branch's PR
-description as an image" (`tmux/pr-image.sh`, `tmux/pr-image.js`), draws the
+description as an image" (`tmux/pr-image.js`), draws the
 description as GitHub does (its `body_html`, read with a GET, GitHub's
 stylesheet, Mermaid in mermaid-cli's headless Chrome) and shows it a page at a
-time as images, through tmux's passthrough for that pane alone.
+time as images, through tmux's passthrough for that pane alone. It opens in
+place of the pane, as `M-d`'s diff does (`pane-in-place.sh`'s `pr-image`), and
+`q` or asking for it again puts the pane back.
 
 ## The notes app
 

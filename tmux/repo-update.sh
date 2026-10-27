@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keeps ~/editor-configs up to date with GitHub: fetches origin, and when its
 # main has commits yours doesn't, offers them in a popup that fast-forwards
-# main, links whatever is new (setup.sh tmux bin), and reloads tmux.
+# main, runs ./setup.sh, and reloads tmux.
 #
 # Usage:
 #   repo-update.sh check [<client>]   fetch, and offer any new commits in a
@@ -56,7 +56,7 @@ case "${1:-}" in
     client="${2:-$(tmux list-clients -F '#{client_activity} #{client_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)}"
     [ -n "$client" ] || exit 0
     echo "$tip" > "$STATE/update-offered"
-    tmux display-popup -c "$client" -E -w 90 -h 60% -T ' editor-configs ' "$0 prompt"
+    tmux display-popup -c "$client" -E -w 90 -h 85% -T ' editor-configs ' "$0 prompt"
     ;;
 
   prompt)
@@ -88,9 +88,14 @@ case "${1:-}" in
       done_ 1
     fi
     printf '  Updated to %s.\n' "$(git_ log -1 --format=%h)"
-    # New files only take effect once setup.sh links them, and it is what
-    # installs the pinned tmux plugins. It changes only what isn't in place.
-    [ -x "$REPO/setup.sh" ] && "$REPO/setup.sh" tmux bin 2>&1 | grep -v ': up to date$' | sed 's/^/  /'
+    # The guided setup, which links what is new, installs the pinned tmux
+    # plugins and anything else the update needs, and asks about the rest. It
+    # changes only what isn't in place. Not piped, so its questions show.
+    if [ -x "$REPO/setup.sh" ]; then
+      printf '\n'
+      "$REPO/setup.sh"
+      printf '\n'
+    fi
     if [ -n "${TMUX:-}" ]; then
       # The sidebar daemon keeps running the code it started with; reloading
       # tmux.conf starts it again once it has stopped.

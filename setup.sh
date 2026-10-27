@@ -293,9 +293,12 @@ TMUX_MIN=3.8
 # The parts the tmux workspace needs.
 WORKSPACE=(tmux neovim lazygit bin)
 
+# What is left is listed again at the end, so it needn't be found among the
+# ticks; the git hooks after a pull print only that list.
+left=()
 problems=0
 ok() { echo "  ✓ $1"; }
-todo() { echo "  ✗ $1"; problems=$((problems + 1)); }
+todo() { echo "  ✗ $1"; left+=("$1"); problems=$((problems + 1)); }
 optional() { echo "  – $1"; }
 ask() {
   $CHECK && return 1
@@ -529,7 +532,9 @@ fi
 
 echo ""
 if (( problems )); then
-  echo "$problems thing(s) left above. Run ./setup.sh again once they're done."
+  echo "Left to do:"
+  printf '  ✗ %s\n' "${left[@]}"
+  echo "Run ./setup.sh again once they're done."
   exit 1
 fi
 if [[ -n ${TMUX:-} ]]; then

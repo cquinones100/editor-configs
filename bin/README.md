@@ -20,6 +20,11 @@ hooks (`./setup.sh git`, for committing to it). It also lists GitHub, the
 Linear key and slack-relay, with the keys each one is for. `./setup.sh
 --check` only reports.
 
+It ends by listing again whatever is left to do. Once `./setup.sh git` has
+set this clone's git hooks, every `git pull` links what the pull added (the
+`tmux`, `bin` and `git` parts, and `claude` if you use all of it) and prints
+that list, when there is anything on it.
+
 To turn parts of the workspace on or off (banners, the sidebar, the second
 status line, PR and ticket lookups, project colors, the theme, saving pane
 contents, the update check and more), open Settings from `M-p`: mission

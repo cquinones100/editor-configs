@@ -8,8 +8,8 @@ It is opinionated: the defaults are how it is meant to be used, and Settings (`M
 
 - macOS, with zsh as your shell
 - [Homebrew](https://brew.sh)
-- Node, set up through [nvm](https://github.com/nvm-sh/nvm) in `~/.zshrc`
-- A terminal that passes Option through as Alt and shows 24-bit color: [Ghostty](https://ghostty.org) (its config is in `ghostty/`) or iTerm2 with the Option keys set to Esc+. Terminal.app does neither.
+- A terminal that passes Option through as Alt and shows 24-bit color: [Ghostty](https://ghostty.org) (`brew install --cask ghostty`; setup links its config) or iTerm2 with the Option keys set to Esc+. Terminal.app does neither.
+- [Claude Code](https://claude.com/claude-code), which every tab runs: `curl -fsSL https://claude.ai/install.sh | bash`
 
 ## Set up
 
@@ -18,7 +18,7 @@ git clone https://github.com/cquinones100/switchboard.git ~/switchboard
 ~/switchboard/setup.sh
 ```
 
-`setup.sh` checks what the workspace needs and asks before it installs anything or changes `~/.zshrc`: Homebrew's `tmux jq fzf gh glow lazygit neovim`, the links for the tmux, Neovim and lazygit configs and the scripts in `bin/`, the worktree shell functions, and Neovim's plugins. Then it asks about the optional parts (Claude Code's hooks for tab states, this repo's whole Claude Code setup, the git hooks) and lists what GitHub, Linear and the Slack relay need. It ends with a list of anything left to do; run it again until it says Ready. Running it again any time changes only what isn't in place, and `./setup.sh --check` only reports.
+`setup.sh` checks what the workspace needs and asks before it installs anything or changes `~/.zshrc`: Homebrew's `tmux jq fzf gh glow lazygit neovim git-delta ripgrep`, Node through nvm, the MesloLGS NF font, the links for the tmux, Neovim and lazygit configs and the scripts in `bin/`, the worktree shell functions, Ghostty's config, and Neovim's plugins. Then it asks about the optional parts (Claude Code's hooks for tab states, this repo's whole Claude Code setup, the git hooks) and lists what GitHub, Linear, the Slack relay, the PR image view (mermaid-cli), `/deploy-test` (ffmpeg) and `/review-loop` (Codex) need. It ends with a list of anything left to do; run it again until it says Ready. Running it again any time changes only what isn't in place, and `./setup.sh --check` only reports.
 
 Then start tmux:
 

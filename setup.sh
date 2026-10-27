@@ -301,7 +301,17 @@ fi
 
 # ── The guided setup ────────────────────────────────────────────────────────
 
-PACKAGES=(tmux jq fzf gh glow lazygit neovim)
+# git-delta draws lazygit's diffs, and ripgrep is Telescope's live grep.
+PACKAGES=(tmux jq fzf gh glow lazygit neovim git-delta ripgrep)
+# Each package's command, where it isn't the package's name.
+command_of() {
+  case $1 in
+    neovim) echo nvim ;;
+    git-delta) echo delta ;;
+    ripgrep) echo rg ;;
+    *) echo "$1" ;;
+  esac
+}
 # The oldest tmux this has been used with.
 TMUX_MIN=3.8
 # The parts the tmux workspace needs.
@@ -373,9 +383,7 @@ if command -v brew >/dev/null; then
   ok "Homebrew"
   missing=()
   for package in "${PACKAGES[@]}"; do
-    command="$package"
-    [[ $package == neovim ]] && command=nvim
-    command -v "$command" >/dev/null || missing+=("$package")
+    command -v "$(command_of "$package")" >/dev/null || missing+=("$package")
   done
   if (( ${#missing[@]} == 0 )); then
     ok "${PACKAGES[*]}"
@@ -397,10 +405,51 @@ if command -v tmux >/dev/null; then
   fi
 fi
 
+# nvm's own installer, at a pinned release, adds it to ~/.zshrc; then the
+# current LTS Node through it.
+NVM_VERSION=v0.40.3
 if in_zsh 'command -v node' >/dev/null; then
   ok "Node $(in_zsh 'node --version')"
+elif ask "Install nvm $NVM_VERSION (it adds itself to ~/.zshrc) and Node's LTS release?"; then
+  if curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh" | PROFILE=~/.zshrc bash >/dev/null &&
+    in_zsh 'nvm install --lts' >/dev/null && in_zsh 'command -v node' >/dev/null; then
+    ok "installed Node $(in_zsh 'node --version') through nvm"
+  else
+    todo "Node through nvm: https://github.com/nvm-sh/nvm, then nvm install --lts"
+  fi
 else
   todo "Node in an interactive zsh, through nvm: https://github.com/nvm-sh/nvm, then nvm install --lts"
+fi
+
+# The font Ghostty's config names, with the icons Neovim and the status line
+# draw: powerlevel10k's MesloLGS NF, pinned to a commit and checked against
+# its checksums, into ~/Library/Fonts.
+FONT_COMMIT=145eb9fbc2f42ee408dacd9b22d8e6e0e553f83d
+font_sha256() {
+  case $1 in
+    Regular) echo d97946186e97f8d7c0139e8983abf40a1d2d086924f2c5dbf1c29bd8f2c6e57d ;;
+    Bold) echo b6c0199cf7c7483c8343ea020658925e6de0aeb318b89908152fcb4d19226003 ;;
+    Italic) echo 6f357bcbe2597704e157a915625928bca38364a89c22a4ac36e7a116dcd392ef ;;
+    "Bold Italic") echo 56b4131adecec052c4b324efb818dd326d586dbc316fc68f98f1cae2eb8d1220 ;;
+  esac
+}
+install_font() {
+  local style file tmp
+  tmp=$(mktemp -d)
+  for style in Regular Bold Italic "Bold Italic"; do
+    file="MesloLGS NF $style.ttf"
+    curl -fsSL -o "$tmp/$file" "https://github.com/romkatv/powerlevel10k-media/raw/$FONT_COMMIT/${file// /%20}" &&
+      echo "$(font_sha256 "$style")  $tmp/$file" | shasum -a 256 -c --quiet - || { rm -rf "$tmp"; return 1; }
+  done
+  mkdir -p ~/Library/Fonts && cp "$tmp"/*.ttf ~/Library/Fonts/
+  rm -rf "$tmp"
+}
+if [[ -f ~/Library/Fonts/"MesloLGS NF Regular.ttf" || -f /Library/Fonts/"MesloLGS NF Regular.ttf" ]]; then
+  ok "the MesloLGS NF font"
+elif ask "Install the MesloLGS NF font, for Ghostty and Neovim's icons?"; then
+  install_font && ok "installed the MesloLGS NF font" || todo "the MesloLGS NF font, from https://github.com/romkatv/powerlevel10k-media"
+else
+  todo "the MesloLGS NF font, from https://github.com/romkatv/powerlevel10k-media"
 fi
 
 if in_zsh 'echo $PATH' | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
@@ -446,6 +495,21 @@ else
   todo "${undefined[*]%%:*} in ~/.zshrc: eval \"\$(<script> init zsh)\" for each"
 fi
 
+# The terminal it is set up for: Ghostty passes Option through as Alt, which
+# every M- key needs, and draws 24-bit color; its config also carries the
+# theme theme.sh switches and the font above. Another terminal works when it
+# does both, so this is offered rather than required.
+ghostty_installed() { [[ -d /Applications/Ghostty.app || -d ~/Applications/Ghostty.app ]] || command -v ghostty >/dev/null; }
+if ! ghostty_installed; then
+  optional "Ghostty, the terminal this is set up for: brew install --cask ghostty, then ./setup.sh again. Another terminal needs Option sending Alt (Esc+) and 24-bit color."
+elif (( $(pending ghostty) == 0 )); then
+  ok "Ghostty's config"
+elif ask "Link Ghostty's config (Option as Alt, 24-bit color, the theme and font)? Yours is moved aside, not deleted."; then
+  apply ghostty && ok "linked Ghostty's config; restart Ghostty to use it" || todo "./setup.sh ghostty failed"
+else
+  optional "Ghostty's config, for Option as Alt and the theme: ./setup.sh ghostty"
+fi
+
 # diffview (M-d) and the notes app need the plugins lazy.nvim installs.
 if [[ -d ~/.local/share/nvim/lazy/diffview.nvim ]]; then
   ok "Neovim's plugins"
@@ -469,6 +533,12 @@ if security find-generic-password -s linear-api-key >/dev/null 2>&1; then
 else
   optional "Linear, for M-i, M-l and ticket titles in tab names: a personal API key from Linear's settings, then security add-generic-password -a \"\$USER\" -s linear-api-key -w"
 fi
+# /shape files tickets in the team named here.
+if [[ -n $(jq -r '.linearTeam // empty' ~/.config/worktree-from-ticket/config.json 2>/dev/null) ]]; then
+  ok "the Linear team for /shape"
+else
+  optional "the Linear team /shape files tickets in: add \"linearTeam\": \"<team key>\" to ~/.config/worktree-from-ticket/config.json"
+fi
 
 # Without these hooks every tab shows idle, and M-a has nothing to walk. Only
 # the hooks that run agent-state.sh are added to your own settings, beside
@@ -487,7 +557,7 @@ if whole_claude; then
 elif grep -qs 'agent-state.sh' ~/.claude/settings.json; then
   ok "Claude Code's hooks (tab states, the sidebar's Needs you, M-a)"
 elif ! command -v claude >/dev/null; then
-  optional "Claude Code, for tab states, the sidebar's sessions and M-a: https://claude.com/claude-code"
+  optional "Claude Code, which every tab here runs, for tab states, the sidebar's sessions and M-a: curl -fsSL https://claude.ai/install.sh | bash"
 elif ask "Add Claude Code's hooks for tab states and M-a to your ~/.claude/settings.json?"; then
   mkdir -p ~/.claude
   [[ -f ~/.claude/settings.json ]] || echo '{}' > ~/.claude/settings.json
@@ -531,6 +601,23 @@ if [[ -f ~/.config/slack-relay/config.json ]]; then
   ok "slack-relay"
 else
   optional "slack-relay, to use the tabs from Slack: see slack-relay in bin/README.md"
+fi
+
+# What a few features need beyond the rest, each named for what it unlocks.
+if in_zsh 'command -v mmdc' >/dev/null; then
+  ok "mermaid-cli (M-p's PR description as an image)"
+else
+  optional "mermaid-cli, for M-p's PR description as an image: npm install -g @mermaid-js/mermaid-cli"
+fi
+if command -v ffmpeg >/dev/null; then
+  ok "ffmpeg (/deploy-test's videos)"
+else
+  optional "ffmpeg, for /deploy-test's videos: brew install ffmpeg"
+fi
+if in_zsh 'command -v codex' >/dev/null; then
+  ok "Codex (/review-loop's reviewer)"
+else
+  optional "Codex, /review-loop's reviewer: npm install -g @openai/codex, then codex login"
 fi
 
 # A sidebar daemon started before its code last changed keeps running the old

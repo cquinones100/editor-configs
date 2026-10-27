@@ -1444,3 +1444,23 @@ test("with the github and linear settings off, mission control has no PRs view a
     sidebar.reloadSettings();
   }
 });
+
+test("a tab whose transcript can't be read is still listed, and the others with it", async () => {
+  tmux("new-window", "-t", "test", "-c", tmp);
+  const pane = tmux("display", "-p", "-t", "test:", "#{pane_id}");
+  tmux("set", "-p", "-t", pane, "@agent_state", "done");
+  tmux("set", "-p", "-t", pane, "@agent_since", String(Math.floor(Date.now() / 1000)));
+  // A directory where its transcript should be: reading it throws.
+  fs.mkdirSync(path.join(home, ".claude/projects/-work/broken.jsonl"), { recursive: true });
+  fs.writeFileSync(path.join(home, ".claude/sessions/131.json"), JSON.stringify({ pid: 131, sessionId: "broken", cwd: "/work", tmux: `test:@9.${pane}`, entrypoint: "cli" }));
+  const failures = [];
+  try {
+    const tabs = sidebar.tabsFrom(await sidebar.snapshot(), (tab, err) => failures.push(err.code));
+    assert.equal(tabs.length, 2);
+    assert.equal(tabs.find((t) => t.claudePane === pane).background, 0);
+    assert.deepEqual(failures, ["EISDIR"]);
+  } finally {
+    fs.rmSync(path.join(home, ".claude/sessions/131.json"));
+    fs.rmSync(path.join(home, ".claude/projects/-work/broken.jsonl"), { recursive: true });
+  }
+});

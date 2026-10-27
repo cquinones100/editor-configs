@@ -1,10 +1,25 @@
+-- ruby-lsp needs Ruby 2.7 or newer to install. macOS ships 2.6, so on a Mac
+-- with only that, asking for it failed again, with an error, every time
+-- Neovim started.
+local function modern_ruby()
+  if vim.fn.executable("ruby") == 0 then return false end
+  local ok, result = pcall(function() return vim.system({ "ruby", "-e", "print RUBY_VERSION" }, { text = true }):wait(2000) end)
+  if not ok or result.code ~= 0 then return false end
+  local major, minor = (result.stdout or ""):match("^(%d+)%.(%d+)")
+  return major and (tonumber(major) > 2 or (tonumber(major) == 2 and tonumber(minor) >= 7)) or false
+end
+
+-- None of this in the notes app (bin/notes sets g:notes_app): a note needs no
+-- language server, and the installs only slowed its start and showed errors.
 return {
   {
     "williamboman/mason.nvim",
+    cond = not vim.g.notes_app,
     opts = {},
   },
   {
     "williamboman/mason-lspconfig.nvim",
+    cond = not vim.g.notes_app,
     dependencies = {
       "williamboman/mason.nvim",
       "neovim/nvim-lspconfig",
@@ -13,7 +28,6 @@ return {
       ensure_installed = {
         "ts_ls",
         "pyright",
-        "ruby_lsp",
         "html",
         "cssls",
         "tailwindcss",
@@ -21,6 +35,7 @@ return {
       },
     },
     config = function(_, opts)
+      if modern_ruby() then table.insert(opts.ensure_installed, "ruby_lsp") end
       require("mason-lspconfig").setup(opts)
 
       local capabilities = require("cmp_nvim_lsp").default_capabilities()

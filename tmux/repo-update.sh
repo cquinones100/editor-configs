@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keeps ~/editor-configs up to date with GitHub: fetches origin, and when its
 # main has commits yours doesn't, offers them in a popup that fast-forwards
-# main, relinks what sync.sh has to, and reloads tmux.
+# main, links whatever is new (setup.sh tmux bin), and reloads tmux.
 #
 # Usage:
 #   repo-update.sh check [<client>]   fetch, and offer any new commits in a
@@ -88,12 +88,9 @@ case "${1:-}" in
       done_ 1
     fi
     printf '  Updated to %s.\n' "$(git_ log -1 --format=%h)"
-    # New files only take effect once sync.sh links them, and it is what
-    # installs the pinned tmux plugins.
-    if [ -n "$(git_ diff --name-only --diff-filter=A "$old" HEAD -- tmux bin)$(git_ diff --name-only "$old" HEAD -- sync.sh tmux/plugins.txt)" ]; then
-      printf '  Linking what changed (./sync.sh tmux bin)…\n'
-      "$REPO/sync.sh" tmux bin 2>&1 | sed 's/^/    /'
-    fi
+    # New files only take effect once setup.sh links them, and it is what
+    # installs the pinned tmux plugins. It changes only what isn't in place.
+    [ -x "$REPO/setup.sh" ] && "$REPO/setup.sh" tmux bin 2>&1 | grep -v ': up to date$' | sed 's/^/  /'
     if [ -n "${TMUX:-}" ]; then
       # The sidebar daemon keeps running the code it started with; reloading
       # tmux.conf starts it again once it has stopped.

@@ -1,20 +1,297 @@
 #!/usr/bin/env bash
 
-# Sets up the tmux workspace (tmux, the sidebar, the palette, the notes app,
-# Neovim and the scripts in bin/) on a new Mac, and says what else each
-# optional part needs. Safe to run again: it installs only what is missing,
-# and asks before installing anything or changing ~/.zshrc. With --check it
-# changes nothing and only reports.
+# Sets this repository up on a Mac, and keeps it set up: run it again at any
+# time, and it changes only what isn't in place yet.
+#
+# Usage:
+#   ./setup.sh               the guided setup for the tmux workspace (tmux, the
+#                            sidebar, the palette, the notes app, Neovim and the
+#                            scripts in bin/): checks what it needs, installs
+#                            what is missing after asking, links the configs,
+#                            and asks about each optional part
+#   ./setup.sh <part>...     only those parts, without questions: lazygit,
+#                            neovim, git, claude, iterm, karabiner, tmux,
+#                            ghostty, pgcli, bin, or the name of one script in
+#                            bin/ to link just that one
+#   --check                  with either: say what would change, change nothing
+#
+# Each part says what it changed, or that it was up to date. A link already
+# pointing at the right file is left alone, and a real file or directory in
+# the way is moved aside to <name>.bak.<time>, never overwritten or deleted.
 
 set -u
 
 CHECK=false
-[[ ${1:-} == --check ]] && CHECK=true
+parts=()
+for arg in "$@"; do
+  if [[ $arg == --check ]]; then CHECK=true; else parts+=("$arg"); fi
+done
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Resolved from this script's own location, so one bin script can be linked
+# from a clone anywhere. Everything else links from ~/editor-configs, which
+# the guided setup points at this clone.
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="$HOME/editor-configs"
+
+case "$(uname -s)" in
+  Darwin) OS=macos ;;
+  Linux) OS=linux ;;
+  *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+if [[ $OS == macos ]]; then
+  LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
+  # iTerm and Karabiner only exist on macOS.
+  PARTS=(lazygit neovim git claude iterm karabiner tmux ghostty pgcli bin)
+else
+  LAZYGIT_DIR="$HOME/.config/lazygit"
+  PARTS=(lazygit neovim git claude tmux ghostty pgcli bin)
+fi
+
+# ── Parts ───────────────────────────────────────────────────────────────────
+
+# Each change is printed under its part's name, which is printed only once
+# something changes; `changes` counts them.
+# The guided setup indents them under its own list, and leaves out the parts
+# that were up to date.
+changes=0
+header=""
+indent=""
+quiet=false
+change() {
+  if [[ -n $header ]]; then
+    echo "$indent$header"
+    header=""
+  fi
+  if $CHECK; then echo "$indent  would: $1"; else echo "$indent  $1"; fi
+  changes=$((changes + 1))
+}
+dir() { $CHECK || mkdir -p "$1"; }
+
+# Links $1 at $2, unless it is already linked there. A real file or directory
+# already at $2 is moved aside to $2.bak.<time> first, rather than being
+# overwritten or deleted. A $2 ending in / is a directory to link into, under
+# $1's own name.
+put_link() {
+  local src=$1 dest=$2 backup
+  [[ $dest == */ ]] && dest="$dest$(basename "$src")"
+  [[ -L $dest && $(readlink "$dest") == "$src" ]] && return 0
+  if [[ -e $dest && ! -L $dest ]]; then
+    backup="$dest.bak.$(date +%Y%m%d%H%M%S)"
+    $CHECK || mv "$dest" "$backup" || return 1
+    change "move $dest aside to $backup"
+  fi
+  $CHECK || ln -sfn "$src" "$dest" || return 1
+  change "link $dest"
+}
+
+part_lazygit() {
+  dir "$LAZYGIT_DIR"
+  put_link "$SRC/lazygit/config.yml" "$LAZYGIT_DIR/config.yml"
+}
+
+part_neovim() {
+  dir ~/.config
+  put_link "$SRC/nvim" ~/.config/nvim
+}
+
+# This clone's git setup only. The global ~/.gitconfig isn't managed here: it
+# holds a machine's identity and paths, which have no place in a public repo.
+# This repo's own hooks, such as the one that keeps machine-specific Claude
+# settings out of commits, are set on this clone only, so other repositories
+# keep theirs.
+part_git() {
+  [[ $(git -C "$SRC" config core.hooksPath) == .githooks ]] && return 0
+  $CHECK || git -C "$SRC" config core.hooksPath .githooks || return 1
+  change "set this clone's core.hooksPath to .githooks"
+}
+
+part_claude() {
+  dir ~/.claude
+  put_link "$SRC/claude/CLAUDE.md" ~/.claude/CLAUDE.md
+  put_link "$SRC/claude/settings.json" ~/.claude/settings.json
+  put_link "$SRC/claude/statusline-command.sh" ~/.claude/statusline-command.sh
+  put_link "$SRC/claude/otel-headers.sh" ~/.claude/otel-headers.sh
+  put_link "$SRC/claude/commands" ~/.claude/commands
+  # One link per skill rather than one for the directory: Claude Code keeps its
+  # own synced/ folder in ~/.claude/skills, so that path has to stay real.
+  dir ~/.claude/skills
+  # Skills kept here but not installed. review-loop is defined by the repos that
+  # use it, and a personal copy beside theirs shows up as a second /review-loop.
+  # A leftover link from before it was listed here is removed.
+  local unlinked_skills=(review-loop ci-loop) skill name hook
+  for skill in "$SRC"/claude/skills/*/; do
+    name=$(basename "$skill")
+    if [[ " ${unlinked_skills[*]} " == *" $name "* ]]; then
+      if [[ -L ~/.claude/skills/$name ]]; then
+        $CHECK || rm ~/.claude/skills/"$name"
+        change "remove the link to the $name skill, which is kept here but not installed"
+      fi
+      continue
+    fi
+    put_link "${skill%/}" ~/.claude/skills/
+  done
+  dir ~/.claude/hooks
+  for hook in "$SRC"/claude/hooks/*; do
+    put_link "$hook" ~/.claude/hooks/
+  done
+}
+
+part_iterm() {
+  local dest="$HOME/Library/Application Support/iTerm2/Scripts/AutoLaunch"
+  dir "$dest"
+  put_link "$SRC/iterm/Scripts/AutoLaunch/session_title.py" "$dest/session_title.py"
+}
+
+part_karabiner() {
+  dir ~/.config/karabiner
+  put_link "$SRC/karabiner/karabiner.json" ~/.config/karabiner/karabiner.json
+}
+
+# Installs the tmux plugins listed in tmux/plugins.txt, each at its pinned
+# commit. A plugin already there is moved to that commit, fetching it first if
+# it is new to the clone. Nothing else is run from the plugin repositories here;
+# tmux.conf loads them.
+tmux_plugins() {
+  local plugins=~/.config/tmux/plugins name url commit
+  dir "$plugins"
+  while read -r name url commit; do
+    [[ $(git -C "$plugins/$name" rev-parse HEAD 2>/dev/null) == "$commit" ]] && continue
+    if $CHECK; then
+      change "install the $name plugin at ${commit:0:7}"
+      continue
+    fi
+    if [ ! -d "$plugins/$name/.git" ]; then
+      git clone --quiet --no-checkout "$url" "$plugins/$name" || { echo "  could not clone $name" >&2; continue; }
+    fi
+    git -C "$plugins/$name" cat-file -e "$commit^{commit}" 2>/dev/null ||
+      git -C "$plugins/$name" fetch --quiet origin "$commit" ||
+      { echo "  could not fetch $name at $commit" >&2; continue; }
+    git -C "$plugins/$name" -c advice.detachedHead=false checkout --quiet --detach "$commit" &&
+      change "install the $name plugin at ${commit:0:7}"
+  done < <(grep -vE '^\s*(#|$)' "$SRC/tmux/plugins.txt")
+}
+
+# mermaid-ascii, which draws the Mermaid diagrams in M-v's PR view
+# (tmux/pr-view.sh), pinned to one release and checked against its checksum
+# before it is installed in ~/.local/bin. Updating it means reading what changed
+# and putting the new version and checksums here.
+MERMAID_ASCII_VERSION=1.6.1
+# Its checksums, from the release's checksums.txt. bash 3.2, which macOS has,
+# has no associative arrays, hence the case.
+mermaid_ascii_sha256() {
+  case $1 in
+    Darwin_arm64) echo 9b7f7788bd2596437d92856e9a60b7b05ecb5f6f786c8c0b1cb369f742bf8063 ;;
+    Darwin_x86_64) echo a0fc7b8dc4f01d0ad0afff16590d63b8a85d157cc957b2a659ffeca617360bdc ;;
+  esac
+}
+mermaid_ascii() {
+  local platform sum tmp stamp=~/.local/state/editor-configs/mermaid-ascii.version
+  platform="$(uname -s)_$(uname -m | sed 's/aarch64/arm64/')"
+  sum=$(mermaid_ascii_sha256 "$platform")
+  if [ -z "$sum" ]; then
+    echo "  no pinned mermaid-ascii for $platform; M-v shows diagrams as their source" >&2
+    return 0
+  fi
+  # It has no --version, so the version installed is kept beside it.
+  [ -x ~/.local/bin/mermaid-ascii ] && [ "$(cat "$stamp" 2>/dev/null)" = "$MERMAID_ASCII_VERSION" ] && return 0
+  if $CHECK; then
+    change "install mermaid-ascii $MERMAID_ASCII_VERSION"
+    return 0
+  fi
+  tmp=$(mktemp -d)
+  if curl -fsSL -o "$tmp/m.tar.gz" "https://github.com/AlexanderGrooff/mermaid-ascii/releases/download/$MERMAID_ASCII_VERSION/mermaid-ascii_$platform.tar.gz" &&
+    echo "$sum  $tmp/m.tar.gz" | shasum -a 256 -c --quiet - &&
+    tar -xzf "$tmp/m.tar.gz" -C "$tmp" mermaid-ascii &&
+    mkdir -p ~/.local/bin "${stamp%/*}" && install -m 755 "$tmp/mermaid-ascii" ~/.local/bin/mermaid-ascii; then
+    echo "$MERMAID_ASCII_VERSION" > "$stamp"
+    change "install mermaid-ascii $MERMAID_ASCII_VERSION"
+  else
+    echo "  could not install mermaid-ascii $MERMAID_ASCII_VERSION" >&2
+  fi
+  rm -rf "$tmp"
+}
+
+# tmux.conf and every script it runs, each linked into ~/.config/tmux.
+part_tmux() {
+  dir ~/.config/tmux
+  put_link "$SRC/tmux/tmux.conf" ~/.config/tmux/tmux.conf
+  tmux_plugins
+  mermaid_ascii
+  local file
+  for file in "$SRC"/tmux/*.sh "$SRC"/tmux/*.zsh "$SRC"/tmux/*.js "$SRC"/tmux/glow-style.json; do
+    put_link "$file" ~/.config/tmux/
+  done
+  # Keeps resurrect's saves private and few; it changes nothing once they are.
+  $CHECK || "$SRC/tmux/resurrect-tidy.sh"
+}
+
+part_ghostty() {
+  dir ~/.config/ghostty
+  put_link "$SRC/ghostty/config" ~/.config/ghostty/config
+}
+
+part_pgcli() {
+  put_link "$SRC/pgcli/config" ~/.pgclirc
+}
+
+part_bin() {
+  dir ~/.local/bin
+  # Executables only, so docs alongside the scripts don't get linked in.
+  local script
+  for script in "$SRC"/bin/*; do
+    [[ -f $script && -x $script ]] || continue
+    put_link "$script" ~/.local/bin/"$(basename "$script")"
+  done
+}
+
+bin_scripts() {
+  local script
+  for script in "$REPO_DIR"/bin/*; do
+    [[ -f $script && -x $script ]] && basename "$script"
+  done
+}
+
+failed=()
+run_part() {
+  local name=$1 before=$changes
+  header="$name:"
+  if printf '%s\n' "${PARTS[@]}" | grep -qx "$name"; then
+    "part_$name" || failed+=("$name")
+  else
+    dir ~/.local/bin
+    put_link "$REPO_DIR/bin/$name" ~/.local/bin/"$name" || failed+=("$name")
+  fi
+  (( changes == before )) && ! $quiet && echo "$name: up to date"
+  header=""
+}
+
+if (( ${#parts[@]} )); then
+  for part in "${parts[@]}"; do
+    if ! printf '%s\n' "${PARTS[@]}" | grep -qx "$part" && [[ ! -f $REPO_DIR/bin/$part ]]; then
+      echo "Unknown part: $part" >&2
+      echo "  parts: ${PARTS[*]}" >&2
+      echo "  bin scripts: $(bin_scripts | tr '\n' ' ')" >&2
+      exit 1
+    fi
+  done
+  for part in "${parts[@]}"; do
+    run_part "$part"
+  done
+  if (( ${#failed[@]} )); then
+    echo "" >&2
+    echo "Failed: ${failed[*]}" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+# ── The guided setup ────────────────────────────────────────────────────────
+
 PACKAGES=(tmux jq fzf gh glow lazygit neovim)
 # The oldest tmux this has been used with.
 TMUX_MIN=3.8
+# The parts the tmux workspace needs.
+WORKSPACE=(tmux neovim lazygit bin)
 
 problems=0
 ok() { echo "  ✓ $1"; }
@@ -29,10 +306,27 @@ ask() {
 # What an interactive zsh sees, since tmux starts new tabs from `zsh -i` and
 # nvm is set up only there.
 in_zsh() { zsh -i -c "$1" 2>/dev/null; }
+# How many changes the parts named would make, changing nothing.
+pending() (
+  CHECK=true
+  changes=0
+  for part in "$@"; do "part_$part" >/dev/null 2>&1; done
+  echo "$changes"
+)
+# Runs the parts named, their changes indented under this list.
+apply() {
+  local part
+  indent="    "
+  quiet=true
+  for part in "$@"; do run_part "$part"; done
+  indent=""
+  quiet=false
+  (( ${#failed[@]} == 0 ))
+}
 
 echo "Required"
 
-if [[ $(uname -s) == Darwin ]]; then
+if [[ $OS == macos ]]; then
   ok "macOS"
 else
   todo "macOS: the scripts use pbcopy, osascript and the Keychain"
@@ -47,13 +341,13 @@ fi
 
 # Everything links to and runs from ~/editor-configs, so a clone elsewhere is
 # linked there.
-if [[ $(cd ~/editor-configs 2>/dev/null && pwd -P) == "$REPO_DIR" ]]; then
+if [[ $(cd "$SRC" 2>/dev/null && pwd -P) == "$(cd "$REPO_DIR" && pwd -P)" ]]; then
   ok "the repo is at ~/editor-configs"
-elif [[ -e ~/editor-configs ]]; then
+elif [[ -e $SRC ]]; then
   todo "~/editor-configs is something else; move it aside, then run this again"
   exit 1
 elif ask "Link ~/editor-configs to $REPO_DIR?"; then
-  ln -s "$REPO_DIR" ~/editor-configs && ok "linked ~/editor-configs to $REPO_DIR"
+  ln -s "$REPO_DIR" "$SRC" && ok "linked ~/editor-configs to $REPO_DIR"
 else
   todo "the repo at ~/editor-configs (ln -s '$REPO_DIR' ~/editor-configs)"
 fi
@@ -100,15 +394,19 @@ else
   todo "~/.local/bin on your PATH, in ~/.zshrc"
 fi
 
-# The links, the pinned tmux plugins and mermaid-ascii, and the scripts. Once
-# tmux.conf and nvim are linked the configs were taken already, so the sync
-# runs again without asking, for the scripts added since.
-if [[ -L ~/.config/tmux/tmux.conf && -L ~/.config/nvim ]]; then
-  $CHECK || "$REPO_DIR/sync.sh" tmux neovim lazygit bin >/dev/null && ok "the configs are linked" || todo "./sync.sh tmux neovim lazygit bin failed"
-elif ask "Link the tmux and Neovim configs and the scripts in bin/ (./sync.sh tmux neovim lazygit bin)?"; then
-  "$REPO_DIR/sync.sh" tmux neovim lazygit bin && ok "linked the configs" || todo "./sync.sh tmux neovim lazygit bin failed"
+# The links, the pinned tmux plugins and mermaid-ascii, and the scripts. Asked
+# the first time, since it moves aside any tmux or Neovim config already
+# there; once tmux.conf is linked, whatever was added since is linked without
+# asking.
+count=$(pending "${WORKSPACE[@]}")
+if (( count == 0 )); then
+  ok "the configs are linked"
+elif $CHECK; then
+  todo "$count link(s) or installs to make: ./setup.sh ${WORKSPACE[*]}"
+elif [[ -L ~/.config/tmux/tmux.conf ]] || ask "Link the tmux, Neovim and lazygit configs and the scripts in bin/? Any config of yours in the way is moved aside, not deleted."; then
+  apply "${WORKSPACE[@]}" && ok "linked the configs" || todo "./setup.sh ${WORKSPACE[*]} failed"
 else
-  todo "./sync.sh tmux neovim lazygit bin"
+  todo "./setup.sh ${WORKSPACE[*]}"
 fi
 
 # The shell functions that move a tab into a worktree, which the palette's
@@ -160,8 +458,15 @@ fi
 # what is there, and the statusline (which gives the sidebar each session's
 # context use) only when you have none: the rest of claude/settings.json is
 # its owner's.
-if [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */editor-configs/claude/settings.json ]]; then
-  ok "Claude Code, with this repo's whole setup"
+whole_claude() { [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */editor-configs/claude/settings.json ]]; }
+if whole_claude; then
+  if (( $(pending claude) == 0 )); then
+    ok "Claude Code, with this repo's whole setup"
+  elif $CHECK; then
+    todo "this repo's Claude Code setup has links to make: ./setup.sh claude"
+  else
+    apply claude && ok "Claude Code, with this repo's whole setup, newly added skills and hooks linked" || todo "./setup.sh claude failed"
+  fi
 elif grep -qs 'agent-state.sh' ~/.claude/settings.json; then
   ok "Claude Code's hooks (tab states, the sidebar's Needs you, M-a)"
 elif ! command -v claude >/dev/null; then
@@ -170,7 +475,7 @@ elif ask "Add Claude Code's hooks for tab states and M-a to your ~/.claude/setti
   mkdir -p ~/.claude
   [[ -f ~/.claude/settings.json ]] || echo '{}' > ~/.claude/settings.json
   cp ~/.claude/settings.json ~/.claude/settings.json.bak."$(date +%Y%m%d%H%M%S)"
-  [[ -e ~/.claude/statusline-command.sh ]] || ln -s ~/editor-configs/claude/statusline-command.sh ~/.claude/statusline-command.sh
+  [[ -e ~/.claude/statusline-command.sh ]] || ln -s "$SRC/claude/statusline-command.sh" ~/.claude/statusline-command.sh
   merged=$(jq --slurpfile repo "$REPO_DIR/claude/settings.json" '
     ($repo[0].hooks | map_values(
       map(.hooks |= map(select(.command | contains("agent-state.sh")))) | map(select(.hooks | length > 0))
@@ -185,24 +490,24 @@ else
 fi
 
 # Everything in claude/: its owner's CLAUDE.md, settings (telemetry included),
-# skills, commands and hooks, linked in place of yours, which sync.sh moves
-# aside. Asked only once Claude Code is there, and never assumed.
-if [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */editor-configs/claude/settings.json ]] || ! command -v claude >/dev/null; then
+# skills, commands and hooks, linked in place of yours, which is moved aside.
+# Asked only once Claude Code is there, and never assumed.
+if whole_claude || ! command -v claude >/dev/null; then
   :
 elif ask "Also replace your Claude Code setup with this repo's whole one (CLAUDE.md, settings with its owner's telemetry, skills, commands, hooks)? Yours is moved aside, not deleted."; then
-  "$REPO_DIR/sync.sh" claude && ok "linked this repo's Claude Code setup" || todo "./sync.sh claude failed"
+  apply claude && ok "linked this repo's Claude Code setup" || todo "./setup.sh claude failed"
 else
-  optional "this repo's whole Claude Code setup, skills included: ./sync.sh claude, which replaces yours"
+  optional "this repo's whole Claude Code setup, skills included: ./setup.sh claude, which replaces yours"
 fi
 
 # Only for committing to this clone: its pre-commit hook keeps machine-specific
 # Claude settings out of commits.
-if [[ $(git -C "$REPO_DIR" config core.hooksPath) == .githooks ]]; then
+if (( $(pending git) == 0 )); then
   ok "this clone's git hooks"
 elif ask "Use this repo's git hooks in this clone (only matters if you commit to it)?"; then
-  "$REPO_DIR/sync.sh" git && ok "set this clone's git hooks" || todo "./sync.sh git failed"
+  apply git && ok "set this clone's git hooks" || todo "./setup.sh git failed"
 else
-  optional "this clone's git hooks, if you commit to it: ./sync.sh git"
+  optional "this clone's git hooks, if you commit to it: ./setup.sh git"
 fi
 
 if [[ -f ~/.config/slack-relay/config.json ]]; then

@@ -12,7 +12,7 @@
 # Only what is staged is checked, against HEAD, so the working copy can keep
 # both while the rest of the file is committed with `git add -p`.
 #
-# Enabled per clone by `./sync.sh git`, which points core.hooksPath at
+# Enabled per clone by `./setup.sh git`, which points core.hooksPath at
 # .githooks. `git commit --no-verify` skips it.
 
 set -u

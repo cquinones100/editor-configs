@@ -22,7 +22,7 @@ KEY_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/claude-code/datadog-api-key"
 
 key="${DATADOG_API_KEY:-}"
 
-# `security` is macOS only, and sync.sh installs this on Linux too.
+# `security` is macOS only, and setup.sh installs this on Linux too.
 if [ -z "$key" ] && command -v security >/dev/null 2>&1; then
   key=$(security find-generic-password -a "$USER" -s "$SERVICE" -w 2>/dev/null || true)
 fi

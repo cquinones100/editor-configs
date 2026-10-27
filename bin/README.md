@@ -1,7 +1,9 @@
 # bin
 
-`./sync.sh bin` symlinks every executable here into `~/.local/bin`. To install
-just one, pass its name instead: `./sync.sh worktree-from-ticket`.
+`./setup.sh bin` symlinks every executable here into `~/.local/bin`. To install
+just one, pass its name instead: `./setup.sh worktree-from-ticket`. Running
+it again changes only what isn't in place yet, and says what it changed;
+`--check` says what it would change. (`sync.sh`, the old name, still runs it.)
 
 On a new Mac, `./setup.sh` sets up the whole tmux workspace these scripts
 belong to: it checks for macOS, zsh, the repo at `~/editor-configs`,
@@ -12,9 +14,9 @@ to `~/.zshrc`, and installs Neovim's pinned plugins, asking
 before each install or change to `~/.zshrc`. Then come the optional parts, each asked for
 and off unless you say yes: Claude Code's hooks for tab states and `M-a`
 (only those hooks, added to your own settings, plus the statusline if you
-have none), this repo's whole Claude Code setup in place of yours (`./sync.sh
+have none), this repo's whole Claude Code setup in place of yours (`./setup.sh
 claude`, its owner's settings and telemetry included), and this clone's git
-hooks (`./sync.sh git`, for committing to it). It also lists GitHub, the
+hooks (`./setup.sh git`, for committing to it). It also lists GitHub, the
 Linear key and slack-relay, with the keys each one is for. `./setup.sh
 --check` only reports.
 
@@ -55,7 +57,7 @@ and splits open in the worktree too — and you're still there after claude exit
 1. **Install the script.** From a clone of this repo:
 
    ```sh
-   ./sync.sh worktree-from-ticket
+   ./setup.sh worktree-from-ticket
    ```
 
    That symlinks this one script into `~/.local/bin` and touches nothing else —
@@ -166,7 +168,7 @@ from idea to PR.
   Keeping them there keeps the team out of this repository.
 
 ```sh
-./sync.sh shape
+./setup.sh shape
 ```
 
 ## shape-batch
@@ -203,7 +205,7 @@ when Claude exits. Like
 needs `shape` installed.
 
 ```sh
-./sync.sh shape-batch
+./setup.sh shape-batch
 ```
 
 ## wt-batch
@@ -228,7 +230,7 @@ before any window opens, so a typo in one leaves none of them half-started.
 1. **Install the script.**
 
    ```sh
-   ./sync.sh wt-batch
+   ./setup.sh wt-batch
    ```
 
 2. **Have `wt` working**, meaning `worktree-from-ticket` installed with its
@@ -308,7 +310,7 @@ contributor's fork.
 1. **Install the script.**
 
    ```sh
-   ./sync.sh worktree-from-pr
+   ./setup.sh worktree-from-pr
    ```
 
 2. **Install and authenticate gh.** <https://cli.github.com>, then `gh auth
@@ -377,7 +379,7 @@ dashes, so `feature/login` lands in `feature-login` rather than nesting.
 1. **Install the script.**
 
    ```sh
-   ./sync.sh worktree-from-branch
+   ./setup.sh worktree-from-branch
    ```
 
 2. **Add one line to your shell config** (`./setup.sh` offers to):
@@ -422,7 +424,7 @@ Linear key, no `gh`, and no network: recovery works on a plane.
 1. **Install the script.**
 
    ```sh
-   ./sync.sh worktree-resume
+   ./setup.sh worktree-resume
    ```
 
 2. **Install `claude-here`** and make sure it is on your `PATH`. That is the
@@ -470,7 +472,7 @@ Each row is the window's second tmux status line, from the same
 title, or directory), PR, program, and in a Claude pane the session title and
 last prompt, coloured the same way. That is what the picker searches, so a
 ticket title or something you said to Claude finds the window. It needs
-`./sync.sh tmux` as well as `./sync.sh wt-jump`; without the tmux script a row
+`./setup.sh tmux` as well as `./setup.sh wt-jump`; without the tmux script a row
 falls back to its repository, PR, and branch. Every window is rendered at once,
 which takes about a second with a dozen open.
 
@@ -496,7 +498,7 @@ about half a second.
 1. **Install the script.**
 
    ```sh
-   ./sync.sh wt-jump
+   ./setup.sh wt-jump
    ```
 
 2. **Install fzf** if you want the no-argument picker. `brew install fzf`.
@@ -559,8 +561,8 @@ version that read the end of every transcript each time took.
 ### Setup
 
 ```sh
-./sync.sh wt-revive
-./sync.sh tmux
+./setup.sh wt-revive
+./setup.sh tmux
 ```
 
 `M-o` in the tmux config opens mission control's Work map showing only these
@@ -647,8 +649,8 @@ and on with "Turn the sidebar on or off" in `M-p` (the `@sidebar_on` option).
 ### Setup
 
 ```sh
-./sync.sh tmux-sidebar
-./sync.sh tmux
+./setup.sh tmux-sidebar
+./setup.sh tmux
 ```
 
 then reload tmux. tmux starts the daemon through `tmux/sidebar.sh`, which puts
@@ -776,7 +778,7 @@ is still open, are removed by hand with `git worktree remove <path>`.
 1. **Install the script.**
 
    ```sh
-   ./sync.sh worktree-done
+   ./setup.sh worktree-done
    ```
 
 2. **Install fzf.** `brew install fzf`. Without it the command prints the list
@@ -816,7 +818,7 @@ No shell function, so nothing to add to your shell config.
 Relays between a Slack app's DM and the Claude sessions in your tmux tabs, for
 when you are away from the computer. It runs in its own tmux tab. The command
 is `bin/slack-relay`; its code is in `lib/slack-relay/`, one file per part,
-which `./sync.sh` doesn't need to install, since the command finds it from its
+which `./setup.sh` doesn't need to install, since the command finds it from its
 own location.
 
 ```
@@ -1177,7 +1179,7 @@ no app can press one as you. The app subscribes to no channel events and has no 
 channels, so adding it to one shows it nothing.
 
 ```sh
-./sync.sh slack-relay
+./setup.sh slack-relay
 ```
 
 Its tests run against a tmux server of their own, a temporary home directory
@@ -1220,7 +1222,7 @@ completion and the undo file are off in a note.
 ### Setup
 
 ```
-./sync.sh notes
+./setup.sh notes
 ```
 
 links `bin/notes` into `~/.local/bin`. It needs Neovim 0.10 or newer and a
@@ -1231,7 +1233,7 @@ can do.
 In tmux, `M-N` (Alt-Shift-N) opens it in a tab of its own named Notes, or goes
 to that tab when it is open already, since two of them saving the same notes
 as you type would write over each other. It runs `tmux/notes-open.sh`, which
-`./sync.sh tmux` links, so the binding needs both that and `./sync.sh notes`. `M-e` puts the same
+`./setup.sh tmux` links, so the binding needs both that and `./setup.sh notes`. `M-e` puts the same
 Notes in a pane to the right of the one you are in, moving it from wherever it
 is, or starting it there; pressed again in that tab, or `M-w` on it, it goes back to a
 tab of its own. While it is beside a tab's pane, that tab says "✎ Notes here" in the
@@ -1435,7 +1437,7 @@ checkout and the Codex login.
 1. **Install the script.**
 
    ```sh
-   ./sync.sh codex-review
+   ./setup.sh codex-review
    ```
 
 2. **Log in to Codex** (`codex login`) if `codex` does not already work

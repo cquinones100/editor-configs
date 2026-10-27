@@ -1,10 +1,10 @@
-# tmux plugins, pinned. `./sync.sh tmux` installs each into
+# tmux plugins, pinned. `./setup.sh tmux` installs each into
 # ~/.config/tmux/plugins/<name> at exactly this commit, and tmux.conf loads
 # them directly. There is no plugin manager: TPM only follows branches, so it
 # would run whatever each repository's default branch held on every tmux start.
 #
 # To update a plugin, read what changed between the pinned commit and the new
-# one, put the new commit here, and run `./sync.sh tmux`.
+# one, put the new commit here, and run `./setup.sh tmux`.
 #
 # name            repository                                        commit
 tmux-sensible     https://github.com/tmux-plugins/tmux-sensible     25cb91f42d020f675bb0a2ce3fbd3a5d96119efa

@@ -22,7 +22,7 @@
 #
 # The view's pane carries @pr_view, so the key finds it to close it. It runs
 # under an interactive zsh, for the PATH (gh, glow, ~/.local/bin) the tmux
-# server lacks. mermaid-ascii is pinned and installed by `./sync.sh pr-view`.
+# server lacks. mermaid-ascii is pinned and installed by `./setup.sh tmux`.
 
 set -u
 

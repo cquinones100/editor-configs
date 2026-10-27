@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Keeps tmux-resurrect's saves private and few. Run by resurrect after every
-# save (@resurrect-hook-post-save-all in tmux.conf) and once by `sync.sh tmux`.
+# save (@resurrect-hook-post-save-all in tmux.conf) and by every `setup.sh tmux`.
 #
 # With @resurrect-capture-pane-contents on, pane_contents.tar.gz holds whatever
 # the panes last showed, secrets included, and resurrect writes everything

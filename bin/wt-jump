@@ -272,7 +272,7 @@ const matchesFor = (target, panes) => {
 // Each row is the second tmux status line for that pane, from the same script
 // tmux runs, so a row describes a window exactly as the bar under it does: the
 // label, the PR, the program, and Claude's session title and last prompt. Linked by
-// `./sync.sh tmux`; without it a row falls back to its repository and branch.
+// `./setup.sh tmux`; without it a row falls back to its repository and branch.
 const STATUS_SCRIPT = path.join(os.homedir(), ".config/tmux/tab-status.sh");
 
 // About a third of a second each, mostly finding out whether the pane runs

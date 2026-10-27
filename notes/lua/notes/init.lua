@@ -200,19 +200,21 @@ end
 
 -- The Format menu: everything a note can do, each with its key, in a small
 -- window. A key, Enter or a click on a line picks it; Escape or q closes it.
--- Opened from Visual mode, it acts on the selection.
+-- Opened from Visual mode, it acts on the selection. A paragraph or character
+-- style (those marked `typing`) leaves you typing, as `a` would, unless it
+-- already has: you pick a style to write in it.
 function M.menu(buf, visual, typing_col)
   local first, last = vim.fn.line("."), vim.fn.line(".")
   if visual then first, last = vim.fn.line("'<"), vim.fn.line("'>") end
-  local function para(style) return function() format.paragraph(buf, first, last, style) end end
-  local function char(style) return function() format.character(buf, style, visual, typing_col) end end
+  local function para(style) return { fn = function() format.paragraph(buf, first, last, style) end, typing = true } end
+  local function char(style) return { fn = function() format.character(buf, style, visual, typing_col) end, typing = true } end
   local items = {
     { "Paragraph" },
     { "1", "Title", para("title") },
     { "2", "Heading", para("heading") },
     { "3", "Subheading", para("subheading") },
     { "0", "Body", para("body") },
-    { "m", "Monospaced", function() format.monospaced(buf, first, last) end },
+    { "m", "Monospaced", { fn = function() format.monospaced(buf, first, last) end, typing = true } },
     { "8", "Bulleted List", para("bullet") },
     { "-", "Dashed List", para("dash") },
     { "7", "Numbered List", para("number") },
@@ -259,10 +261,20 @@ function M.menu(buf, visual, typing_col)
     relative = "cursor", row = 1, col = 0, width = 30, height = math.min(#lines, vim.o.lines - 4),
     style = "minimal", border = "rounded", title = " Format ", title_pos = "center",
   })
-  local function pick(fn)
+  local function pick(action)
     vim.api.nvim_win_close(win, true)
     vim.api.nvim_set_current_win(origin)
-    if fn then fn() end
+    if not action then return end
+    if type(action) == "function" then return action() end
+    action.fn()
+    -- Through the note's own `a` (mapped, so it starts after a line's
+    -- marker), once the style is in; not over a selection, which you were
+    -- formatting rather than writing.
+    if action.typing and not visual then
+      vim.schedule(function()
+        if vim.api.nvim_get_mode().mode ~= "i" then vim.api.nvim_feedkeys("a", "m", false) end
+      end)
+    end
   end
   local opts = { buffer = menu_buf, nowait = true, silent = true }
   for row, item in pairs(actions) do

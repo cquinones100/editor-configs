@@ -717,3 +717,37 @@ test("note-watch's watcher reports an item added to a note once its text settles
   assert.deepEqual(out.trim().split("\n").map((line) => line.split(":")[0] + (line.startsWith("NEW") ? line.slice(3) : "")), ["NEW: half typed, now whole", "GONE"]);
 });
 
+
+test("picking a style from the Format menu goes on to the note's own a, to type in it, and an action like ticking doesn't", () => {
+  const { result } = lua(`
+    vim.cmd("Notes")
+    local n = require("notes")
+    require("notes.sidebar").new_note()
+    local buf = vim.api.nvim_get_current_buf()
+    vim.cmd("stopinsert")
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "# Groceries", "", "eggs", "- [ ] milk" })
+    -- What the menu types after a pick, without typing it: a headless Neovim
+    -- left in Insert mode stops reading this script.
+    local fed = {}
+    local feedkeys = vim.api.nvim_feedkeys
+    vim.api.nvim_feedkeys = function(keys, mode, escape)
+      if keys == "a" then return table.insert(fed, { keys = keys, mode = mode }) end
+      return feedkeys(keys, mode, escape)
+    end
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    n.menu(buf, false)
+    feedkeys("8", "x", false)
+    vim.wait(50, function() return false end)
+    local styled = { line = vim.api.nvim_get_current_line(), fed = vim.deepcopy(fed) }
+    fed = {}
+    vim.api.nvim_win_set_cursor(0, { 4, 0 })
+    n.menu(buf, false)
+    feedkeys("c", "x", false)
+    vim.wait(50, function() return false end)
+    io.write(vim.json.encode({ styled = styled, ticked = { line = vim.api.nvim_buf_get_lines(buf, 3, 4, false)[1], fed = fed } }))
+  `);
+  assert.equal(result.styled.line, "* eggs");
+  assert.deepEqual(result.styled.fed, [{ keys: "a", mode: "m" }], "a bulleted list is picked to write in, through the note's mapped a");
+  assert.equal(result.ticked.line, "- [x] milk");
+  assert.deepEqual(result.ticked.fed, [], "ticking a box is done, not written in");
+});

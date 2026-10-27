@@ -28,10 +28,10 @@ for arg in "$@"; do
 done
 
 # Resolved from this script's own location, so one bin script can be linked
-# from a clone anywhere. Everything else links from ~/editor-configs, which
+# from a clone anywhere. Everything else links from ~/switchboard, which
 # the guided setup points at this clone.
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC="$HOME/editor-configs"
+SRC="$HOME/switchboard"
 
 case "$(uname -s)" in
   Darwin) OS=macos ;;
@@ -179,7 +179,7 @@ mermaid_ascii_sha256() {
   esac
 }
 mermaid_ascii() {
-  local platform sum tmp stamp=~/.local/state/editor-configs/mermaid-ascii.version
+  local platform sum tmp stamp=~/.local/state/switchboard/mermaid-ascii.version
   platform="$(uname -s)_$(uname -m | sed 's/aarch64/arm64/')"
   sum=$(mermaid_ascii_sha256 "$platform")
   if [ -z "$sum" ]; then
@@ -259,6 +259,26 @@ run_part() {
   header=""
 }
 
+# The rename from editor-configs: a clone set up as ~/editor-configs gets
+# ~/switchboard linked to it, so the links made from ~/switchboard, and every
+# script that runs from there, work without moving it, and the settings and
+# state folders take their new names. Never with --check, never over anything
+# already there, and only once: after it, there is nothing left to do.
+renamed() {
+  $CHECK && return 0
+  if [[ ! -e $SRC && ! -L $SRC && $(cd "$HOME/editor-configs" 2>/dev/null && pwd -P) == "$(cd "$REPO_DIR" && pwd -P)" ]]; then
+    ln -s "$REPO_DIR" "$SRC" && echo "Linked ~/switchboard to $REPO_DIR, the clone at ~/editor-configs."
+  fi
+  local pair old new
+  for pair in .config/editor-configs:.config/switchboard .local/state/editor-configs:.local/state/switchboard; do
+    old=$HOME/${pair%%:*} new=$HOME/${pair#*:}
+    if [[ -d $old && ! -e $new ]]; then
+      mkdir -p "${new%/*}" && mv "$old" "$new" && echo "Moved ~/${pair%%:*} to ~/${pair#*:}."
+    fi
+  done
+}
+renamed
+
 if (( ${#parts[@]} )); then
   for part in "${parts[@]}"; do
     if ! printf '%s\n' "${PARTS[@]}" | grep -qx "$part" && [[ ! -f $REPO_DIR/bin/$part ]]; then
@@ -336,17 +356,17 @@ else
   todo "zsh as your shell: chsh -s /bin/zsh"
 fi
 
-# Everything links to and runs from ~/editor-configs, so a clone elsewhere is
+# Everything links to and runs from ~/switchboard, so a clone elsewhere is
 # linked there.
 if [[ $(cd "$SRC" 2>/dev/null && pwd -P) == "$(cd "$REPO_DIR" && pwd -P)" ]]; then
-  ok "the repo is at ~/editor-configs"
+  ok "the repo is at ~/switchboard"
 elif [[ -e $SRC ]]; then
-  todo "~/editor-configs is something else; move it aside, then run this again"
+  todo "~/switchboard is something else; move it aside, then run this again"
   exit 1
-elif ask "Link ~/editor-configs to $REPO_DIR?"; then
-  ln -s "$REPO_DIR" "$SRC" && ok "linked ~/editor-configs to $REPO_DIR"
+elif ask "Link ~/switchboard to $REPO_DIR?"; then
+  ln -s "$REPO_DIR" "$SRC" && ok "linked ~/switchboard to $REPO_DIR"
 else
-  todo "the repo at ~/editor-configs (ln -s '$REPO_DIR' ~/editor-configs)"
+  todo "the repo at ~/switchboard (ln -s '$REPO_DIR' ~/switchboard)"
 fi
 
 if command -v brew >/dev/null; then
@@ -455,7 +475,7 @@ fi
 # what is there, and the statusline (which gives the sidebar each session's
 # context use) only when you have none: the rest of claude/settings.json is
 # its owner's.
-whole_claude() { [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */editor-configs/claude/settings.json ]]; }
+whole_claude() { [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */switchboard/claude/settings.json || $(readlink ~/.claude/settings.json 2>/dev/null) == */editor-configs/claude/settings.json ]]; }
 if whole_claude; then
   if (( $(pending claude) == 0 )); then
     ok "Claude Code, with this repo's whole setup"

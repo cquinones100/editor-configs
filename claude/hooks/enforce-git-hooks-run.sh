@@ -1,7 +1,7 @@
 #!/bin/bash
 # Keeps Claude from getting around git hooks: no `git commit --no-verify` (or
 # its short form -n), and no changing core.hooksPath, which would switch a
-# repository's hooks off. editor-configs relies on its pre-commit hook to keep
+# repository's hooks off. Switchboard relies on its pre-commit hook to keep
 # machine-specific Claude settings out of commits. Reading the setting is fine.
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')

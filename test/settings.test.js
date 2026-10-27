@@ -17,7 +17,7 @@ const socket = path.join(tmp, "tmux.sock");
 const file = path.join(tmp, "settings.json");
 execFileSync("tmux", ["-S", socket, "-f", "/dev/null", "new-session", "-d", "-s", "settings", "cat"]);
 const serverPid = execFileSync("tmux", ["-S", socket, "display", "-p", "#{pid}"], { encoding: "utf8" }).trim();
-const env = { ...process.env, HOME: tmp, TMUX: `${socket},${serverPid},0`, EDITOR_CONFIGS_DIR: repo, EDITOR_CONFIGS_SETTINGS: file };
+const env = { ...process.env, HOME: tmp, TMUX: `${socket},${serverPid},0`, SWITCHBOARD_DIR: repo, SWITCHBOARD_SETTINGS: file };
 after(() => {
   execFileSync("tmux", ["-S", socket, "kill-server"]);
   fs.rmSync(tmp, { recursive: true, force: true });

@@ -125,5 +125,5 @@ fi
 args=()
 while IFS= read -r item; do args+=("$item"); done <<<"$chosen"
 cd "$repo" || fail "Can't reach $repo."
-~/editor-configs/bin/shape-batch "${args[@]}" || fail "shape-batch failed."
+~/switchboard/bin/shape-batch "${args[@]}" || fail "shape-batch failed."
 sleep 1.5

@@ -34,7 +34,7 @@ fail() {
   exit 0
 }
 
-reply_tool=~/editor-configs/bin/claude-reply
+reply_tool=~/switchboard/bin/claude-reply
 source=$(tmux display-message -p '#{window_id}')
 reply_file=$(mktemp -t reply-send)
 trap 'rm -f "$reply_file"' EXIT

@@ -16,13 +16,13 @@
 #   tip.sh reset                   show every tip again
 #   tip.sh box <tip> <client>      the popup itself
 #
-# What was shown is kept in ~/.local/state/editor-configs/tips, one name a
+# What was shown is kept in ~/.local/state/switchboard/tips, one name a
 # line, and as @tip_seen_<tip> options, so a hook can skip a tip with a
 # format and start nothing once it has been shown.
 
 set -u
 
-SEEN=~/.local/state/editor-configs/tips
+SEEN=~/.local/state/switchboard/tips
 SHOW_SECONDS=8
 FOOTER="any key closes · tips are in Settings"
 

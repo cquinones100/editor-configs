@@ -23,7 +23,7 @@ after(() => {
 test("a tip is marked shown in its file and as a tmux option, load brings the marks back, and reset clears them", () => {
   const tip = (...args) => execFileSync("bash", [path.join(__dirname, "../tmux/tip.sh"), ...args], { env, encoding: "utf8" });
   const option = (name) => execFileSync("tmux", ["-S", socket, "show", "-gqv", name], { encoding: "utf8" }).trim();
-  const file = path.join(tmp, ".local/state/editor-configs/tips");
+  const file = path.join(tmp, ".local/state/switchboard/tips");
 
   // No client to show it on: nothing is drawn, and it isn't counted as shown.
   tip("show", "waiting");

@@ -1,8 +1,9 @@
 // Tests for setup.sh's parts, which must be safe to run again. Run with:
 // node --test test/*.test.js
 //
-// A temporary HOME whose ~/editor-configs links to this clone, so the links
-// land there and never in your own home. The tmux part (which fetches the
+// A temporary HOME whose ~/editor-configs, the name before the rename, links
+// to this clone, as an older clone's would: setup.sh links ~/switchboard to
+// it, and the links land there and never in your own home. The tmux part (which fetches the
 // plugins) and the git part (which sets this clone's own config) are left out.
 
 const { test } = require("node:test");
@@ -21,6 +22,8 @@ test("setup.sh links its parts once, moves a real file aside once, and changes n
   const parts = ["lazygit", "neovim", "ghostty", "pgcli", "bin", "claude"];
   try {
     fs.symlinkSync(repo, path.join(home, "editor-configs"));
+    fs.mkdirSync(path.join(home, ".config/editor-configs"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/editor-configs/settings.json"), JSON.stringify({ tips: false }));
     fs.mkdirSync(path.join(home, ".config/ghostty"), { recursive: true });
     fs.writeFileSync(path.join(home, ".config/ghostty/config"), "theme = mine\n");
 
@@ -28,7 +31,9 @@ test("setup.sh links its parts once, moves a real file aside once, and changes n
     assert.equal(first.status, 0, first.stdout + first.stderr);
     assert.match(first.stdout, /ghostty:\n  move .*\.config\/ghostty\/config aside to .*\.bak\.\d+\n  link .*\.config\/ghostty\/config/);
     assert.match(first.stdout, /bin:\n(  link .*\n)*  link .*\.local\/bin\/notes\n/);
-    assert.equal(fs.readlinkSync(path.join(home, ".config/nvim")), path.join(home, "editor-configs/nvim"));
+    assert.equal(fs.readlinkSync(path.join(home, ".config/nvim")), path.join(home, "switchboard/nvim"));
+    assert.equal(fs.realpathSync(path.join(home, "switchboard")), fs.realpathSync(repo), "~/switchboard leads to the clone");
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, ".config/switchboard/settings.json"), "utf8")), { tips: false }, "and the settings moved to their new folder");
 
     const check = spawnSync("bash", [script, "--check", ...parts], { env, encoding: "utf8" });
     assert.equal(check.stdout, parts.map((p) => `${p}: up to date\n`).join(""), "--check finds nothing left to do");

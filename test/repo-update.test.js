@@ -1,5 +1,5 @@
 // Tests for tmux/repo-update.sh, which offers new commits on GitHub to
-// ~/editor-configs. Run with: node --test test/*.test.js
+// ~/switchboard. Run with: node --test test/*.test.js
 //
 // A throwaway "remote" (a bare repository) and clones of it, in a temporary
 // directory with a temporary HOME and no tmux, so nothing touches your own
@@ -17,7 +17,7 @@ const script = path.join(__dirname, "../tmux/repo-update.sh");
 test("the update prompt fast-forwards main on yes, leaves it on no, and refuses when main has commits of its own", () => {
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repo-update-test-")));
   const repo = path.join(tmp, "editor-configs");
-  const env = { ...process.env, HOME: tmp, EDITOR_CONFIGS_DIR: repo, TMUX: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
+  const env = { ...process.env, HOME: tmp, SWITCHBOARD_DIR: repo, TMUX: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
   const git = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   const prompt = (answer) => spawnSync("bash", [script, "prompt"], { env, input: answer, encoding: "utf8" });
   try {

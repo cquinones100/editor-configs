@@ -1,4 +1,4 @@
-# editor-configs
+# Switchboard
 
 A terminal workspace for working with coding agents: tmux, Neovim, lazygit and a set of scripts, built around Claude Code. Every tab says what its agent is doing and whether it is waiting on you, one key takes you to the next one that needs you, and a ticket goes from idea to merged PR without leaving the keyboard.
 
@@ -14,8 +14,8 @@ It is opinionated: the defaults are how it is meant to be used, and Settings (`M
 ## Set up
 
 ```
-git clone https://github.com/cquinones100/editor-configs.git ~/editor-configs
-~/editor-configs/setup.sh
+git clone https://github.com/cquinones100/switchboard.git ~/switchboard
+~/switchboard/setup.sh
 ```
 
 `setup.sh` checks what the workspace needs and asks before it installs anything or changes `~/.zshrc`: Homebrew's `tmux jq fzf gh glow lazygit neovim`, the links for the tmux, Neovim and lazygit configs and the scripts in `bin/`, the worktree shell functions, and Neovim's plugins. Then it asks about the optional parts (Claude Code's hooks for tab states, this repo's whole Claude Code setup, the git hooks) and lists what GitHub, Linear and the Slack relay need. It ends with a list of anything left to do; run it again until it says Ready. Running it again any time changes only what isn't in place, and `./setup.sh --check` only reports.

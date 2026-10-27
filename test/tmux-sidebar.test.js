@@ -1390,7 +1390,7 @@ test("a cron job Claude created is a loop until CronDelete names it, shown by it
 });
 
 test("mission control's Settings view lists the options by category, / narrows them to the matching categories, and Enter and Space change one", async () => {
-  const settingsFile = path.join(home, ".config/editor-configs/settings.json");
+  const settingsFile = path.join(home, ".config/switchboard/settings.json");
   fs.rmSync(settingsFile, { force: true });
   const sent = [];
   const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 40, tmuxClient: "none" };
@@ -1425,7 +1425,7 @@ test("mission control's Settings view lists the options by category, / narrows t
 });
 
 test("with the github and linear settings off, mission control has no PRs view and the Work map no PR or ticket", () => {
-  const settingsFile = path.join(home, ".config/editor-configs/settings.json");
+  const settingsFile = path.join(home, ".config/switchboard/settings.json");
   const tab = { id: "@90", index: 9, name: "Some work", path: path.join(tmp, "nowhere"), pr: "12", state: "idle" };
   try {
     fs.mkdirSync(path.dirname(settingsFile), { recursive: true });

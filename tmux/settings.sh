@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Applies the workspace's settings to tmux. Every option is listed in
 # tmux/settings.json with its default; what you changed is in
-# ~/.config/editor-configs/settings.json (mission control's Settings view
+# ~/.config/switchboard/settings.json (mission control's Settings view
 # writes it, and you can edit it by hand). Each value becomes a global tmux
 # option, @setting_<key> (on/off, or the choice's value), which the scripts
 # and hooks read without starting anything, and the few that are tmux's own
@@ -22,9 +22,11 @@
 set -u
 umask 077
 
-REPO="${EDITOR_CONFIGS_DIR:-$HOME/editor-configs}"
+REPO="${SWITCHBOARD_DIR:-$HOME/switchboard}"
+# A clone not yet set up under its new name (setup.sh links it).
+[ -d "$REPO" ] || REPO=$HOME/editor-configs
 SCHEMA="$REPO/tmux/settings.json"
-FILE="${EDITOR_CONFIGS_SETTINGS:-$HOME/.config/editor-configs/settings.json}"
+FILE="${SWITCHBOARD_SETTINGS:-$HOME/.config/switchboard/settings.json}"
 script_dir="$(dirname "$0")"
 
 # What you set, or {} when the file is missing or isn't a JSON object.

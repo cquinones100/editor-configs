@@ -132,7 +132,7 @@
     "key": "update_check",
     "category": "Updates",
     "label": "Update check",
-    "description": "Offer new commits on GitHub to ~/editor-configs: when tmux opens and every hour, only when it opens, or never",
+    "description": "Offer new commits on GitHub to ~/switchboard: when tmux opens and every hour, only when it opens, or never",
     "choices": [
       {
         "value": "hourly",

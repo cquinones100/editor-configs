@@ -15,7 +15,7 @@
 #            removes only when stopped on purpose, but its process has gone.
 #
 # It also starts tmux/repo-update.sh periodic in the background, which checks
-# GitHub for new commits to ~/editor-configs at most once an hour, since this
+# GitHub for new commits to ~/switchboard at most once an hour, since this
 # is the one thing tmux runs on a timer. Nothing here waits for it.
 
 set -u
@@ -32,7 +32,7 @@ IFS='|' read -r saved sidebar light updates < <(tmux display -p '#{@continuum-sa
 
 now=$(date +%s)
 # The hour is checked here, with builtins, so most runs start nothing more.
-read -r checked 2>/dev/null < ~/.local/state/editor-configs/update-checked
+read -r checked 2>/dev/null < ~/.local/state/switchboard/update-checked
 # Not with the update_check setting at "open" or "off" (tmux/settings.sh).
 if [ "${updates:-hourly}" = hourly ] && [ $((now - ${checked:-0})) -ge 3600 ] && [ -x ~/.config/tmux/repo-update.sh ]; then
   ~/.config/tmux/repo-update.sh periodic >/dev/null 2>&1 &

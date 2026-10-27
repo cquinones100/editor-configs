@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keeps ~/editor-configs up to date with GitHub: fetches origin, and when its
+# Keeps ~/switchboard up to date with GitHub: fetches origin, and when its
 # main has commits yours doesn't, offers them in a popup that fast-forwards
 # main, runs ./setup.sh, and reloads tmux.
 #
@@ -21,8 +21,10 @@
 
 set -u
 
-REPO="${EDITOR_CONFIGS_DIR:-$HOME/editor-configs}"
-STATE=~/.local/state/editor-configs
+REPO="${SWITCHBOARD_DIR:-$HOME/switchboard}"
+# A clone not yet set up under its new name (setup.sh links it).
+[ -d "$REPO" ] || REPO=$HOME/editor-configs
+STATE=~/.local/state/switchboard
 CHECK_EVERY=3600
 
 git_() { git -C "$REPO" "$@"; }
@@ -61,7 +63,7 @@ case "${1:-}" in
     client="${2:-$(tmux list-clients -F '#{client_activity} #{client_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)}"
     [ -n "$client" ] || exit 0
     echo "$tip" > "$STATE/update-offered"
-    tmux display-popup -c "$client" -E -w 90 -h 85% -T ' editor-configs ' "$0 prompt"
+    tmux display-popup -c "$client" -E -w 90 -h 85% -T ' Switchboard ' "$0 prompt"
     # How updates also arrive, once (tip.sh).
     [ -x ~/.config/tmux/tip.sh ] && ~/.config/tmux/tip.sh show updates "$client"
     ;;

@@ -17,12 +17,12 @@ done by `codex-review`, a single Node script, so both have to be in place.
    own.
 
 2. **Put `codex-review` on your `PATH`.** The source is
-   [`bin/codex-review`](https://github.com/cquinones100/editor-configs/blob/main/bin/codex-review)
+   [`bin/codex-review`](https://github.com/cquinones100/switchboard/blob/main/bin/codex-review)
    in this repository. For example:
 
    ```sh
    mkdir -p ~/.local/bin
-   curl -fsSL https://raw.githubusercontent.com/cquinones100/editor-configs/main/bin/codex-review -o ~/.local/bin/codex-review
+   curl -fsSL https://raw.githubusercontent.com/cquinones100/switchboard/main/bin/codex-review -o ~/.local/bin/codex-review
    chmod +x ~/.local/bin/codex-review
    codex-review --help
    ```

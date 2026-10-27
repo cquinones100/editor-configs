@@ -6,7 +6,7 @@ it again changes only what isn't in place yet, and says what it changed;
 `--check` says what it would change. (`sync.sh`, the old name, still runs it.)
 
 On a new Mac, `./setup.sh` sets up the whole tmux workspace these scripts
-belong to: it checks for macOS, zsh, the repo at `~/editor-configs`,
+belong to: it checks for macOS, zsh, the repo at `~/switchboard`,
 Homebrew's `tmux jq fzf gh glow lazygit neovim` (tmux 3.8 or newer), Node
 from nvm and `~/.local/bin` on the PATH, links the tmux, Neovim and lazygit
 configs and these scripts, adds the `wt`, `wtpr`, `wtr` and `wtb` functions
@@ -33,7 +33,7 @@ changes one, and `/` searches them. Turning GitHub or Linear off under
 Integrations takes its commands out of `M-p`, makes their keys (`M-v`, `M-m`, `M-r` for
 GitHub; `M-i`, `M-l`, `M-W` for Linear) do nothing, and takes its parts out of
 mission control and the tab names, so nothing asks that service. They are kept in
-`~/.config/editor-configs/settings.json`, only what differs from the
+`~/.config/switchboard/settings.json`, only what differs from the
 defaults in `tmux/settings.json`, and a change made by hand there takes
 effect at once too.
 

@@ -22,7 +22,7 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
    gh repo view --json owner,name --jq '.owner.login + " " + .name'
    ```
 
-2. Record the paths the cleanup needs now, while the worktree still exists, as step 1 of `~/editor-configs/claude/skills/clean-worktree/SKILL.md` finds them:
+2. Record the paths the cleanup needs now, while the worktree still exists, as step 1 of `~/switchboard/claude/skills/clean-worktree/SKILL.md` finds them:
 
    ```
    git rev-parse --show-toplevel
@@ -41,7 +41,7 @@ Arguments: a PR number, if one was given. Otherwise use the current branch's PR.
 4. Settle the ticket and the note now, so finishing up later asks nothing:
    - **The ticket**: the Linear ticket the branch names (an ID like `ABC-123` at the start of the branch name), else one the PR's title or body names. None is fine: then there is no ticket to close out.
    - **The note**: which of the user's notes holds this work's checklist item, settled as `~/.claude/skills/note-watch/pick-note.md` says, with **No note** as an option, since not every PR has one. Remember the answer; read the note only at "Closing out".
-   - **The deploy and the test**: settle both as "Settling" in `~/editor-configs/claude/skills/deploy-test/SKILL.md` says, so nothing after the merge has to ask.
+   - **The deploy and the test**: settle both as "Settling" in `~/switchboard/claude/skills/deploy-test/SKILL.md` says, so nothing after the merge has to ask.
 
 ## Queuing
 
@@ -168,7 +168,7 @@ When it exits:
 
 ## Fixing
 
-When the branch is why the PR can't merge (a required check failed, it has merge conflicts, or the merge queue dropped it for one of those), hand it to `/ci-loop`: read the repository's own `.claude/skills/ci-loop/SKILL.md` and follow it for this PR, or `~/editor-configs/claude/skills/ci-loop/SKILL.md` when the repository has none, and in either case follow the section "When queue-and-clean runs this" in `~/editor-configs/claude/skills/ci-loop/SKILL.md`, which a repository's copy leaves out. It finds the failure, fixes it in this worktree or reruns a failure the branch didn't cause, pushes without force, and watches until the PR's checks pass. Tell it what brought the PR there: the failing checks, the conflicts, or the merge queue's reason for dropping it.
+When the branch is why the PR can't merge (a required check failed, it has merge conflicts, or the merge queue dropped it for one of those), hand it to `/ci-loop`: read the repository's own `.claude/skills/ci-loop/SKILL.md` and follow it for this PR, or `~/switchboard/claude/skills/ci-loop/SKILL.md` when the repository has none, and in either case follow the section "When queue-and-clean runs this" in `~/switchboard/claude/skills/ci-loop/SKILL.md`, which a repository's copy leaves out. It finds the failure, fixes it in this worktree or reruns a failure the branch didn't cause, pushes without force, and watches until the PR's checks pass. Tell it what brought the PR there: the failing checks, the conflicts, or the merge queue's reason for dropping it.
 
 When it hands back:
 
@@ -180,14 +180,14 @@ Hand the PR over at most three times in one run, since each requeue can fail aga
 
 ## Deploy and test
 
-After the PR merges, and before anything is removed, follow `~/editor-configs/claude/skills/deploy-test/SKILL.md` from "Waiting for the deploy", with what was settled before watching (it is `disable-model-invocation`, so read it rather than invoking it). The worktree stays until the user has approved, so a fix can start from it if the feature isn't right.
+After the PR merges, and before anything is removed, follow `~/switchboard/claude/skills/deploy-test/SKILL.md` from "Waiting for the deploy", with what was settled before watching (it is `disable-model-invocation`, so read it rather than invoking it). The worktree stays until the user has approved, so a fix can start from it if the feature isn't right.
 
 - `deploy-test: approved (…)`: go to "Cleanup", and keep what is in the brackets for the final message.
 - `deploy-test: fail: <reason>`: leave everything as it is, the ticket and the note included, and reply `queue-and-clean: fail: <reason>`.
 
 ## Cleanup
 
-Only after GitHub reports the PR `MERGED` and the user has approved in "Approval". Follow `~/editor-configs/claude/skills/clean-worktree/SKILL.md` from step 2, with the paths recorded before watching and the PR's number (it is `disable-model-invocation`, so read it rather than invoking it).
+Only after GitHub reports the PR `MERGED` and the user has approved in "Approval". Follow `~/switchboard/claude/skills/clean-worktree/SKILL.md` from step 2, with the paths recorded before watching and the PR's number (it is `disable-model-invocation`, so read it rather than invoking it).
 
 - `clean-worktree: success`: close out the ticket and the note, as "Closing out" says, then reply `queue-and-clean: success`. From here on every command needs `git -C <main-clone>` or an absolute path, since the shell's working directory no longer exists.
 - `clean-worktree: fail: <reason>`: reply `queue-and-clean: fail: <reason>`, closing out nothing.

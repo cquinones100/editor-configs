@@ -51,10 +51,11 @@ hex=$("$script_dir/accent-color.sh" "$path")
 # prints nothing, and the directory name is used as usual.
 label=""
 # With the tab_lookups setting off (tmux/settings.sh), neither Linear nor
-# GitHub is asked: the tab takes its directory's name and no PR.
-lookups=$(tmux show -gqv @setting_tab_lookups 2>/dev/null)
+# GitHub is asked: the tab takes its directory's name and no PR. The linear
+# and github settings turn off each one's half.
+IFS='|' read -r lookups linear github < <(tmux display -p '#{@setting_tab_lookups}|#{@setting_linear}|#{@setting_github}' 2>/dev/null)
 ticket=$(printf '%s' "$branch" | grep -ioE '[a-z][a-z0-9]*-[0-9]+' | head -1 | tr 'a-z' 'A-Z')
-if [ -n "$ticket" ] && [ "$lookups" != off ]; then
+if [ -n "$ticket" ] && [ "${lookups:-}" != off ] && [ "${linear:-}" != off ]; then
   title=$("$script_dir/ticket-title.sh" "$ticket")
   [ -n "$title" ] && label="$ticket: $title"
 fi
@@ -63,7 +64,7 @@ fi
 label=${label//$'\t'/ }
 
 pr=""
-[ "$lookups" = off ] || pr=$("$script_dir/window-pr.sh" "$path")
+[ "${lookups:-}" = off ] || [ "${github:-}" = off ] || pr=$("$script_dir/window-pr.sh" "$path")
 
 facts="$hex"$'\t'"$label"$'\t'"$pr"
 mkdir -p "$cache_dir"

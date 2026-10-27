@@ -125,7 +125,14 @@ text_width=$(( width - tags_width - key_width - 2 ))
 (( text_width < 30 )) && text_width=30
 rows=$(mktemp)
 trap 'rm -f "$rows"' EXIT
-bindings | awk -F'\t' '$1 != "M-p"' | sort -t$'\t' -k2,2 |
+# Commands tagged #github or #linear are left out while that setting is off
+# (tmux/settings.sh), so the palette offers nothing that would ask it.
+IFS='|' read -r github linear < <(tmux display -p '#{@setting_github}|#{@setting_linear}')
+bindings | awk -F'\t' -v github="$github" -v linear="$linear" '
+    $1 == "M-p" { next }
+    github == "off" && $2 ~ / #github( |$)/ { next }
+    linear == "off" && $2 ~ / #linear( |$)/ { next }
+    { print }' | sort -t$'\t' -k2,2 |
   awk -F'\t' -v recent_file="$recent_file" '
     BEGIN { while ((getline key < recent_file) > 0) if (!(key in rank)) rank[key] = ++n }
     { print ($1 in rank ? rank[$1] : n + 1) "\t" NR "\t" $0 }' |

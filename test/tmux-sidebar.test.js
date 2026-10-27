@@ -1423,3 +1423,24 @@ test("mission control's Settings view lists the options by category, / narrows t
     sidebar.reloadSettings();
   }
 });
+
+test("with the github and linear settings off, mission control has no PRs view and the Work map no PR or ticket", () => {
+  const settingsFile = path.join(home, ".config/editor-configs/settings.json");
+  const tab = { id: "@90", index: 9, name: "Some work", path: path.join(tmp, "nowhere"), pr: "12", state: "idle" };
+  try {
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    fs.rmSync(settingsFile, { force: true });
+    sidebar.reloadSettings();
+    assert.ok(sidebar.builtInViews({ tabs: [] }).some((v) => v.title === "PRs"));
+    assert.equal(sidebar.workMap([tab]).find((r) => r.tab === tab).cells[3], "#12 open");
+
+    fs.writeFileSync(settingsFile, JSON.stringify({ github: false, linear: false }));
+    sidebar.reloadSettings();
+    assert.ok(!sidebar.builtInViews({ tabs: [] }).some((v) => v.title === "PRs"));
+    assert.equal(sidebar.workMap([tab]).find((r) => r.tab === tab).cells[3], "");
+    assert.deepEqual(sidebar.mergeOf({ path: tab.path, branch: "feat" }), {});
+  } finally {
+    fs.rmSync(settingsFile, { force: true });
+    sidebar.reloadSettings();
+  }
+});

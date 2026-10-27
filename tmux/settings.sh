@@ -86,7 +86,7 @@ apply() {
   # The rest only when tmux is already running with the old values.
   local list=" ${changed[*]} "
   [[ $list == *" theme "* ]] && apply_theme
-  if [[ $list == *" accent_colors "* || $list == *" tab_lookups "* ]]; then
+  if [[ $list == *" accent_colors "* || $list == *" tab_lookups "* || $list == *" github "* || $list == *" linear "* ]]; then
     # Tab colors and names are cached per directory (path-facts.sh).
     rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/tmux-path-facts"
     tmux list-sessions -F '#{session_name}' 2>/dev/null | while read -r session; do

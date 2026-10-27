@@ -1,5 +1,19 @@
 [
   {
+    "key": "github",
+    "category": "Integrations",
+    "label": "GitHub",
+    "description": "PR commands in M-p, the PRs view, PR numbers and merge states in tabs and the Work map; off, nothing asks GitHub",
+    "default": true
+  },
+  {
+    "key": "linear",
+    "category": "Integrations",
+    "label": "Linear",
+    "description": "Ticket commands in M-p, ticket titles in tab names and tickets in the Work map; off, nothing asks Linear",
+    "default": true
+  },
+  {
     "key": "notifications",
     "category": "Notifications",
     "label": "Push notifications",
@@ -12,8 +26,14 @@
     "label": "Finished tabs clear",
     "description": "When a tab's finished mark goes: once you look at the tab, or only when you next prompt it",
     "choices": [
-      { "value": "look", "label": "when seen" },
-      { "value": "prompt", "label": "on prompt" }
+      {
+        "value": "look",
+        "label": "when seen"
+      },
+      {
+        "value": "prompt",
+        "label": "on prompt"
+      }
     ],
     "default": "look"
   },
@@ -65,9 +85,18 @@
     "label": "Theme",
     "description": "tmux's colors, and Ghostty's with them; system follows macOS's appearance when tmux starts or this changes",
     "choices": [
-      { "value": "dark", "label": "dark" },
-      { "value": "light", "label": "light" },
-      { "value": "system", "label": "system" }
+      {
+        "value": "dark",
+        "label": "dark"
+      },
+      {
+        "value": "light",
+        "label": "light"
+      },
+      {
+        "value": "system",
+        "label": "system"
+      }
     ],
     "default": "dark"
   },
@@ -98,9 +127,18 @@
     "label": "Update check",
     "description": "Offer new commits on GitHub to ~/editor-configs: when tmux opens and every hour, only when it opens, or never",
     "choices": [
-      { "value": "hourly", "label": "open, hourly" },
-      { "value": "open", "label": "open only" },
-      { "value": "off", "label": "off" }
+      {
+        "value": "hourly",
+        "label": "open, hourly"
+      },
+      {
+        "value": "open",
+        "label": "open only"
+      },
+      {
+        "value": "off",
+        "label": "off"
+      }
     ],
     "default": "hourly"
   },

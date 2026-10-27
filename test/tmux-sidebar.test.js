@@ -446,6 +446,16 @@ test("a tab whose turn ended with background tasks still running reads as workin
   fs.appendFileSync(file, ended("run1") + "\n");
   assert.equal(sidebar.backgroundTasks(file, since), 0);
 
+  // A command that outran its timeout and was moved to the background runs on
+  // too, and one whose output only quotes those words starts nothing.
+  fs.appendFileSync(file, [
+    JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), message: { content: [{ type: "tool_result", tool_use_id: "use-slow", content: "Command did not complete within its 120s timeout and was moved to the background (ID: slow1). Output is being written to: /tmp/x" }] } }),
+    JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), message: { content: [{ type: "tool_result", tool_use_id: "use-grep", content: "log: Command did not complete within its 120s timeout and was moved to the background (ID: quoted1)" }] } }),
+  ].join("\n") + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  fs.appendFileSync(file, ended("slow1") + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 0);
+
   const tab = { id: "@9", index: 9, name: "review", state: "background", background: 2, session: "$1", panes: [], sidebars: [] };
   assert.equal(sidebar.stateWords(tab), "working in background · 2 tasks");
   assert.deepEqual(sidebar.grouped([tab, { ...tab, id: "@8", index: 8, state: "done", background: 0 }]).map((g) => [g.title, g.tabs.map((x) => x.id)]), [

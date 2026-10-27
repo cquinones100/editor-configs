@@ -205,16 +205,15 @@ Neither step fails the run: the PR merged and the cleanup finished. Add what the
 
 ## Back to the repository
 
-Once the worktree is gone, this session runs in a directory that no longer exists, and so does the tab: tmux, the tab's name and color, and any split or new tab all follow the pane's directory, which a `cd` from inside this session can't change. So after a cleanup that succeeded, hand the pane to a shell in the main clone, as `/wt` hands its pane over. This ends the session, so the final line goes to the new shell, which prints it first.
+Once the worktree is gone, this session runs in a directory that no longer exists, and so does the tab: tmux, the tab's name and color, and any split or new tab all follow the pane's directory, which a `cd` from inside this session can't change. So after a cleanup that succeeded, restart the pane in the main clone with this same conversation resumed there, as `/wt` restarts its pane (`claude --resume <id>` finds a conversation by its ID from any directory, the deleted one's included).
 
-Only when `$TMUX_PANE` is set and this session was running in the worktree just removed. Otherwise, reply with the final line as usual and stop here.
+Only when `$TMUX_PANE` and `$CLAUDE_CODE_SESSION_ID` are set and this session was running in the worktree just removed. Otherwise, reply with the final line as usual and stop here.
 
-1. Write the final line, `queue-and-clean: success (…)` as above, with a newline, to `$HOME/.local/state/queue-and-clean/<pane>` with the Write tool, where `<pane>` is `$TMUX_PANE` without its `%` (`%28` gives `28`), so nothing in the line passes through a shell.
-2. If the main clone's path contains a single quote, reply with the final line and stop: it goes into the command below between single quotes.
-3. As your final action, on its own and not chained to anything:
+1. If the main clone's path contains a single quote, reply with the final line and stop: it goes into the command below between single quotes.
+2. Write the final line, `queue-and-clean: success (…)` as above, as your reply's text, and in the same reply, as its final action, on its own and not chained to anything:
 
    ```
-   tmux respawn-pane -k -t "$TMUX_PANE" -c '<main-clone>' "zsh -i -c 'f=~/.local/state/queue-and-clean/${TMUX_PANE#%}; cat \$f; rm -f \$f; exec zsh -i'"
+   tmux respawn-pane -k -t "$TMUX_PANE" -c '<main-clone>' "zsh -i -c 'claude --resume $CLAUDE_CODE_SESSION_ID; exec zsh -i'"
    ```
 
-   `-k` stops this session and starts a shell in the main clone in its place, which prints the final line and stays open. Run nothing after it.
+   `-k` stops this session, and the pane starts again in the main clone with this conversation, the final line included, open where it left off. When that Claude exits, `exec zsh -i` leaves a shell there. Run nothing after it.

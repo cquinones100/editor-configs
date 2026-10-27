@@ -55,6 +55,65 @@ local commits = {
 
 local back = { "n", "c", "<cmd>DiffviewClose<cr>", { desc = "Back to the whole branch" } }
 
+-- yp copies where the cursor is as path:line, relative to the repository,
+-- and yl a GitHub link to that line at the side's commit, as GitHub's "Copy
+-- link" does: the left side at the base, the right at the branch's head (HEAD
+-- for a side showing the working tree). In visual mode, the lines selected
+-- (path:12-20, #L12-L20). From the file tree or history, the file shown, at
+-- the right side's cursor. A buffer's own name is no use here: diffview names
+-- them diffview:///…/.git/<sha>/<path>.
+local function here()
+  local view = require("diffview.lib").get_current_view()
+  local layout = view and view.cur_layout
+  if not layout then return end
+  local win = vim.tbl_filter(function(w) return w.id == vim.api.nvim_get_current_win() end, layout.windows)[1]
+  local first, last
+  if win then
+    first, last = vim.fn.line("v"), vim.fn.line(".")
+    if first > last then first, last = last, first end
+    if not vim.fn.mode():match("^[vV\22]") then first = last end
+  else
+    win = layout:get_main_win()
+    if not (win and vim.api.nvim_win_is_valid(win.id)) then return end
+    first = vim.api.nvim_win_get_cursor(win.id)[1]
+    last = first
+  end
+  if not (win.file and win.file.path) then return end
+  return { view = view, file = win.file, first = first, last = last }
+end
+
+local function copy(text)
+  vim.fn.setreg("+", text)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<esc>", true, false, true), "n", false)
+  vim.notify("Copied " .. text)
+end
+
+local function copy_path()
+  local at = here()
+  if not at then return vim.notify("No file here", vim.log.levels.WARN) end
+  copy(at.file.path .. ":" .. at.first .. (at.last > at.first and "-" .. at.last or ""))
+end
+
+local function copy_link()
+  local at = here()
+  if not at then return vim.notify("No file here", vim.log.levels.WARN) end
+  local top = at.view.adapter.ctx.toplevel
+  local remote = vim.trim(vim.fn.system({ "git", "-C", top, "remote", "get-url", "origin" }))
+  local repo = remote:match("github%.com[:/](.-)%.git$") or remote:match("github%.com[:/](.-)/?$")
+  if not repo then return vim.notify("origin isn't on GitHub", vim.log.levels.WARN) end
+  local commit = at.file.rev and at.file.rev.commit
+  if not commit then commit = vim.trim(vim.fn.system({ "git", "-C", top, "rev-parse", "HEAD" })) end
+  local lines = "#L" .. at.first .. (at.last > at.first and "-L" .. at.last or "")
+  copy("https://github.com/" .. repo .. "/blob/" .. commit .. "/" .. at.file.path .. lines)
+end
+
+local copies = {
+  { "n", "yp", copy_path, { desc = "Copy path:line" } },
+  { "x", "yp", copy_path, { desc = "Copy path:lines" } },
+  { "n", "yl", copy_link, { desc = "Copy a GitHub link to the line" } },
+  { "x", "yl", copy_link, { desc = "Copy a GitHub link to the lines" } },
+}
+
 -- Shows the file under the cursor in the tree, or a commit's first file in
 -- the history, without moving the cursor. A folder or commit is never folded
 -- by moving over it. Waits for the cursor to settle, so holding j doesn't load
@@ -226,9 +285,9 @@ return {
       end,
     },
     keymaps = {
-      view = { close, quit },
-      file_panel = { close, escape, quit, commits },
-      file_history_panel = { close, escape, quit, back },
+      view = { close, quit, unpack(copies) },
+      file_panel = { close, escape, quit, commits, unpack(copies) },
+      file_history_panel = { close, escape, quit, back, unpack(copies) },
     },
   },
   config = function(_, opts)

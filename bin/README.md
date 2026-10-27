@@ -1037,7 +1037,10 @@ The menu is the tab's own: the skills its session lists in its transcript,
 plus those only you can invoke (which that list leaves out), read from
 `~/.claude/skills` and `~/.claude/commands` and from `.claude` in the tab's
 directory and the ones above it. It is grouped frequently used, yours, the
-project's, then plugins and built-in skills. Frequently used is the eight you
+project's, then Claude Code's own commands that finish without asking
+anything (`compact`, `clear`, `context`, `cost`, `usage`; one that opens a
+picker would wait on a key Slack can't press), which answer in the tab rather
+than the thread, then plugins and built-in skills. Frequently used is the eight you
 use most of those the tab can run, from the counts Claude Code keeps in
 `~/.claude.json`, each use counting half as much every 30 days, so what you
 use now outranks what you used a lot months ago; a Slack menu holds 100 options, so a longer list

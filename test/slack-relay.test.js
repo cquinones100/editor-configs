@@ -2805,8 +2805,10 @@ test("a tab's skills come from its session's list and from your and its project'
   ].join("\n"));
   try {
     const skills = relay.skillsFor(relay.claudeTabs().find((t) => t.id === window));
-    // Yours, then the project's, then the rest of what the session lists.
-    assert.deepEqual(skills.map((s) => [s.source, s.name]), [["yours", "shape"], ["project", "deploy"], ["session", "aikido:scan"], ["session", "pdf"], ["session", "review-loop"]]);
+    // Yours, then the project's, then Claude Code's own commands that need no
+    // answer, then the rest of what the session lists.
+    assert.deepEqual(skills.map((s) => [s.source, s.name]), [["yours", "shape"], ["project", "deploy"], ["claude", "clear"], ["claude", "compact"], ["claude", "context"], ["claude", "cost"], ["claude", "usage"], ["session", "aikido:scan"], ["session", "pdf"], ["session", "review-loop"]]);
+    assert.equal(skills.find((s) => s.name === "compact").hint, "[what the summary should keep]");
 
     // The ones you use most go first, most used first, each use counting for
     // less the longer ago it was: deploy's 40 uses were months ago. A skill
@@ -2822,9 +2824,9 @@ test("a tab's skills come from its session's list and from your and its project'
       },
     }));
     const ranked = relay.skillsFor(relay.claudeTabs().find((t) => t.id === window));
-    assert.deepEqual(ranked.map((s) => [s.source, s.name]), [["frequent", "review-loop"], ["frequent", "pdf"], ["frequent", "deploy"], ["yours", "shape"], ["session", "aikido:scan"]]);
+    assert.deepEqual(ranked.map((s) => [s.source, s.name]), [["frequent", "review-loop"], ["frequent", "pdf"], ["frequent", "deploy"], ["yours", "shape"], ["claude", "clear"], ["claude", "compact"], ["claude", "context"], ["claude", "cost"], ["claude", "usage"], ["session", "aikido:scan"]]);
     const menu = relay.skillScreen(relay.claudeTabs().find((t) => t.id === window), "screen").blocks.find((block) => block.block_id === "skill").element;
-    assert.deepEqual(menu.option_groups.map((g) => g.label.text), ["Frequently used", "Yours", "Plugins and built-in"]);
+    assert.deepEqual(menu.option_groups.map((g) => g.label.text), ["Frequently used", "Yours", "Claude Code", "Plugins and built-in"]);
     assert.equal(skills.find((s) => s.name === "review-loop").description, "Review the branch with Codex");
     assert.equal(skills.find((s) => s.name === "aikido:scan").description, "Scan for issues");
     assert.equal(skills.find((s) => s.name === "deploy").description, "Deploy this project");
@@ -2869,8 +2871,8 @@ test("Skill under a finished turn opens a menu of the tab's skills, and Run type
     assert.equal(opened.trigger_id, "TR9");
     const form = opened.view;
     assert.equal(form.callback_id, "skill");
-    assert.deepEqual(form.blocks[0].element.option_groups.map((g) => [g.label.text, g.options.map((o) => o.value)]), [["Plugins and built-in", ["review-loop"]]]);
-    assert.equal(form.blocks[0].element.option_groups[0].options[0].description.text, "Review the branch");
+    assert.deepEqual(form.blocks[0].element.option_groups.map((g) => [g.label.text, g.options.map((o) => o.value)]), [["Claude Code", ["clear", "compact", "context", "cost", "usage"]], ["Plugins and built-in", ["review-loop"]]]);
+    assert.equal(form.blocks[0].element.option_groups[1].options[0].description.text, "Review the branch");
     assert.ok(!form.blocks.some((b) => b.block_id === "typed"), "everything fits in the menu");
 
     // Picking a skill draws the form again, saying what it takes, for you only
@@ -2901,7 +2903,7 @@ test("Skill under a finished turn opens a menu of the tab's skills, and Run type
     const big = relay.skillScreen(relay.claudeTabs().find((t) => t.id === crowded), "screen");
     tmux("kill-window", "-t", crowded);
     assert.equal(big.blocks[0].element.option_groups.reduce((n, g) => n + g.options.length, 0), relay.MAX_SKILLS);
-    assert.match(big.blocks.find((b) => b.block_id === "typed").label.text, /^Or another skill \(5 more aren't in the menu\)$/);
+    assert.match(big.blocks.find((b) => b.block_id === "typed").label.text, new RegExp(`^Or another skill \\(${5 + relay.BUILT_IN.length} more aren't in the menu\\)$`), "Claude Code's commands come before what is cut");
     assert.equal(big.blocks[0].optional, true, "either one will do");
     assert.equal(relay.submissionFrom(state, run("review-loop", "", "U2")), undefined, "only yours");
 

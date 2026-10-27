@@ -18,6 +18,12 @@ hooks (`./sync.sh git`, for committing to it). It also lists GitHub, the
 Linear key and slack-relay, with the keys each one is for. `./setup.sh
 --check` only reports.
 
+Once set up, tmux keeps the clone up to date: each time it opens, and once an
+hour after that, `tmux/repo-update.sh` checks GitHub, and when `main` there
+has new commits it lists them in a popup and asks whether to update. Yes
+moves `main` forward, links anything new and reloads tmux; a clone with
+commits of its own is left for you to update by hand.
+
 ## worktree-from-ticket
 
 Creates a git worktree on a branch named after a Linear ticket, then opens

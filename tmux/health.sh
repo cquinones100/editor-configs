@@ -13,6 +13,10 @@
 #   sidebar  the sidebar is on but its daemon (bin/tmux-sidebar) isn't running.
 #   relay    bin/slack-relay crashed: its events file is still there, which it
 #            removes only when stopped on purpose, but its process has gone.
+#
+# It also starts tmux/repo-update.sh periodic in the background, which checks
+# GitHub for new commits to ~/editor-configs at most once an hour, since this
+# is the one thing tmux runs on a timer. Nothing here waits for it.
 
 set -u
 
@@ -26,9 +30,16 @@ alive() {
 
 IFS='|' read -r saved sidebar < <(tmux display -p '#{@continuum-save-last-timestamp}|#{@sidebar_on}' 2>/dev/null)
 
+now=$(date +%s)
+# The hour is checked here, with builtins, so most runs start nothing more.
+read -r checked 2>/dev/null < ~/.local/state/editor-configs/update-checked
+if [ $((now - ${checked:-0})) -ge 3600 ] && [ -x ~/.config/tmux/repo-update.sh ]; then
+  ~/.config/tmux/repo-update.sh periodic >/dev/null 2>&1 &
+fi
+
 problems=()
-if [ -n "${saved:-}" ] && [ $(($(date +%s) - saved)) -gt $SAVE_LIMIT ]; then
-  problems+=("saves $((($(date +%s) - saved) / 60))m old")
+if [ -n "${saved:-}" ] && [ $((now - saved)) -gt $SAVE_LIMIT ]; then
+  problems+=("saves $(((now - saved) / 60))m old")
 fi
 if [ "${sidebar:-}" != off ] && ! alive ~/.local/state/tmux-sidebar/daemon.pid; then
   problems+=("sidebar down")

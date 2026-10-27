@@ -30,8 +30,9 @@ status line, PR and ticket lookups, project colors, the theme, saving pane
 contents, the update check and more), open Settings from `M-p`: mission
 control's Settings view lists every option by category, Enter or Space
 changes one, and `/` searches them. Turning GitHub or Linear off under
-Integrations takes its commands out of `M-p` and its parts out of mission
-control and the tab names, so nothing asks that service. They are kept in
+Integrations takes its commands out of `M-p`, makes their keys (`M-v`, `M-m`, `M-r` for
+GitHub; `M-i`, `M-l`, `M-W` for Linear) do nothing, and takes its parts out of
+mission control and the tab names, so nothing asks that service. They are kept in
 `~/.config/editor-configs/settings.json`, only what differs from the
 defaults in `tmux/settings.json`, and a change made by hand there takes
 effect at once too.

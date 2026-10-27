@@ -82,10 +82,16 @@ apply() {
   done < <(values)
   (( ${#args[@]} )) || return 1
   tmux "${args[@]}"
+  disable_services
   [ -n "$load" ] && return 0
   # The rest only when tmux is already running with the old values.
   local list=" ${changed[*]} "
   [[ $list == *" theme "* ]] && apply_theme
+  # A service turned back on gets its keys back from tmux.conf, which runs
+  # this again (with --load) for whatever is still off.
+  if [[ ( $list == *" github "* && $(value_of github) == on ) || ( $list == *" linear "* && $(value_of linear) == on ) ]]; then
+    tmux source-file ~/.config/tmux/tmux.conf
+  fi
   if [[ $list == *" accent_colors "* || $list == *" tab_lookups "* || $list == *" github "* || $list == *" linear "* ]]; then
     # Tab colors and names are cached per directory (path-facts.sh).
     rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/tmux-path-facts"
@@ -95,6 +101,23 @@ apply() {
   fi
   [[ $list == *" sidebar "* ]] && "$script_dir/sidebar.sh" nudge
   return 0
+}
+
+# With the github or linear setting off, every key whose description carries
+# that service's tag (#github, #linear) is bound again to do nothing, in the
+# root, prefix and palette tables, so pressing it neither asks the service nor
+# reaches the pane. Bound without a note, it also drops out of the palette.
+disable_services() {
+  local service table key
+  for service in github linear; do
+    [ "$(value_of "$service")" = off ] || continue
+    for table in root prefix palette; do
+      tmux list-keys -N -T "$table" -P '' 2>/dev/null | grep -E " #$service( |$)" | awk '{ print $1 }' |
+        while read -r key; do
+          tmux bind -T "$table" "$key" refresh-client -S
+        done
+    done
+  done
 }
 
 # Writes one setting, leaving out a value equal to its default, through a

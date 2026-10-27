@@ -1805,6 +1805,47 @@ test("a turn ending in the tab in front of you still goes in its thread, from it
     tmux("kill-window", "-t", window);
   }
 });
+
+test("a turn says how full its context is, and a tab past 90% is told once, with a Compact button", async () => {
+  const [window] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const panePid = tmux("display", "-p", "-t", window, "#{pane_pid}");
+  fs.writeFileSync(path.join(home, ".claude/sessions", `${panePid}.json`), JSON.stringify({ pid: Number(panePid), sessionId: "nearly-full" }));
+  const transcript = path.join(home, ".claude/projects/-work/nearly-full.jsonl");
+  fs.writeFileSync(transcript, `${JSON.stringify({ type: "user", message: { content: "check the build" }, timestamp: new Date().toISOString() })}\n`);
+  const contextFile = path.join(home, ".local/state/tmux-sidebar/context/nearly-full");
+  fs.mkdirSync(path.dirname(contextFile), { recursive: true });
+  const inFront = () => relay.claudeTabs().map((t) => (t.id === window ? { ...t, focused: true } : t));
+  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    relay.presence.idleMs = 0;
+    fs.writeFileSync(contextFile, "92\tOpus 5.5 (1M context)");
+    await relay.alertTabs(state, inFront(), [{ event: "done", time: now, transcript_path: transcript, last: "The build passes." }]);
+    assert.match(posts.find((p) => /has finished/.test(p.body)).body, /_92% context used · Opus 5\.5 \(1M context\)_$/);
+    const warnings = () => posts.filter((p) => /of its context/.test(p.body));
+    assert.equal(warnings().length, 1);
+    assert.match(warnings()[0].body, /has used \*\*92%\*\* of its context/);
+    assert.equal(warnings()[0].thread, state.homes[window].ts, "in the tab's thread");
+    const warned = calls.find((c) => c.method === "chat.postMessage" && /of its context/.test(c.params.text));
+    assert.match(JSON.stringify(warned.params.blocks), /Compact/);
+    assert.match(JSON.stringify(warned.params.blocks), /\\"skill\\":\\"compact\\"/);
+
+    fs.writeFileSync(contextFile, "95\tOpus 5.5 (1M context)");
+    await relay.alertTabs(state, inFront(), [{ event: "done", time: now + 1, transcript_path: transcript, last: "Still passing." }]);
+    assert.equal(warnings().length, 1, "not again while it stays above");
+
+    fs.writeFileSync(contextFile, "30\tOpus 5.5 (1M context)");
+    await relay.alertTabs(state, inFront(), [{ event: "done", time: now + 2, transcript_path: transcript, last: "Compacted." }]);
+    fs.writeFileSync(contextFile, "91\tOpus 5.5 (1M context)");
+    await relay.alertTabs(state, inFront(), [{ event: "done", time: now + 3, transcript_path: transcript, last: "Full again." }]);
+    assert.equal(warnings().length, 2, "again once it has dropped below and passed it again");
+  } finally {
+    fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`));
+    fs.rmSync(contextFile);
+    tmux("kill-window", "-t", window);
+  }
+});
 test("slack-relay starts from outside tmux, in the running tmux server", () => {
   // Outside tmux, tmux finds its server by the default socket under
   // TMUX_TMPDIR, which is the tests' own directory; it is pointed at the
@@ -2152,7 +2193,7 @@ test("status and threads link each tab's thread", async () => {
   const link = "https://example.slack.com/archives/D1/p1791500000000300?thread_ts=1791500000.000300&cid=D1";
 
   await relay.handle(state, { ts: `${Math.floor(Date.now() / 1000)}.000050`, text: "status", thread_ts: null });
-  assert.match(posts[0].body, /\| Tab \| Name \| State \| For \| Thread \|/);
+  assert.match(posts[0].body, /\| Tab \| Name \| State \| For \| Context \| Thread \|/);
   assert.ok(posts[0].body.includes(`| **${index}** |`) && posts[0].body.includes(`[open](${link})`));
   assert.match(posts[0].body, new RegExp(`\\| \\*\\*${otherIndex}\\*\\* \\|[^\\n]*\\| — \\|`), "no thread yet");
 

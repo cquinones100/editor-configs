@@ -902,8 +902,14 @@ In the DM:
   sits in was later linked to
 - `?` in a tab's thread shows its last turn: your last prompt and Claude's
   reply since, from its transcript (the screen if there is none)
-- `status` lists every Claude tab, its state, and a link to its thread, which
-  opens at the thread's newest message
+- `status` lists every Claude tab, its state, how full its context is, and a
+  link to its thread, which opens at the thread's newest message
+- each turn posted ends with how full the tab's context is and its model, as
+  do each tab's line on the Home tab and its screen, read from the file the
+  status line writes for the sidebar, so as of its last redraw. Once a
+  session passes 90%, its thread says so once, with a **Compact** button that
+  opens the Skill form with `compact` picked; it says so again only after the
+  context has dropped below and passed 90% again
 - `threads` lists a link to each Claude tab's thread, to find a conversation
   again; a tab with no thread yet says so, and sending it a Message from its
   screen on the Home tab starts one

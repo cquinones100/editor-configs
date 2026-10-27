@@ -214,7 +214,7 @@ place of the pane, as `M-d`'s diff does (`pane-in-place.sh`'s `pr-image`), and
 
 ## Context use, for the sidebar
 
-`claude/statusline-command.sh` writes each session's context use and model, which Claude Code gives only to the statusline, to `~/.local/state/tmux-sidebar/context/<session id>` (`<percent>\t<model>`), when they change, for mission control's Sessions view (`lib/sidebar/sessions.js`). A change to that line's shape belongs in both.
+`claude/statusline-command.sh` writes each session's context use and model, which Claude Code gives only to the statusline, to `~/.local/state/tmux-sidebar/context/<session id>` (`<percent>\t<model>`), when they change, for mission control's Sessions view (`lib/sidebar/sessions.js`) and the Slack relay (`contextOf` in `lib/slack-relay/tabs.js`), which shows it on each turn, the Home tab and a tab's screen, and warns a thread once a session passes 90%. A change to that line's shape belongs in all three.
 
 ## Settings
 

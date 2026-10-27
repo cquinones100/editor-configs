@@ -1,0 +1,114 @@
+[
+  {
+    "key": "notifications",
+    "category": "Notifications",
+    "label": "Push notifications",
+    "description": "A macOS banner, named for the tab, when a Claude tab waits on you",
+    "default": true
+  },
+  {
+    "key": "done_clears",
+    "category": "Notifications",
+    "label": "Finished tabs clear",
+    "description": "When a tab's finished mark goes: once you look at the tab, or only when you next prompt it",
+    "choices": [
+      { "value": "look", "label": "when seen" },
+      { "value": "prompt", "label": "on prompt" }
+    ],
+    "default": "look"
+  },
+  {
+    "key": "sidebar",
+    "category": "Sidebar",
+    "label": "Sidebar",
+    "description": "The sidebar on the left of every window; M-s still hides or shows it for now",
+    "default": true
+  },
+  {
+    "key": "pr_board",
+    "category": "Sidebar",
+    "label": "PR board",
+    "description": "Mission control's PRs view, which asks GitHub about your pull requests every two minutes",
+    "default": true
+  },
+  {
+    "key": "second_status",
+    "category": "Tabs and status bar",
+    "label": "Second status line",
+    "description": "The line under the tabs with the tab's name, branch, PR and Claude session",
+    "default": true
+  },
+  {
+    "key": "tab_lookups",
+    "category": "Tabs and status bar",
+    "label": "PRs and tickets in tab names",
+    "description": "Look up each tab's PR number on GitHub and its ticket's title on Linear, in the background",
+    "default": true
+  },
+  {
+    "key": "accent_colors",
+    "category": "Tabs and status bar",
+    "label": "Project colors",
+    "description": "A color of its own for each project's tab, made from its directory; off, every tab is gray",
+    "default": true
+  },
+  {
+    "key": "health_light",
+    "category": "Tabs and status bar",
+    "label": "Health light",
+    "description": "A red mark in the status bar when saves, the sidebar or the Slack relay quietly stop",
+    "default": true
+  },
+  {
+    "key": "theme",
+    "category": "Appearance",
+    "label": "Theme",
+    "description": "tmux's colors, and Ghostty's with them; system follows macOS's appearance when tmux starts or this changes",
+    "choices": [
+      { "value": "dark", "label": "dark" },
+      { "value": "light", "label": "light" },
+      { "value": "system", "label": "system" }
+    ],
+    "default": "dark"
+  },
+  {
+    "key": "save_contents",
+    "category": "Sessions",
+    "label": "Save what panes show",
+    "description": "Keep each pane's screen in the layout saves, to show again after a restart; it can hold secrets",
+    "default": true
+  },
+  {
+    "key": "auto_restore",
+    "category": "Sessions",
+    "label": "Restore on start",
+    "description": "Bring back the last saved tabs and panes when tmux starts",
+    "default": true
+  },
+  {
+    "key": "confirm_close",
+    "category": "Safety",
+    "label": "Ask before closing a pane",
+    "description": "M-w asks first; off, it closes the pane at once",
+    "default": true
+  },
+  {
+    "key": "update_check",
+    "category": "Updates",
+    "label": "Update check",
+    "description": "Offer new commits on GitHub to ~/editor-configs: when tmux opens and every hour, only when it opens, or never",
+    "choices": [
+      { "value": "hourly", "label": "open, hourly" },
+      { "value": "open", "label": "open only" },
+      { "value": "off", "label": "off" }
+    ],
+    "default": "hourly"
+  },
+  {
+    "key": "haiku_summaries",
+    "category": "Slack relay",
+    "label": "Haiku summaries",
+    "description": "One line on what each tab is doing in the relay's Home tab and progress, each a paid Haiku call",
+    "default": true
+  }
+]

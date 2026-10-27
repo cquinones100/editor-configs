@@ -53,6 +53,13 @@ if $name_only; then
   exit 0
 fi
 
+# One gray for every project with the accent_colors setting off
+# (tmux/settings.sh). Only tmux reads it; iTerm and the statusline keep theirs.
+if [ "$(tmux show -gqv @setting_accent_colors 2>/dev/null)" = off ]; then
+  printf '8a8a8a'
+  exit 0
+fi
+
 hash=$(printf '%s' "$color_key" | shasum -a 256 | cut -c1-8)
 hue=$(( 16#$hash % 360 ))
 h_segment=$(( hue / 60 ))

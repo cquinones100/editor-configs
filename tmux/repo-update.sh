@@ -29,6 +29,11 @@ git_() { git -C "$REPO" "$@"; }
 
 case "${1:-}" in
   check | periodic)
+    # The update_check setting (tmux/settings.sh): off never checks, and
+    # "open" leaves out the hourly one.
+    case "$1:$(tmux show -gqv @setting_update_check 2>/dev/null)" in
+      *:off | periodic:open) exit 0 ;;
+    esac
     mkdir -p "$STATE"
     now=$(date +%s)
     if [ "$1" = periodic ]; then

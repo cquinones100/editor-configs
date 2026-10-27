@@ -28,14 +28,18 @@ alive() {
   [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
 }
 
-IFS='|' read -r saved sidebar < <(tmux display -p '#{@continuum-save-last-timestamp}|#{@sidebar_on}' 2>/dev/null)
+IFS='|' read -r saved sidebar light updates < <(tmux display -p '#{@continuum-save-last-timestamp}|#{@sidebar_on}|#{@setting_health_light}|#{@setting_update_check}' 2>/dev/null)
 
 now=$(date +%s)
 # The hour is checked here, with builtins, so most runs start nothing more.
 read -r checked 2>/dev/null < ~/.local/state/editor-configs/update-checked
-if [ $((now - ${checked:-0})) -ge 3600 ] && [ -x ~/.config/tmux/repo-update.sh ]; then
+# Not with the update_check setting at "open" or "off" (tmux/settings.sh).
+if [ "${updates:-hourly}" = hourly ] && [ $((now - ${checked:-0})) -ge 3600 ] && [ -x ~/.config/tmux/repo-update.sh ]; then
   ~/.config/tmux/repo-update.sh periodic >/dev/null 2>&1 &
 fi
+
+# The light itself, unless the health_light setting is off.
+[ "${light:-on}" = off ] && exit 0
 
 problems=()
 if [ -n "${saved:-}" ] && [ $((now - saved)) -gt $SAVE_LIMIT ]; then

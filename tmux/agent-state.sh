@@ -270,10 +270,11 @@ case "${1:-}" in
       permission_prompt | elicitation_dialog | elicitation_url_dialog | agent_needs_input)
         set_state "$TMUX_PANE" waiting ;;
     esac
-    # The banner names the tab, so you know where to go.
-    label=$(tmux display -p -t "$TMUX_PANE" '#{window_index}:#{window_name}' 2>/dev/null)
+    # The banner names the tab, so you know where to go. None with the
+    # notifications setting off (tmux/settings.sh).
+    IFS=$'\t' read -r banner label < <(tmux display -p -t "$TMUX_PANE" $'#{?@setting_notifications,#{@setting_notifications},on}\t#{window_index}:#{window_name}' 2>/dev/null)
     text=${message:-Claude Code needs your attention}
-    osascript -e "display notification \"${text//\"/\\\"}\" with title \"Claude Code: ${label//\"/\\\"}\"" >/dev/null 2>&1
+    [ "${banner:-}" = off ] || osascript -e "display notification \"${text//\"/\\\"}\" with title \"Claude Code: ${label//\"/\\\"}\"" >/dev/null 2>&1
     ;;
 
   seen)
@@ -282,7 +283,9 @@ case "${1:-}" in
     # The pane-focus-in hook runs this in the background, so the wait holds
     # nothing up.
     sleep "${AGENT_SEEN_DELAY:-1}"
-    [ "$(tmux display -p -t "$window" '#{&&:#{window_active},#{session_attached}}' 2>/dev/null)" = 1 ] &&
+    # With the done_clears setting at "prompt", a finished tab keeps its mark
+    # until the next prompt, however long you look at it.
+    [ "$(tmux display -p -t "$window" '#{&&:#{&&:#{window_active},#{session_attached}},#{!=:#{@setting_done_clears},prompt}}' 2>/dev/null)" = 1 ] &&
     while IFS=$'\t' read -r pane state; do
       [ "$state" = done ] && tmux set -pu -t "$pane" @agent_state && tmux set -pu -t "$pane" @agent_since
     done < <(tmux list-panes -t "$window" -F $'#{pane_id}\t#{@agent_state}' 2>/dev/null)

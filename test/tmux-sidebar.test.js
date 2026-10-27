@@ -1388,3 +1388,38 @@ test("a cron job Claude created is a loop until CronDelete names it, shown by it
   assert.equal(sidebar.nextCron("3-59/5 * * * *", new Date(2026, 9, 26, 16, 9).getTime()), new Date(2026, 9, 26, 16, 13).getTime());
   assert.equal(sidebar.loopName("/loop 5m /babysit-prs"), "/babysit-prs");
 });
+
+test("mission control's Settings view lists the options by category, / narrows them to the matching categories, and Enter and Space change one", async () => {
+  const settingsFile = path.join(home, ".config/editor-configs/settings.json");
+  fs.rmSync(settingsFile, { force: true });
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 40, tmuxClient: "none" };
+  try {
+    await sidebar.refresh();
+    client.view.view = sidebar.viewsFor(client).findIndex((s) => s.title === "Settings") + 1;
+    await sidebar.missionKey(client, { key: "g" });
+    const all = plain(sent.at(-1));
+    assert.match(all, /NOTIFICATIONS 2[\s\S]*Push notifications +on +A macOS banner[\s\S]*SLACK RELAY 1/);
+
+    // / then "notif": the Notifications header and its two options, and no other category.
+    for (const key of ["/", "n", "o", "t", "i", "f", "Enter"]) await sidebar.missionKey(client, { key });
+    const items = sidebar.viewsFor(client)[client.view.view - 1].items;
+    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear"]);
+    assert.doesNotMatch(plain(sent.at(-1)), /SIDEBAR|Theme/);
+
+    // Enter on an on/off option turns it off, and only what differs from the default is written.
+    await sidebar.missionKey(client, { key: "j" });
+    await sidebar.missionKey(client, { key: "Enter" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile, "utf8")), { notifications: false });
+    assert.match(plain(sent.at(-1)), /Push notifications +off/);
+    // Space on a choice goes to its next one; turning the first back on leaves only that.
+    await sidebar.missionKey(client, { key: "Enter" });
+    await sidebar.missionKey(client, { key: "j" });
+    await sidebar.missionKey(client, { key: "Space" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile, "utf8")), { done_clears: "prompt" });
+    assert.match(plain(sent.at(-1)), /Finished tabs clear +on prompt/);
+  } finally {
+    fs.rmSync(settingsFile, { force: true });
+    sidebar.reloadSettings();
+  }
+});

@@ -50,8 +50,11 @@ hex=$("$script_dir/accent-color.sh" "$path")
 # looks like a ticket is harmless: Linear has no such ticket, ticket-title.sh
 # prints nothing, and the directory name is used as usual.
 label=""
+# With the tab_lookups setting off (tmux/settings.sh), neither Linear nor
+# GitHub is asked: the tab takes its directory's name and no PR.
+lookups=$(tmux show -gqv @setting_tab_lookups 2>/dev/null)
 ticket=$(printf '%s' "$branch" | grep -ioE '[a-z][a-z0-9]*-[0-9]+' | head -1 | tr 'a-z' 'A-Z')
-if [ -n "$ticket" ]; then
+if [ -n "$ticket" ] && [ "$lookups" != off ]; then
   title=$("$script_dir/ticket-title.sh" "$ticket")
   [ -n "$title" ] && label="$ticket: $title"
 fi
@@ -59,7 +62,8 @@ fi
 # Tabs separate the fields, so none may be in one.
 label=${label//$'\t'/ }
 
-pr=$("$script_dir/window-pr.sh" "$path")
+pr=""
+[ "$lookups" = off ] || pr=$("$script_dir/window-pr.sh" "$path")
 
 facts="$hex"$'\t'"$label"$'\t'"$pr"
 mkdir -p "$cache_dir"

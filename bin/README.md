@@ -20,6 +20,15 @@ hooks (`./setup.sh git`, for committing to it). It also lists GitHub, the
 Linear key and slack-relay, with the keys each one is for. `./setup.sh
 --check` only reports.
 
+To turn parts of the workspace on or off (banners, the sidebar, the second
+status line, PR and ticket lookups, project colors, the theme, saving pane
+contents, the update check and more), open Settings from `M-p`: mission
+control's Settings view lists every option by category, Enter or Space
+changes one, and `/` searches them. They are kept in
+`~/.config/editor-configs/settings.json`, only what differs from the
+defaults in `tmux/settings.json`, and a change made by hand there takes
+effect at once too.
+
 Once set up, tmux keeps the clone up to date: each time it opens, and once an
 hour after that, `tmux/repo-update.sh` checks GitHub, and when `main` there
 has new commits it lists them in a popup and asks whether to update. Yes

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Popup confirmation for tmux pane actions.
 # Usage: confirm.sh "Prompt text" [<pane_id>]
+#        confirm.sh --yes [<pane_id>]   closes it without asking, for M-w with
+#                                       the confirm_close setting off
 #
 # Without a pane, the one in the global @confirm_pane, which M-w sets just
 # before the popup, since display-popup does not expand #{pane_id} in its
@@ -10,16 +12,20 @@ prompt="$1"
 target=${2:-$(tmux show -gqv @confirm_pane)}
 [ -n "$target" ] || exit 0
 
-text="$prompt (y/n) "
-cols=$(tput cols)
-lines=$(tput lines)
-pad_left=$(( (cols - ${#text}) / 2 ))
-pad_top=$(( (lines - 1) / 2 ))
+if [ "$prompt" = --yes ]; then
+  ans=y
+else
+  text="$prompt (y/n) "
+  cols=$(tput cols)
+  lines=$(tput lines)
+  pad_left=$(( (cols - ${#text}) / 2 ))
+  pad_top=$(( (lines - 1) / 2 ))
 
-for ((i = 0; i < pad_top; i++)); do echo; done
-printf "%*s%s" "$pad_left" "" "$text"
+  for ((i = 0; i < pad_top; i++)); do echo; done
+  printf "%*s%s" "$pad_left" "" "$text"
 
-read -rsn 1 ans
+  read -rsn 1 ans
+fi
 
 case "$ans" in
   y|Y)

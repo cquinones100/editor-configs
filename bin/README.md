@@ -7,7 +7,8 @@ On a new Mac, `./setup.sh` sets up the whole tmux workspace these scripts
 belong to: it checks for macOS, zsh, the repo at `~/editor-configs`,
 Homebrew's `tmux jq fzf gh glow lazygit neovim` (tmux 3.8 or newer), Node
 from nvm and `~/.local/bin` on the PATH, links the tmux, Neovim and lazygit
-configs and these scripts, and installs Neovim's pinned plugins, asking
+configs and these scripts, adds the `wt`, `wtpr`, `wtr` and `wtb` functions
+to `~/.zshrc`, and installs Neovim's pinned plugins, asking
 before each install or change to `~/.zshrc`. Then come the optional parts, each asked for
 and off unless you say yes: Claude Code's hooks for tab states and `M-a`
 (only those hooks, added to your own settings, plus the statusline if you
@@ -337,9 +338,63 @@ contributor's fork.
 - Works on shallow and `--single-branch` clones: the PR's branch is added to the
   remote's fetch refspec when the existing one doesn't cover it.
 
+## worktree-from-branch
+
+The same for any branch, with no ticket or PR behind it. Takes a branch name,
+creates a worktree on it, moves your shell into it, and opens claude with no
+prompt.
+
+```
+wtb fix-login-redirect
+wtb feature/login
+```
+
+A branch that exists here or on the remote is checked out as it is, tracking
+the remote's when there is one. A branch that exists nowhere is created off the
+remote's default branch, fetched first, so it starts from what is merged now
+rather than from wherever your checkout sits; it gets an upstream on its first
+push. With no remote, it starts at `HEAD`.
+
+`M-B` ("Start work on a branch, new or existing, in a new tab (wtb)" in `M-p`)
+(`tmux/wtb-open.zsh`) lists the branches, local and remote, newest commit first, in
+fzf: Enter works on the one picked, or creates the name typed when no branch
+matches it, and ctrl-n creates the name typed even when some do. It runs `wtb`
+with that in a new tab,
+in the repository of the pane you were in. The tab is named by
+`tmux/tab-label.sh` as for any directory, since there is no ticket to name it.
+
+That creates `.claude/worktrees/<branch>` off the repo root, slashes made
+dashes, so `feature/login` lands in `feature-login` rather than nesting.
+
+### Setup
+
+1. **Install the script.**
+
+   ```sh
+   ./sync.sh worktree-from-branch
+   ```
+
+2. **Add one line to your shell config** (`./setup.sh` offers to):
+
+   ```sh
+   eval "$(worktree-from-branch init zsh)"
+   ```
+
+   This defines the `wtb` function, which the palette's popup types into the
+   new tab.
+
+### Notes
+
+- Plain git: no Linear key and no `gh`.
+- Rerunning on the same branch reuses its worktree, or the worktree that already
+  has the branch checked out. A local branch behind the remote's is
+  fast-forwarded; one that has diverged is left alone with a warning.
+- A branch checked out in your main clone stops the run, as with `wtpr`.
+- `wtr <branch>` resumes it later, matching the branch name exactly.
+
 ## worktree-resume
 
-The way back in. Takes the same ticket or PR the other two take, finds the
+The way back in. Takes the same ticket, PR or branch the other three take, finds the
 worktree they already made for it, moves your shell there, and hands off to
 `claude-here` to resume the session that was running in it. What you run after a
 restart, when the worktrees survived but the terminal didn't.
@@ -348,11 +403,12 @@ restart, when the worktrees survived but the terminal didn't.
 wtr ABC-123
 wtr 123
 wtr https://github.com/owner/repo/pull/123
+wtr fix-login-redirect
 ```
 
 Nothing is created and nothing is fetched. The worktree is found by matching the
 identifier against `git worktree list` — `wt` and `wtpr` bake it into the branch
-name and the directory name, so it is already recorded on disk. That means no
+name and the directory name, and a branch is matched by name, so it is already recorded on disk. That means no
 Linear key, no `gh`, and no network: recovery works on a plane.
 
 ### Setup

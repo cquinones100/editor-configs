@@ -104,11 +104,31 @@ fi
 # tmux.conf and nvim are linked the configs were taken already, so the sync
 # runs again without asking, for the scripts added since.
 if [[ -L ~/.config/tmux/tmux.conf && -L ~/.config/nvim ]]; then
-  "$REPO_DIR/sync.sh" tmux neovim lazygit bin >/dev/null && ok "the configs are linked" || todo "./sync.sh tmux neovim lazygit bin failed"
+  $CHECK || "$REPO_DIR/sync.sh" tmux neovim lazygit bin >/dev/null && ok "the configs are linked" || todo "./sync.sh tmux neovim lazygit bin failed"
 elif ask "Link the tmux and Neovim configs and the scripts in bin/ (./sync.sh tmux neovim lazygit bin)?"; then
   "$REPO_DIR/sync.sh" tmux neovim lazygit bin && ok "linked the configs" || todo "./sync.sh tmux neovim lazygit bin failed"
 else
   todo "./sync.sh tmux neovim lazygit bin"
+fi
+
+# The shell functions that move a tab into a worktree, which the palette's
+# popups type into a new tab and /wt runs: only a function can cd the shell.
+# Each comes from its script's `init zsh`, so ~/.zshrc evals that, and only the
+# ones it doesn't define yet are added.
+worktree_functions=(wt:worktree-from-ticket wtpr:worktree-from-pr wtr:worktree-resume wtb:worktree-from-branch)
+undefined=()
+for pair in "${worktree_functions[@]}"; do
+  [[ $(in_zsh "whence -w ${pair%%:*}") == *function ]] || undefined+=("$pair")
+done
+if (( ${#undefined[@]} == 0 )); then
+  ok "the wt, wtpr, wtr and wtb functions"
+elif ask "Add ${undefined[*]%%:*} to ~/.zshrc, from their scripts' init?"; then
+  for pair in "${undefined[@]}"; do
+    echo "eval \"\$(${pair#*:} init zsh)\"" >> ~/.zshrc
+  done
+  ok "added ${undefined[*]%%:*} to ~/.zshrc"
+else
+  todo "${undefined[*]%%:*} in ~/.zshrc: eval \"\$(<script> init zsh)\" for each"
 fi
 
 # diffview (M-d) and the notes app need the plugins lazy.nvim installs.

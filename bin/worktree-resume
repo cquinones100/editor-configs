@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-// worktree-resume <linear-ticket-or-pr>
+// worktree-resume <linear-ticket-pr-or-branch>
 //
-// Finds the worktree `wt` or `wtpr` already made for a Linear ticket or a
-// GitHub pull request, moves your shell into it, and hands off to
+// Finds the worktree `wt`, `wtpr` or `wtb` already made for a Linear ticket, a
+// GitHub pull request or a branch, moves your shell into it, and hands off to
 // `claude-here` to resume the session that was running there. The companion to
-// those two for the morning after a restart.
+// those three for the morning after a restart.
 //
 // Nothing is created and nothing is fetched: the worktree is located by
 // matching the identifier against `git worktree list`, so this works offline
@@ -14,6 +14,7 @@
 //   worktree-resume ABC-123                      resumes the ticket's worktree
 //   worktree-resume 123                          resumes the PR's worktree
 //   worktree-resume https://github.com/o/r/pull/123
+//   worktree-resume my-branch                    resumes the branch's worktree
 //   worktree-resume init zsh                     prints the `wtr` shell function
 //
 // The bare command cannot change your shell's directory — no child process can.
@@ -28,12 +29,13 @@ const SELF = fs.realpathSync(process.argv[1]);
 
 const usage = () => {
   console.error(
-    "Usage: worktree-resume <linear-ticket-or-pr>\n" +
+    "Usage: worktree-resume <linear-ticket-pr-or-branch>\n" +
       "       worktree-resume init <zsh|bash>\n\n" +
       "Examples:\n" +
       "  worktree-resume ABC-123\n" +
       "  worktree-resume 123\n" +
       "  worktree-resume https://github.com/owner/repo/pull/123\n" +
+      "  worktree-resume my-branch\n" +
       "  worktree-resume https://linear.app/workspace/issue/ABC-123/title",
   );
   process.exit(1);
@@ -103,7 +105,8 @@ const parseTarget = (input) => {
     return { token: `pr-${number}`, label: `PR #${number}`, create: `wtpr ${number}` };
   }
 
-  fail(`could not parse a Linear ticket or pull request from "${input}"`);
+  // Anything else is a branch, as `wtb` takes: matched whole, not as a token.
+  return { branch: input, label: input, create: `wtb ${input}` };
 };
 
 const gitOutput = (args, options = {}) =>
@@ -224,10 +227,11 @@ const main = async () => {
   const target = parseTarget(positional[0]);
   const root = repoRoot();
 
-  const matched = listWorktrees(root).filter(
-    (worktree) =>
-      mentions(path.basename(worktree.path), target.token) ||
-      mentions(worktree.branch, target.token),
+  const matched = listWorktrees(root).filter((worktree) =>
+    target.branch
+      ? worktree.branch === target.branch && worktree.path !== root
+      : mentions(path.basename(worktree.path), target.token) ||
+        mentions(worktree.branch, target.token),
   );
 
   // A worktree git still tracks but whose directory is gone is not somewhere

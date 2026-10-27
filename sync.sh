@@ -164,6 +164,7 @@ sync_tmux() {
   put_link ~/editor-configs/tmux/ticket-open.zsh ~/.config/tmux/ticket-open.zsh
   put_link ~/editor-configs/tmux/wt-open.zsh ~/.config/tmux/wt-open.zsh
   put_link ~/editor-configs/tmux/wtpr-open.zsh ~/.config/tmux/wtpr-open.zsh
+  put_link ~/editor-configs/tmux/wtb-open.zsh ~/.config/tmux/wtb-open.zsh
   put_link ~/editor-configs/tmux/update-main.sh ~/.config/tmux/update-main.sh
   put_link ~/editor-configs/tmux/shape-open.zsh ~/.config/tmux/shape-open.zsh
   put_link ~/editor-configs/tmux/slack-relay-open.sh ~/.config/tmux/slack-relay-open.sh

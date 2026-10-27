@@ -119,7 +119,7 @@ sidebar's cursor does, leaves it, and a session that finishes in the tab you
 are looking at never gets it. A pane that
 is no longer running Claude loses its state on the next focus, so a session
 that died without `SessionEnd` leaves nothing behind. `M-a` walks the sidebar's
-Needs you in its order (flagged, then waiting, then done), from the list the
+Needs you in its order (pinned, then waiting, then done), from the list the
 sidebar daemon writes to `~/.local/state/tmux-sidebar/needs` whenever it
 changes, since only the daemon knows a tab that looks done is still looping
 or working in the background; without the daemon it falls back to the panes'

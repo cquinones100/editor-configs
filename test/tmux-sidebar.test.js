@@ -621,28 +621,28 @@ test("a tab says what Claude is doing and what it waits on, as its hooks recorde
   }
 });
 
-test("flagged tabs come first in Needs you, ahead of ones waiting longer", () => {
+test("pinned tabs come first in Needs you, ahead of ones waiting longer", () => {
   const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], claude: { sessionId: "s" } };
   const tabs = [
     { ...base, id: "@1", index: 1, name: "waiting long", state: "waiting", since: 10 },
-    { ...base, id: "@2", index: 2, name: "flagged", state: "idle", flagged: true },
+    { ...base, id: "@2", index: 2, name: "pinned", state: "idle", pinned: true },
     { ...base, id: "@3", index: 3, name: "done", state: "done", since: 20 },
   ];
-  assert.deepEqual(sidebar.grouped(tabs)[0].tabs.map((x) => x.name), ["flagged", "waiting long", "done"]);
-  assert.deepEqual(sidebar.staged(tabs)[0].tabs.map((x) => x.name), ["flagged", "waiting long", "done"]);
+  assert.deepEqual(sidebar.grouped(tabs)[0].tabs.map((x) => x.name), ["pinned", "waiting long", "done"]);
+  assert.deepEqual(sidebar.staged(tabs)[0].tabs.map((x) => x.name), ["pinned", "waiting long", "done"]);
 });
 
-test("a tab flagged by hand needs you, whatever Claude is doing in it, until it is unflagged", async () => {
+test("a tab pinned by hand needs you, whatever Claude is doing in it, until it is unpinned", async () => {
   const window = tmux("new-window", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
   try {
-    tmux("setw", "-t", window, "@flagged", "1");
+    tmux("setw", "-t", window, "@pinned", "1");
     let tab = sidebar.tabsFrom(await sidebar.snapshot()).find((x) => x.id === window);
-    assert.equal(tab.flagged, true);
+    assert.equal(tab.pinned, true);
     assert.deepEqual(sidebar.grouped([tab]).map((g) => g.title), ["Needs you"]);
     assert.deepEqual(sidebar.missionGrid([tab], 100, 20).shelves[0].blocks.map((b) => b.stage.title), ["Needs you"]);
-    assert.match(sidebar.stateWords(tab), /^flagged · /);
-    assert.match(sidebar.sidebarLines({ tabs: [tab], sections: [], cols: 40, rows: 10, view: { focused: false, cursor: window, frame: 0, here: window } }).lines.join(""), /⚑/);
-    tmux("setw", "-u", "-t", window, "@flagged");
+    assert.match(sidebar.stateWords(tab), /^pinned · /);
+    assert.match(sidebar.sidebarLines({ tabs: [tab], sections: [], cols: 40, rows: 10, view: { focused: false, cursor: window, frame: 0, here: window } }).lines.join(""), /📌/);
+    tmux("setw", "-u", "-t", window, "@pinned");
     tab = sidebar.tabsFrom(await sidebar.snapshot()).find((x) => x.id === window);
     assert.deepEqual(sidebar.grouped([tab]).map((g) => g.title), ["Other"], "a shell, with no Claude");
   } finally {

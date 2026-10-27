@@ -296,7 +296,7 @@ case "${1:-}" in
 
   next)
     # The sidebar's Needs you, as its daemon writes it (lib/sidebar/daemon.js,
-    # writeNeeds), when the daemon runs: flagged tabs first, then waiting and
+    # writeNeeds), when the daemon runs: pinned tabs first, then waiting and
     # done, and none that only looks done here while it works in the
     # background or loops, which only the daemon can tell from the transcript.
     # Each press goes to the tab after this one there, wrapping at the end; a

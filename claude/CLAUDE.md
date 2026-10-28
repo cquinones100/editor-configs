@@ -118,6 +118,10 @@ One line per pane: the tab's number, its name (with the PR number and the Linear
 
 Don't look on turns that can't depend on it. Reading another tab's screen or typing into it is a different thing: only when I ask.
 
+# Skills
+
+- When a skill exists both in the repository (`.claude/skills/<name>/`, in the worktree or its main clone) and as my personal one, use the repository's: read its SKILL.md and follow it instead of the personal one.
+
 # Slack
 
 - NEVER offer to reply to a Slack thread. Reading Slack is fine; drafting, sending, or proposing a reply is not, unless I explicitly ask for one.

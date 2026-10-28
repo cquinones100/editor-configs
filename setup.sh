@@ -115,19 +115,12 @@ part_claude() {
   # One link per skill rather than one for the directory: Claude Code keeps its
   # own synced/ folder in ~/.claude/skills, so that path has to stay real.
   dir ~/.claude/skills
-  # Skills kept here but not installed. review-loop is defined by the repos that
-  # use it, and a personal copy beside theirs shows up as a second /review-loop.
-  # A leftover link from before it was listed here is removed.
-  local unlinked_skills=(review-loop ci-loop) skill name hook
+  # Every skill, review-loop and ci-loop included: a repository can define its
+  # own of those, and a personal skill wins over a project one of the same
+  # name, so each of the two starts by reading and following the repository's
+  # copy, in the worktree or its main clone, when there is one.
+  local skill hook
   for skill in "$SRC"/claude/skills/*/; do
-    name=$(basename "$skill")
-    if [[ " ${unlinked_skills[*]} " == *" $name "* ]]; then
-      if [[ -L ~/.claude/skills/$name ]]; then
-        $CHECK || rm ~/.claude/skills/"$name"
-        change "remove the link to the $name skill, which is kept here but not installed"
-      fi
-      continue
-    fi
     put_link "${skill%/}" ~/.claude/skills/
   done
   dir ~/.claude/hooks

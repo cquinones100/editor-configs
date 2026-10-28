@@ -6,6 +6,10 @@ argument-hint: "[all]"
 
 # Review loop
 
+## The repository's own review-loop comes first
+
+This is Switchboard's personal copy, installed for repositories that have none. Before anything else, look for the repository's own: `.claude/skills/review-loop/SKILL.md` in this worktree, then in its main clone (the directory above `git rev-parse --path-format=absolute --git-common-dir`), which a branch cut before the repository added the skill won't have in its worktree. If either exists, read it and follow it instead of this file, with the same arguments, and stop reading here. Only with neither, go on below.
+
 Have Codex review the current branch, fix the findings you agree with, commit, and review again. Stop after two consecutive clean rounds, or when the round cap is hit. Push once at the end, after asking.
 
 The reviewer is the `codex-review` command. It runs Codex read-only against committed history and prints one JSON object with `summary`, `findings`, and the commit it reviewed. If it is not on `PATH`, say so and stop; do not substitute your own review for Codex's.

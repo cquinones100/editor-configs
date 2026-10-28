@@ -7,6 +7,10 @@ disable-model-invocation: true
 
 # CI loop
 
+## The repository's own ci-loop comes first
+
+This is Switchboard's personal copy, installed for repositories that have none. Before anything else, look for the repository's own: `.claude/skills/ci-loop/SKILL.md` in this worktree, then in its main clone (the directory above `git rev-parse --path-format=absolute --git-common-dir`), which a branch cut before the repository added the skill won't have in its worktree. If either exists, read it and follow it instead of this file, with the same arguments, and stop reading here. Only with neither, go on below.
+
 Watch this branch's PR checks without blocking the conversation. When a check fails because of this branch, fix it, push, and watch the new run. When it fails for a reason the branch didn't cause, rerun it once. Stop when every check on the PR's latest commit has passed, or when something needs the user.
 
 When the work is done, the final message is one line and nothing else:

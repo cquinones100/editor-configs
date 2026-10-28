@@ -73,6 +73,20 @@
     "default": true
   },
   {
+    "key": "search_everything",
+    "category": "Integrations",
+    "label": "Search everything",
+    "description": "M-S-f asks for a search and lists what your notes, Linear, GitHub and Slack hold for it, each read beside the pane with Enter",
+    "default": true
+  },
+  {
+    "key": "search_slack",
+    "category": "Integrations",
+    "label": "Slack in search everything",
+    "description": "M-S-f searches Slack too, through Claude's connector, a headless Haiku making that one call, its results arriving a few seconds after the others",
+    "default": true
+  },
+  {
     "key": "diff_order",
     "category": "Diff",
     "label": "Files in reading order",

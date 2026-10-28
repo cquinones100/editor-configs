@@ -33,6 +33,7 @@ tmux new-session -A -s main
 | `M-p` | Find any command by what it does, Settings included |
 | `M-a` | Go to the next tab that needs you |
 | `M-j` | Find a tab by typing its name |
+| `M-S-f` | Search your notes, Linear, GitHub and Slack at once |
 | `M-Space` | Mission control: every tab, the Work map, PRs, Settings |
 | `M-t` | New tab running Claude, in a directory you pick |
 | `M-s` | Into the sidebar and back out |

@@ -52,3 +52,27 @@ test("the picker lists a pane's links newest first, a link written into text wit
     ["ticket title  https://linear.app/team/issue/ABC-1", "https://linear.app/team/issue/ABC-1"],
   ]);
 });
+
+test("search everything finds the notes holding every word, newest first, as links the link view reads, and nothing in .trash", () => {
+  const notes = path.join(tmp, "Notes");
+  fs.mkdirSync(path.join(notes, "Work"), { recursive: true });
+  fs.mkdirSync(path.join(notes, ".trash"));
+  fs.writeFileSync(path.join(notes, "Old plan.md"), "# Old plan\n\n- [ ] deploy the freeze fix\n");
+  fs.writeFileSync(path.join(notes, "Work", "Carl's (draft).md"), "# Carl's (draft)\n\nThe Deploy freeze is on\n");
+  fs.writeFileSync(path.join(notes, "Other.md"), "# Other\n\ndeploy only\n");
+  fs.writeFileSync(path.join(notes, ".trash", "Gone.md"), "# Gone\n\ndeploy freeze\n");
+  fs.utimesSync(path.join(notes, "Old plan.md"), new Date(2020, 0, 1), new Date(2020, 0, 1));
+  execFileSync("tmux", ["-S", socket, "-f", "/dev/null", "new-session", "-d", "-s", "search", "sleep 60"], { env });
+  ["github", "linear", "search_slack"].forEach((key) => execFileSync("tmux", ["-S", socket, "set", "-g", `@setting_${key}`, "off"], { env }));
+
+  const out = execFileSync("node", [path.join(__dirname, "../lib/search.js"), "deploy", "FREEZE"], {
+    env: { ...env, TMUX: `${socket},0,0`, NOTES_DIR: notes },
+    encoding: "utf8",
+  });
+  const rows = out.trim().split("\n").map((row) => row.replace(/\x1b\[[0-9;]*m/g, "").split("\t"));
+  assert.deepEqual(rows, [
+    ["Note   Carl's (draft)  The Deploy freeze is on", `file://${notes}/Work/Carl%27s%20%28draft%29.md`],
+    ["Note   Old plan  deploy the freeze fix", `file://${notes}/Old%20plan.md`],
+  ]);
+  assert.match(rows[0][1], /^file:\/\/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$/, "a link the link view takes");
+});

@@ -14,18 +14,20 @@
 #                                    Enter reads it beside the pane, Ctrl-O opens
 #                                    it in the browser
 #   link-view.sh open <pane> <url>   read <url> in a pane beside <pane>
-#   link-view.sh show <url>          in that pane: read it
+#   link-view.sh show [<url>]        in that pane: read it, else LINK_VIEW_URL
 #   link-view.sh browser <pane>      open the link read in <pane>'s window
 #
 # The pane carries @link_view and the link in @link_url. It runs under an
-# interactive zsh, for the PATH (gh, glow, node) the tmux server lacks, and a
-# link goes into that command line only when it has nothing but a URL's
-# characters, no quote among them.
+# interactive zsh, for the PATH (gh, glow, node) the tmux server lacks, and
+# the link reaches it in LINK_VIEW_URL, set with split-window -e, which passes
+# it as written, never in the command line, where zsh would read a link's & or
+# ( as its own; only a link of nothing but a URL's characters is read.
 
 set -u
 here=${0%/*}
 repo=${SWITCHBOARD_DIR:-$HOME/switchboard}
-safe='^https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$'
+# A note found by search.sh comes as a file:// link, read only from the notes.
+safe='^(https?|file)://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$'
 
 case "${1:-}" in
   pick)
@@ -75,13 +77,13 @@ case "${1:-}" in
     old=$(tmux list-panes -t "$pane" -F '#{pane_id} #{@link_view}' | awk '$2 == "1" { print $1; exit }')
     [ -n "$old" ] && tmux kill-pane -t "$old"
     dir=$(tmux display -p -t "$pane" '#{pane_current_path}')
-    view=$(tmux split-window -h -l 50% -t "$pane" -c "${dir//\#/##}" -P -F '#{pane_id}' "zsh -i -c '$here/link-view.sh show $url'") || exit 0
+    view=$(tmux split-window -h -l 50% -t "$pane" -c "${dir//\#/##}" -P -F '#{pane_id}' -e "LINK_VIEW_URL=$url" "zsh -i -c '$here/link-view.sh show'") || exit 0
     tmux set-option -p -t "$view" @link_view 1
     tmux set-option -p -t "$view" @link_url "$url"
     ;;
 
   show)
-    url=${2:-}
+    url=${2:-${LINK_VIEW_URL:-}}
     dim=$'\e[38;5;244m' red=$'\e[31m' reset=$'\e[0m'
     wait_key() {
       printf '\n  %s\n\n  %sPress any key to close.%s' "$1" "$dim" "$reset"
@@ -103,6 +105,17 @@ case "${1:-}" in
     fi
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
+    # A note, as search.sh gives one: its Markdown, read from the notes
+    # directory and nowhere else.
+    if [[ $url =~ ^file:// ]]; then
+      encoded=${url#file://}
+      file=$(printf '%b' "${encoded//%/\\x}")
+      notes=${NOTES_DIR:-$HOME/Notes}
+      [[ $file == "$notes"/*.md && $file != *"/."* && -f $file ]] || wait_key "${red}Only a note can be read from a file.${reset}"
+      cp "$file" "$work/page.md"
+      "$here/pr-view.sh" page page "$work/page.md" "$work"
+      exit 0
+    fi
     # A GitHub pull request: the PR view's layout.
     if [[ $url =~ ^https://github\.com/[^/]+/[^/]+/pull/[0-9]+ ]]; then
       printf '\n  %sReading the PR...%s' "$dim" "$reset"

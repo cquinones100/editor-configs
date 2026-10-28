@@ -1501,3 +1501,24 @@ test("a merged tab's badge says merged while Claude is marked working, and waiti
   assert.doesNotMatch(badgeOf({ ...tab, state: "waiting", merge: "merged" }), /◆/);
   assert.match(badgeOf({ ...tab, state: "working", merge: "queued" }), /⠋/, "a tab in the merge queue keeps its working spinner");
 });
+
+test("a Markdown table in a reply is drawn in a box, its cells wrapped in their columns, or one cell a line when it can't fit", () => {
+  const reply = "Today:\n\n| Time | Event | You |\n|---|:--|---|\n| 1:00–1:15 PM | Standup | not answered |\n| 1:15–2:00 PM | Community of Practicing Engineers | going |\n\nFree until 11.";
+  assert.deepEqual(sidebar.layout(reply, 80), [
+    "Today:",
+    "",
+    "┌──────────────┬───────────────────────────────────┬──────────────┐",
+    "│ Time         │ Event                             │ You          │",
+    "├──────────────┼───────────────────────────────────┼──────────────┤",
+    "│ 1:00–1:15 PM │ Standup                           │ not answered │",
+    "├──────────────┼───────────────────────────────────┼──────────────┤",
+    "│ 1:15–2:00 PM │ Community of Practicing Engineers │ going        │",
+    "└──────────────┴───────────────────────────────────┴──────────────┘",
+    "",
+    "Free until 11.",
+  ]);
+  const narrow = sidebar.layout(reply, 44);
+  assert.ok(narrow.every((line) => sidebar.width(line) <= 44), "fits");
+  assert.ok(narrow.includes("│ 1:15–2:00   │ Community of  │ going      │") && narrow.some((line) => line.includes("│ Practicing ")), "no word split");
+  assert.deepEqual(sidebar.layout(reply, 24).slice(2, 6), ["Time: 1:00–1:15 PM", "Event: Standup", "You: not answered", "────────────────────"]);
+});

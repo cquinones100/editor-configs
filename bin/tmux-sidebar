@@ -36,6 +36,7 @@ const parts = Object.assign({},
   require("../lib/sidebar/views"),
   require("../lib/sidebar/activity"),
   require("../lib/sidebar/prboard"),
+  require("../lib/sidebar/ticketboard"),
   require("../lib/sidebar/sessions"),
   require("../lib/sidebar/daemon"),
 );

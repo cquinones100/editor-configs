@@ -52,6 +52,13 @@
     "default": true
   },
   {
+    "key": "ticket_board",
+    "category": "Sidebar",
+    "label": "Ticket board",
+    "description": "Mission control's Tickets view, which asks Linear about the issues assigned to you every two minutes",
+    "default": true
+  },
+  {
     "key": "second_status",
     "category": "Tabs and status bar",
     "label": "Second status line",

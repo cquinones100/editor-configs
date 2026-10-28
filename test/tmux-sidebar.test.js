@@ -1451,7 +1451,7 @@ test("mission control's Settings view lists the options by category, / narrows t
   }
 });
 
-test("with the github and linear settings off, mission control has no PRs view and the Work map no PR or ticket", () => {
+test("with the github and linear settings off, mission control has no PRs or Tickets view and the Work map no PR or ticket", () => {
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   const tab = { id: "@90", index: 9, name: "Some work", path: path.join(tmp, "nowhere"), pr: "12", state: "idle" };
   try {
@@ -1459,11 +1459,13 @@ test("with the github and linear settings off, mission control has no PRs view a
     fs.rmSync(settingsFile, { force: true });
     sidebar.reloadSettings();
     assert.ok(sidebar.builtInViews({ tabs: [] }).some((v) => v.title === "PRs"));
+    assert.ok(sidebar.builtInViews({ tabs: [] }).some((v) => v.title === "Tickets"));
     assert.equal(sidebar.workMap([tab]).find((r) => r.tab === tab).cells[3], "#12 open");
 
     fs.writeFileSync(settingsFile, JSON.stringify({ github: false, linear: false }));
     sidebar.reloadSettings();
     assert.ok(!sidebar.builtInViews({ tabs: [] }).some((v) => v.title === "PRs"));
+    assert.ok(!sidebar.builtInViews({ tabs: [] }).some((v) => v.title === "Tickets"));
     assert.equal(sidebar.workMap([tab]).find((r) => r.tab === tab).cells[3], "");
     assert.deepEqual(sidebar.mergeOf({ path: tab.path, branch: "feat" }), {});
   } finally {
@@ -1521,4 +1523,29 @@ test("a Markdown table in a reply is drawn in a box, its cells wrapped in their 
   assert.ok(narrow.every((line) => sidebar.width(line) <= 44), "fits");
   assert.ok(narrow.includes("│ 1:15–2:00   │ Community of  │ going      │") && narrow.some((line) => line.includes("│ Practicing ")), "no word split");
   assert.deepEqual(sidebar.layout(reply, 24).slice(2, 6), ["Time: 1:00–1:15 PM", "Event: Standup", "You: not answered", "────────────────────"]);
+});
+
+test("the ticket board puts your Linear issues in columns by state, urgent first in Todo, with the tab working on each", () => {
+  const issue = (identifier, priority, name, type, updatedAt, completedAt) => ({
+    identifier, title: `Work on ${identifier}`, url: `https://linear.app/x/issue/${identifier}`, priority, priorityLabel: ["No priority", "Urgent", "High", "Medium", "Low"][priority], updatedAt, completedAt, state: { name, type }, project: null,
+  });
+  const columns = sidebar.ticketsFrom(
+    [
+      issue("AB-1", 3, "Todo", "unstarted", "2026-10-01T00:00:00Z"),
+      issue("AB-2", 1, "Todo", "unstarted", "2026-09-01T00:00:00Z"),
+      issue("AB-3", 0, "In Progress", "started", "2026-10-02T00:00:00Z"),
+      issue("AB-4", 2, "Ready for Review", "started", "2026-10-03T00:00:00Z"),
+      issue("AB-5", 0, "Done", "completed", "2026-10-04T00:00:00Z", "2026-10-04T00:00:00Z"),
+    ],
+    [{ index: 4, name: "AB-3: Work on AB-3" }, { index: 5, name: "AB-30: something else" }],
+  );
+  assert.deepEqual(columns.map((c) => [c.title, c.items.map((i) => i.title.split(" ")[0])]), [
+    ["Todo", ["AB-2", "AB-1"]],
+    ["In progress", ["AB-3"]],
+    ["In review", ["AB-4"]],
+    ["Done", ["AB-5"]],
+  ]);
+  assert.equal(columns[0].items[0].state, "attention", "urgent needs you");
+  assert.equal(columns[1].items[0].detail, "In Progress · tab 4");
+  assert.equal(columns[0].items[1].detail, "Todo · Medium");
 });

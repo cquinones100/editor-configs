@@ -1565,3 +1565,35 @@ test("a merged tab still waiting on its deploy or testing it is under Testing De
   ]);
   assert.deepEqual(sidebar.staged(tabs).map((g) => g.title), ["Needs you", "Testing Deploy", "Merged"]);
 });
+
+test("the Calendar view draws the day /today saved, and says when it is out of date", () => {
+  const stateDir = fs.mkdtempSync(path.join(tmp, "calendar-"));
+  const env = { ...process.env, TMUX_SIDEBAR_STATE_DIR: stateDir };
+  const now = new Date();
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const day = { date, events: [
+    { title: "Planning", start: new Date(now.getTime() - 3 * 3_600_000).toISOString(), end: new Date(now.getTime() - 2 * 3_600_000).toISOString(), you: "going", link: "https://calendar.example/1" },
+    { title: "Review", start: new Date(now.getTime() + 3_600_000).toISOString(), end: new Date(now.getTime() + 7_200_000).toISOString(), you: "maybe", join: "https://zoom.example/j/2" },
+    { title: "Bad link", start: now.toISOString(), end: now.toISOString(), you: "going", join: "javascript:alert(1)" },
+  ] };
+  execFileSync("node", [path.join(__dirname, "../claude/skills/today/scripts/save.js")], { input: JSON.stringify(day), env });
+  const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "calendar.json"), "utf8"));
+  assert.equal(saved.events[2].join, undefined, "only https links are kept");
+  const script = `
+    const { calendarView, calendarLines, calendarStale, calendarLooping } = require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/calendar"))});
+    const view = calendarView([]);
+    const plain = calendarLines(view, 120, 40, 1).map((l) => l.replace(/\\x1b\\[[0-9;]*m/g, ""));
+    console.log(JSON.stringify({ items: view.items.map((i) => [i.title, i.url]), plain, stale: view.stale, looping: calendarLooping([{ name: "Calendar", claude: {} }]), loopingNone: calendarLooping([{ name: "Calendar" }]) }));`;
+  const out = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.deepEqual(out.items.map((i) => i[0]), ["Planning", "Bad link", "Review"]);
+  assert.equal(out.items[2][1], "https://zoom.example/j/2", "Enter joins the call");
+  assert.equal(out.stale, false);
+  assert.ok(out.plain.some((l) => l.includes("Planning")) && out.plain.some((l) => l.includes("▎Review")), "an unanswered event is outlined");
+  assert.ok(out.plain.some((l) => l.includes("●") && l.includes("─")), "a line at now");
+  assert.ok(out.looping && !out.loopingNone, "a Calendar tab counts only while Claude runs in it");
+
+  fs.writeFileSync(path.join(stateDir, "calendar.json"), JSON.stringify({ ...saved, date: "2020-01-01" }));
+  const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.equal(old.stale, true);
+  assert.match(old.plain.join("\n"), /No calendar for today yet \(last saved 2020-01-01\): opening a Calendar tab to fetch it/);
+});

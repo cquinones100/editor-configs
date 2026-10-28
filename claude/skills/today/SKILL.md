@@ -18,6 +18,18 @@ Arguments: none for today, or `tomorrow`, or a date. The rest of this says "toda
 
 3. **Drop what isn't the user's.** Leave out events the user has declined. Keep tentative and unanswered ones; the table says which they are.
 
+   **Save the day for mission control**, only when the day asked for is today: its Calendar view draws what this saves, since it can't reach the calendar itself. Pass the events kept as JSON to the script beside this file:
+
+   ```
+   node ~/.claude/skills/today/scripts/save.js <<'EOF'
+   {"date": "2026-10-28", "events": [
+     {"title": "Standup", "start": "2026-10-28T13:00:00-04:00", "end": "2026-10-28T13:15:00-04:00", "allDay": false, "you": "going", "join": "https://…zoom.us/j/…", "link": "<htmlLink>"}
+   ]}
+   EOF
+   ```
+
+   `start` and `end` as the API gives them (no times and `"allDay": true` for an all-day event), `you` as the table's You column says it, `join` the call's link as the Where column finds it, and `link` the event's `htmlLink`. A failure here doesn't stop the reply.
+
 4. **Show the table.** All-day events first, then the rest by start time:
 
    | Time | Event | Length | Where | You |

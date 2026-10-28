@@ -214,6 +214,10 @@ place of the pane, as `M-d`'s diff does (`pane-in-place.sh`'s `pr-image`), and
 
 `test/tmux-conf.test.js` loads `tmux.conf` into a throwaway server and checks it loads without an error and that every `bind` runs as many commands as the file gives it, which a `\;` that lost its backslash breaks silently. The file skips what reaches beyond that server (starting the sidebar daemon, the plugins, the theme) while `@conf_check` is set, inside `%if`; anything new it runs at load belongs inside one too.
 
+## The Calendar view
+
+Mission control's Calendar view (`lib/sidebar/calendar.js`) draws the day `/today` last saved with its `scripts/save.js` to `~/.local/state/tmux-sidebar/calendar.json`, since the daemon can't reach the Google Calendar connector; a change to the file's shape belongs in both. The Calendar tab is opened by `tmux/calendar-open.sh`, which `M-p`'s command runs and the daemon runs with `--background` when the saved day is out of date and no tab is keeping it, at most every ten minutes.
+
 ## Context use, for the sidebar
 
 `claude/statusline-command.sh` writes each session's context use and model, which Claude Code gives only to the statusline, to `~/.local/state/tmux-sidebar/context/<session id>` (`<percent>\t<model>`), when they change, for mission control's Sessions view (`lib/sidebar/sessions.js`) and the Slack relay (`contextOf` in `lib/slack-relay/tabs.js`), which shows it on each turn, the Home tab and a tab's screen, and warns a thread once a session passes 90%. A change to that line's shape belongs in all three.

@@ -4,8 +4,8 @@
 // ~/.local/state/tmux-sidebar/slack.json, written to a temporary file and
 // renamed into place, then the sidebar is nudged to draw it. Plain Node.
 //
-//   node save.js --since    prints when to look back to: the last look, or a
-//                           day ago the first time (ISO 8601, and the Unix time)
+//   node save.js --since    prints when to look back to: the last look, or an
+//                           hour ago the first time (ISO 8601, and the Unix time)
 //   node save.js < new.json  adds what this look found and marks the look
 //
 // new.json: { "items": [{ "kind": "mention" | "dm" | "thread" | "channel",
@@ -22,6 +22,8 @@ const path = require("node:path");
 const dir = process.env.TMUX_SIDEBAR_STATE_DIR || path.join(os.homedir(), ".local/state/tmux-sidebar");
 const file = path.join(dir, "slack.json");
 const KEEP_MS = 24 * 60 * 60_000;
+// The first look goes back only this far: a day's worth is mostly read.
+const FIRST_MS = 60 * 60_000;
 const MAX_ITEMS = 300;
 const KINDS = ["mention", "dm", "thread", "channel"];
 
@@ -35,7 +37,7 @@ const read = (p) => {
 const saved = read(file) ?? { items: [] };
 
 if (process.argv[2] === "--since") {
-  const since = Number(saved.checked) || Date.now() - KEEP_MS;
+  const since = Number(saved.checked) || Date.now() - FIRST_MS;
   console.log(`${new Date(since).toISOString()} ${Math.floor(since / 1000)}`);
   process.exit(0);
 }

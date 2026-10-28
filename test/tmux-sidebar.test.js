@@ -1647,7 +1647,7 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   assert.equal(empty.title, "Slack", "there before anything is saved");
   assert.match(empty.error, /^Nothing saved yet: going to this view opens a Slack tab/);
   const first = execFileSync("node", [save, "--since"], { env, encoding: "utf8" });
-  assert.ok(Math.abs(Number(first.trim().split(" ")[1]) - (now - 86400)) < 60, "a day back the first time");
+  assert.ok(Math.abs(Number(first.trim().split(" ")[1]) - (now - 3600)) < 60, "an hour back the first time");
   const items = [
     { kind: "mention", channel: "C1", where: "#general", user: "U1", from: "Ada", text: "can you look\nat this", ts: String(now - 60), link: "https://x.slack.com/archives/C1/p1" },
     { kind: "dm", channel: "DRELAY", where: "relay", user: "U2", from: "Me", text: "editor configs: tests failed", ts: String(now - 30) },
@@ -1666,6 +1666,11 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   assert.deepEqual(out.urls, [null, "https://x.slack.com/archives/C1/p1"], "only https links");
   assert.equal(out.details[1], "can you look at this");
   assert.equal(out.error, null);
+  // Leaving the view marks what its look brought as seen: below anything new, faded.
+  execFileSync("node", ["-e", `require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/slack"))}).markSlackSeen()`], { env });
+  execFileSync("node", [save], { input: JSON.stringify({ items: [{ kind: "dm", channel: "D9", where: "Bo", user: "U9", from: "Bo", text: "new one", ts: String(Date.now() / 1000) }] }), env });
+  const after = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.deepEqual(after.titles, ["DM Bo · Bo", "↳ Lin · #dev · seen", "@ Ada · #general · seen"]);
   const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
   fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ ...saved, checked: Date.now() - 3_600_000 }));
   const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));

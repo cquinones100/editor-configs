@@ -45,6 +45,13 @@
     "default": true
   },
   {
+    "key": "diff_order",
+    "category": "Diff",
+    "label": "Files in reading order",
+    "description": "M-d lists the changed files flat, documentation first and tests last, with Haiku ordering the code from most abstract to most concrete; off, the folder tree, A to Z",
+    "default": true
+  },
+  {
     "key": "pr_board",
     "category": "Sidebar",
     "label": "PR board",

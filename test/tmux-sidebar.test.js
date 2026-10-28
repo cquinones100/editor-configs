@@ -1684,3 +1684,41 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
   assert.match(old.error, /^Out of date, last looked 1h ago: opening a Slack tab to catch up\.$/);
 });
+
+test("the Calendar view's iCal feed gives today's events, repeats and moved occurrences included, in /today's shape", () => {
+  const now = new Date(2026, 9, 28, 12, 0);
+  const ics = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "X-WR-CALNAME:me@example.com",
+    "BEGIN:VTIMEZONE", "TZID:America/New_York",
+    "BEGIN:DAYLIGHT", "TZOFFSETFROM:-0500", "TZOFFSETTO:-0400", "TZNAME:EDT", "DTSTART:19700308T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU", "END:DAYLIGHT",
+    "BEGIN:STANDARD", "TZOFFSETFROM:-0400", "TZOFFSETTO:-0500", "TZNAME:EST", "DTSTART:19701101T020000", "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU", "END:STANDARD",
+    "END:VTIMEZONE",
+    // Every weekday at 1 PM, since September, the call in Google's own field.
+    "BEGIN:VEVENT", "UID:standup@google.com", "SUMMARY:Standup", "DTSTART;TZID=America/New_York:20260901T130000", "DTEND;TZID=America/New_York:20260901T131500",
+    "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", "X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij",
+    "ATTENDEE;PARTSTAT=ACCEPTED:mailto:me@example.com", "END:VEVENT",
+    // Every Wednesday at 3 PM, but today's moved to 4 PM, a Zoom link in its location.
+    "BEGIN:VEVENT", "UID:review@google.com", "SUMMARY:Review", "DTSTART;TZID=America/New_York:20261007T150000", "DTEND;TZID=America/New_York:20261007T160000",
+    "RRULE:FREQ=WEEKLY;BYDAY=WE", "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:me@example.com", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:review@google.com", "RECURRENCE-ID;TZID=America/New_York:20261028T150000", "SUMMARY:Review (moved)",
+    "DTSTART;TZID=America/New_York:20261028T160000", "DTEND;TZID=America/New_York:20261028T170000", "LOCATION:https://acme.zoom.us/j/123?pwd=x",
+    "ATTENDEE;PARTSTAT=TENTATIVE:mailto:me@example.com", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:nope@google.com", "SUMMARY:Declined", "DTSTART:20261028T170000Z", "DTEND:20261028T180000Z", "ATTENDEE;PARTSTAT=DECLINED:mailto:me@example.com", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:ooo@google.com", "SUMMARY:Holiday", "DTSTART;VALUE=DATE:20261028", "DTEND;VALUE=DATE:20261029", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:old@google.com", "SUMMARY:Yesterday", "DTSTART:20261027T170000Z", "DTEND:20261027T180000Z", "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const script = `process.env.TZ = "America/New_York"; const { dayFrom } = require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/calendar-feed"))}); console.log(JSON.stringify(dayFrom(${JSON.stringify(ics)}, new Date(${now.getTime()}))))`;
+  const day = JSON.parse(execFileSync("node", ["-e", script], { env: { ...process.env, TZ: "America/New_York" }, encoding: "utf8" }));
+  const byTitle = Object.fromEntries(day.events.map((e) => [e.title, e]));
+  assert.deepEqual(Object.keys(byTitle).sort(), ["Holiday", "Review (moved)", "Standup"]);
+  assert.equal(byTitle.Standup.start, "2026-10-28T17:00:00.000Z");
+  assert.equal(byTitle.Standup.you, "going");
+  assert.equal(byTitle.Standup.join, "https://meet.google.com/abc-defg-hij");
+  assert.equal(Buffer.from(byTitle.Standup.link.split("eid=")[1], "base64").toString(), "standup_20261028T170000Z me@example.com");
+  assert.equal(byTitle["Review (moved)"].start, "2026-10-28T20:00:00.000Z");
+  assert.equal(byTitle["Review (moved)"].you, "maybe");
+  assert.equal(byTitle["Review (moved)"].join, "https://acme.zoom.us/j/123?pwd=x");
+  assert.equal(byTitle.Holiday.allDay, true);
+  assert.equal(byTitle.Holiday.you, "yours");
+});

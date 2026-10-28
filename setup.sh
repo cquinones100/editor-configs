@@ -205,12 +205,33 @@ mermaid_ascii() {
   rm -rf "$tmp"
 }
 
+# The sidebar daemon's packages, pinned in lib/sidebar/package.json and its
+# lockfile: ical.js, for the Calendar view's iCal feed. Installed with npm ci
+# when what is installed isn't the locked version; without them, the view
+# reads only what /today saves.
+sidebar_packages() {
+  local want have
+  want=$(node -e 'console.log(require(process.argv[1]).packages["node_modules/ical.js"].version)' "$SRC/lib/sidebar/package-lock.json" 2>/dev/null)
+  have=$(node -e 'console.log(require(process.argv[1]).version)' "$SRC/lib/sidebar/node_modules/ical.js/package.json" 2>/dev/null)
+  [ -n "$want" ] && [ "$want" = "$have" ] && return 0
+  if $CHECK; then
+    change "install the sidebar's packages (ical.js $want)"
+    return 0
+  fi
+  if (cd "$SRC/lib/sidebar" && npm ci --silent --no-audit --no-fund >/dev/null 2>&1); then
+    change "install the sidebar's packages (ical.js $want)"
+  else
+    echo "  could not install the sidebar's packages (npm ci in lib/sidebar); the Calendar view reads only what /today saves" >&2
+  fi
+}
+
 # tmux.conf and every script it runs, each linked into ~/.config/tmux.
 part_tmux() {
   dir ~/.config/tmux
   put_link "$SRC/tmux/tmux.conf" ~/.config/tmux/tmux.conf
   tmux_plugins
   mermaid_ascii
+  sidebar_packages
   local file
   for file in "$SRC"/tmux/*.sh "$SRC"/tmux/*.zsh "$SRC"/tmux/*.js "$SRC"/tmux/glow-style.json; do
     put_link "$file" ~/.config/tmux/

@@ -1,0 +1,8 @@
+{
+  "name": "switchboard-sidebar",
+  "private": true,
+  "description": "The sidebar daemon's packages: ical.js, for the Calendar view's iCal feed (calendar-feed.js).",
+  "dependencies": {
+    "ical.js": "2.2.1"
+  }
+}

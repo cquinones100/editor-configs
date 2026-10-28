@@ -367,6 +367,29 @@ local function wrap_set_file(view)
   end
 end
 
+-- A file opens at its first change rather than at its top, the cursor on
+-- the first word that changed: in Markdown a paragraph is one line, so the
+-- unchanged lines around a change can fill the screen and hide it, and the
+-- change can sit far along a line that wraps over a dozen rows.
+local function to_first_change(view)
+  local win = view.cur_layout and view.cur_layout:get_main_win()
+  if not (win and vim.api.nvim_win_is_valid(win.id) and vim.wo[win.id].diff) then return end
+  vim.api.nvim_win_call(win.id, function()
+    vim.cmd("normal! gg")
+    if vim.fn.diff_hlID(1, 1) == 0 then vim.cmd("silent! normal! ]c") end
+    local lnum = vim.fn.line(".")
+    local text = vim.fn.getline(lnum)
+    for col = 1, #text do
+      local name = vim.fn.synIDattr(vim.fn.diff_hlID(lnum, col), "name")
+      if name == "DiffText" or name == "DiffTextAdd" then
+        vim.api.nvim_win_set_cursor(0, { lnum, col - 1 })
+        break
+      end
+    end
+    vim.cmd("normal! zz")
+  end)
+end
+
 -- Git's own colors, in diffview's windows only, whatever the colorscheme,
 -- as GitHub shows a diff: on the left every line that changed or went is
 -- tinted red, on the right every line that changed or came is tinted green,
@@ -406,10 +429,10 @@ local function minimal_highlights()
       table.insert(unpainted, name .. ":" .. copy)
     end
   end
-  vim.api.nvim_set_hl(0, "DiffviewMinimalAdd", { bg = blend(ADDED, normal, 0.22) })
-  vim.api.nvim_set_hl(0, "DiffviewMinimalAddText", { bg = blend(ADDED, normal, 0.5) })
-  vim.api.nvim_set_hl(0, "DiffviewMinimalDelete", { bg = blend(REMOVED, normal, 0.22) })
-  vim.api.nvim_set_hl(0, "DiffviewMinimalDeleteText", { bg = blend(REMOVED, normal, 0.5) })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalAdd", { bg = blend(ADDED, normal, 0.14) })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalAddText", { bg = blend(ADDED, normal, 0.55) })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalDelete", { bg = blend(REMOVED, normal, 0.14) })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalDeleteText", { bg = blend(REMOVED, normal, 0.55) })
   vim.api.nvim_set_hl(0, "DiffviewMinimalFiller", { fg = normal, bg = normal })
 end
 
@@ -425,6 +448,7 @@ local function minimal_for(side)
     "DiffAdd:" .. line,
     "DiffChange:" .. line,
     "DiffText:" .. words,
+    "DiffTextAdd:" .. words,
     "DiffDelete:DiffviewMinimalFiller",
     unpack(unpainted),
   }, ",")
@@ -440,6 +464,7 @@ return {
         if view.panel and view.panel.ordered_file_list then wrap_set_file(view) end
         if view.emitter then
           view.emitter:on("file_open_post", function()
+            to_first_change(view)
             if view.keep_panel and view.panel:is_open() then view.panel:focus() end
             view.keep_panel = false
           end)
@@ -475,8 +500,11 @@ return {
   config = function(_, opts)
     -- Lines matched as people read them: histogram rather than Myers, the
     -- indent heuristic, and linematch pairing the lines of a changed block,
-    -- so fewer lines look changed than were.
-    vim.opt.diffopt:append({ "algorithm:histogram", "indent-heuristic", "linematch:60" })
+    -- so fewer lines look changed than were. Within a changed line, the words
+    -- that changed, not the span from the first difference to the last, which
+    -- in a paragraph of prose on one line is most of it. Three lines around a
+    -- change rather than six, since a line of prose can fill the screen.
+    vim.opt.diffopt:append({ "algorithm:histogram", "indent-heuristic", "linematch:60", "inline:word", "context:3" })
     minimal_highlights()
     vim.api.nvim_create_autocmd("ColorScheme", { callback = minimal_highlights })
     vim.g.diff_order = order_on()

@@ -52,15 +52,50 @@
     "default": true
   },
   {
+    "key": "view_work_map",
+    "category": "Mission control",
+    "label": "Work map",
+    "description": "Mission control's Work map: every piece of work in your tabs' repositories (M-j and M-o open it whatever this says)",
+    "default": true
+  },
+  {
+    "key": "view_calendar",
+    "category": "Mission control",
+    "label": "Calendar",
+    "description": "Mission control's Calendar view: today from the day /today last saved",
+    "default": true
+  },
+  {
+    "key": "view_activity",
+    "category": "Mission control",
+    "label": "Activity",
+    "description": "Mission control's Activity view: what happened across the tabs, newest first",
+    "default": true
+  },
+  {
+    "key": "view_closed",
+    "category": "Mission control",
+    "label": "Closed tabs",
+    "description": "Mission control's Closed view: the tabs closed last, to reopen",
+    "default": true
+  },
+  {
+    "key": "view_sessions",
+    "category": "Mission control",
+    "label": "Sessions",
+    "description": "Mission control's Sessions view: each Claude session's context, model and age",
+    "default": true
+  },
+  {
     "key": "pr_board",
-    "category": "Sidebar",
+    "category": "Mission control",
     "label": "PR board",
     "description": "Mission control's PRs view, which asks GitHub about your pull requests every two minutes",
     "default": true
   },
   {
     "key": "ticket_board",
-    "category": "Sidebar",
+    "category": "Mission control",
     "label": "Ticket board",
     "description": "Mission control's Tickets view, which asks Linear about the issues assigned to you every two minutes",
     "default": true

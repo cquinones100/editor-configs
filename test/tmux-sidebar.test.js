@@ -1610,3 +1610,20 @@ test("Enter on a board's PR or ticket offers what to do with it, and each item s
   assert.match(lines[3], /^ {4}w {2}Start work on it in a new tab \(wt\)/);
   assert.match(lines[4], /^ {4}o {2}Open it in the browser/);
 });
+
+test("each mission control view but Settings can be turned off in Settings, the Work map staying for M-j and M-o", () => {
+  const settingsFile = path.join(home, ".config/switchboard/settings.json");
+  try {
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_activity: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
+    sidebar.reloadSettings();
+    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title), ["Settings"]);
+    assert.deepEqual(sidebar.builtInViews({ tabs: [] }, { workMap: true }).map((v) => v.title), ["Work map", "Settings"]);
+    fs.rmSync(settingsFile);
+    sidebar.reloadSettings();
+    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Activity", "Closed", "PRs", "Tickets", "Sessions", "Settings"]);
+  } finally {
+    fs.rmSync(settingsFile, { force: true });
+    sidebar.reloadSettings();
+  }
+});

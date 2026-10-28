@@ -315,6 +315,23 @@ test("tabs with no Claude in them, such as the Slack relay or Notes, are Other, 
   assert.deepEqual(sidebar.staged(tabs).map((g) => g.title), ["Idle", "Other"]);
 });
 
+test("a tab between a /loop's ticks is in Loops, after Idle and before Other, and one working is not", () => {
+  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "claude", claude: { sessionId: "s" } };
+  const tabs = [
+    { ...base, id: "@1", index: 1, name: "Calendar", state: "background", loop: { kind: "scheduled", prompt: "/today", at: Date.now() + 60_000 } },
+    { ...base, id: "@2", index: 2, name: "resting", state: "idle" },
+    { ...base, id: "@3", index: 3, name: "Notes", state: "idle", command: "nvim", claude: undefined },
+    { ...base, id: "@4", index: 4, name: "busy", state: "working", loop: { kind: "scheduled", prompt: "/oncall", at: Date.now() + 60_000 } },
+    { ...base, id: "@5", index: 5, name: "reviewing", state: "background", loop: { kind: "review", round: 1 } },
+  ];
+  assert.deepEqual(sidebar.grouped(tabs).map((g) => [g.title, g.tabs.map((x) => x.name)]), [
+    ["Working", ["busy", "reviewing"]],
+    ["Idle", ["resting"]],
+    ["Loops", ["Calendar"]],
+    ["Other", ["Notes"]],
+  ]);
+});
+
 test("a frozen layout keeps each tab in its group and place while states change", () => {
   const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "zsh", claude: { sessionId: "s" } };
   const before = [

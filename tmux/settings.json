@@ -73,13 +73,6 @@
     "default": true
   },
   {
-    "key": "view_activity",
-    "category": "Mission control",
-    "label": "Activity",
-    "description": "Mission control's Activity view: what happened across the tabs, newest first",
-    "default": true
-  },
-  {
     "key": "view_closed",
     "category": "Mission control",
     "label": "Closed tabs",

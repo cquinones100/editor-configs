@@ -1159,46 +1159,9 @@ test("the work map lists every open tab, lines its rows up in columns, and keeps
   assert.ok(!fs.existsSync(done));
 });
 
-test("the activity view puts each event's time first", () => {
-  const section = { title: "Activity", items: [{ title: "worked 3m · finished 7 feed tab", detail: "", state: "attention", time: Date.now() - 120_000 }], loaded: true, builtIn: true, timeFirst: true };
-  const text = sidebar.missionLines({ tabs: [], sections: [section], cols: 80, rows: 10, view: { view: 1, cursor: 0, frame: 0 }, config }).map((line) => line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""));
-  assert.match(text[1], /^\s+2m ● worked 3m · finished 7 feed tab/);
-});
-
-test("the activity feed records what changed across the tabs, newest first, a turn as one line, and keeps it across a restart", () => {
-  fs.rmSync(path.join(sidebar.STATE_DIR, "activity.jsonl"), { force: true });
-  sidebar.resetActivity();
-  const tab = (extra) => ({ id: "@70", index: 7, name: "feed tab", state: "idle", ...extra });
-  sidebar.record([tab({})]);
-  assert.deepEqual(sidebar.activityItems([]), [], "the first look only takes note");
-  sidebar.record([tab({ state: "working", activity: "Run the test suite" })]);
-  sidebar.record([tab({ state: "waiting", wait: "asks: Ship it?" })]);
-  sidebar.record([tab({ state: "done" })]);
-  sidebar.record([tab({ state: "background", pr: "12", checks: { pass: 3, fail: 2, pending: 0 } })]);
-  sidebar.record([tab({ state: "idle", pr: "12", merge: "merged" })]);
-  sidebar.record([tab({ state: "idle", pr: "12", merge: "merged" }), { id: "@71", index: 8, name: "new tab", state: "idle" }]);
-  sidebar.record([{ id: "@71", index: 8, name: "new tab", state: "idle" }]);
-  const feed = (tabs) => sidebar.activityItems(tabs).map((i) => [i.title.replace(/\s+/g, " "), i.detail, i.state]);
-  const expected = [
-    ["closed 7 feed tab", "", "idle"],
-    ["opened 8 new tab", "", "idle"],
-    ["merged 7 feed tab", "#12", "idle"],
-    ["checks failing 7 feed tab", "✗2 on #12", "attention"],
-    ["started working 7 feed tab", "", "active"],
-    ["worked <1m · finished 7 feed tab", "Run the test suite", "attention"],
-    ["waiting on you 7 feed tab", "asks: Ship it?", "attention"],
-  ];
-  assert.deepEqual(feed([]), expected);
-  assert.equal(sidebar.activityItems([{ id: "@71" }])[1].tab?.id, "@71", "an open tab's event goes to it with Enter");
-  // A restart reads them back, and its first look reports nothing new.
-  sidebar.resetActivity();
-  sidebar.record([{ id: "@71", index: 8, name: "new tab", state: "idle" }]);
-  assert.deepEqual(feed([]), expected);
-});
-
 test("the Closed view lists closed tabs newest first, one per conversation (a shell, one per directory), to reopen with their Claude resumed", (t) => {
-  fs.rmSync(path.join(sidebar.STATE_DIR, "activity.jsonl"), { force: true });
-  sidebar.resetActivity();
+  fs.rmSync(path.join(sidebar.STATE_DIR, "closed.jsonl"), { force: true });
+  sidebar.resetClosed();
   const realNow = Date.now;
   t.after(() => (Date.now = realNow));
   const claude = { id: "@80", index: 3, name: "ABC-1: Feat", state: "idle", path: "/work/abc-1", claude: { sessionId: "1234-abcd" } };
@@ -1621,13 +1584,13 @@ test("each mission control view but Settings can be turned off in Settings, the 
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   try {
     fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
-    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_slack: false, view_activity: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
+    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_slack: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
     sidebar.reloadSettings();
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title), ["Settings"]);
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }, { workMap: true }).map((v) => v.title), ["Work map", "Settings"]);
     fs.rmSync(settingsFile);
     sidebar.reloadSettings();
-    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Slack", "Activity", "Closed", "PRs", "Tickets", "Sessions", "Settings"]);
+    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Slack", "Closed", "PRs", "Tickets", "Sessions", "Settings"]);
   } finally {
     fs.rmSync(settingsFile, { force: true });
     sidebar.reloadSettings();

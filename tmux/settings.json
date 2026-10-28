@@ -52,6 +52,13 @@
     "default": true
   },
   {
+    "key": "next_meeting",
+    "category": "Sidebar",
+    "label": "Next meeting",
+    "description": "In the sidebar's notifications, from five minutes before a meeting until ten after it starts: its name, the tickets and PRs it mentions, and Enter or a click to join its call",
+    "default": true
+  },
+  {
     "key": "diff_order",
     "category": "Diff",
     "label": "Files in reading order",

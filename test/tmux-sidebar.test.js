@@ -1401,7 +1401,7 @@ test("mission control's Settings view lists the options by category, / narrows t
     // / then "notif": the Notifications header and its two options, and no other category.
     for (const key of ["/", "n", "o", "t", "i", "f", "Enter"]) await sidebar.missionKey(client, { key });
     const items = sidebar.viewsFor(client)[client.view.view - 1].items;
-    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications"], "the Notifications category, and the Sidebar's Notifications option");
+    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications", "Next meeting"], "the Notifications category, and the Sidebar's options that mention notifications");
     assert.doesNotMatch(plain(sent.at(-1)), /Theme/);
 
     // Enter on an on/off option turns it off, and only what differs from the default is written.
@@ -1769,4 +1769,13 @@ test("the Inbox lists unread Linear mentions, comments and assignments, newest f
     ["2", "Ada assigned it to you", "https://linear.app/x/issue/AB-1", "attention"],
   ], "not a status change, nor one read or snoozed");
   assert.equal(items[0].ticket, "AB-1");
+});
+
+test("a meeting's description gives the tickets and pull requests it names, links first", () => {
+  const refs = sidebar.refsFrom("Agenda: <a href=\"https://linear.app/acme/issue/AB-12/fix-it\">AB-12</a>, https://github.com/o/repo/pull/45 and CD-7; UTF-8 isn't one");
+  assert.deepEqual(refs, [
+    { id: "AB-12", url: "https://linear.app/acme/issue/AB-12/fix-it" },
+    { id: "repo#45", url: "https://github.com/o/repo/pull/45" },
+    { id: "CD-7" },
+  ]);
 });

@@ -1390,7 +1390,7 @@ test("mission control's Settings view lists the options by category, / narrows t
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   fs.rmSync(settingsFile, { force: true });
   const sent = [];
-  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 40, tmuxClient: "none" };
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 60, tmuxClient: "none" };
   try {
     await sidebar.refresh();
     client.view.view = sidebar.viewsFor(client).findIndex((s) => s.title === "Settings") + 1;
@@ -1401,8 +1401,8 @@ test("mission control's Settings view lists the options by category, / narrows t
     // / then "notif": the Notifications header and its two options, and no other category.
     for (const key of ["/", "n", "o", "t", "i", "f", "Enter"]) await sidebar.missionKey(client, { key });
     const items = sidebar.viewsFor(client)[client.view.view - 1].items;
-    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear"]);
-    assert.doesNotMatch(plain(sent.at(-1)), /SIDEBAR|Theme/);
+    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications"], "the Notifications category, and the Sidebar's Notifications option");
+    assert.doesNotMatch(plain(sent.at(-1)), /Theme/);
 
     // Enter on an on/off option turns it off, and only what differs from the default is written.
     await sidebar.missionKey(client, { key: "j" });

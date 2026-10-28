@@ -45,6 +45,13 @@
     "default": true
   },
   {
+    "key": "sidebar_notifications",
+    "category": "Sidebar",
+    "label": "Notifications",
+    "description": "The Notifications block at the bottom of the sidebar: new Slack messages and your Linear inbox, which a click opens in mission control",
+    "default": true
+  },
+  {
     "key": "diff_order",
     "category": "Diff",
     "label": "Files in reading order",

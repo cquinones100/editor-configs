@@ -980,7 +980,7 @@ test("/ filters mission control's cards, and X closes every merged tab and remov
   const other = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
   tmux("setw", "-t", other, "@tab_label", "something else");
   const sent = [];
-  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 120, rows: 30, tmuxClient: "none" };
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 30, tmuxClient: "none" };
   try {
     await sidebar.refresh();
     assert.equal(sidebar.state.tabs.find((x) => x.id === landed).merge, "merged");
@@ -1615,13 +1615,13 @@ test("each mission control view but Settings can be turned off in Settings, the 
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   try {
     fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
-    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_activity: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
+    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_slack: false, view_activity: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
     sidebar.reloadSettings();
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title), ["Settings"]);
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }, { workMap: true }).map((v) => v.title), ["Work map", "Settings"]);
     fs.rmSync(settingsFile);
     sidebar.reloadSettings();
-    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Activity", "Closed", "PRs", "Tickets", "Sessions", "Settings"]);
+    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Slack", "Activity", "Closed", "PRs", "Tickets", "Sessions", "Settings"]);
   } finally {
     fs.rmSync(settingsFile, { force: true });
     sidebar.reloadSettings();
@@ -1643,6 +1643,9 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   const env = { ...process.env, TMUX_SIDEBAR_STATE_DIR: stateDir, SLACK_RELAY_STATE: relayDir };
   const save = path.join(__dirname, "../claude/skills/slack-updates/scripts/save.js");
   const now = Date.now() / 1000;
+  const empty = JSON.parse(execFileSync("node", ["-e", `const { slackView } = require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/slack"))}); console.log(JSON.stringify(slackView([])))`], { env, encoding: "utf8" }));
+  assert.equal(empty.title, "Slack", "there before anything is saved");
+  assert.match(empty.error, /^Nothing saved yet: going to this view opens a Slack tab/);
   const first = execFileSync("node", [save, "--since"], { env, encoding: "utf8" });
   assert.ok(Math.abs(Number(first.trim().split(" ")[1]) - (now - 86400)) < 60, "a day back the first time");
   const items = [

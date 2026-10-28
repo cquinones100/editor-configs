@@ -80,7 +80,8 @@ test("tmux.conf loads without an error, and every binding keeps all its commands
         if (flag === "-T") table = w.shift();
         if (flag === "-N") w.shift();
       }
-      return { table, key: w[0], commands: w.slice(1).filter((x) => x === "\\;").length + 1, line };
+      // A bare ; counts too: tmux reads it as the end of the bind.
+      return { table, key: w[0], commands: w.slice(1).filter((x) => x === "\\;" || x === ";").length + 1, line };
     });
   assert.ok(binds.length > 30, "the binds were read");
 

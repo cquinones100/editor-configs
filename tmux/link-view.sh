@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # A link read in a pane to the right, as the PR (M-v) and ticket (M-i) views
 # show theirs, rather than in the browser: a GitHub pull request as the PR
-# view lays it out, a Linear ticket as the ticket view does, and any other web
-# page as its main text in Markdown (lib/link-view.js), drawn by glow and paged
+# view lays it out, a Linear ticket as the ticket view does, a Notion page or
+# Google Doc as Claude's connector gives it (lib/link-view.js doc), and any
+# other web page as its main text in Markdown (lib/link-view.js), drawn by glow and paged
 # with less. A Slack message can't be read without Claude's connector, so its
 # pane only offers to open it. M-p's "Open the link being read in the
 # browser" opens it, in the Chrome profile its host is given
@@ -85,6 +86,16 @@ case "${1:-}" in
       gh pr view "${BASH_REMATCH[0]}" --json number,title,url,state,isDraft,author,baseRefName,headRefName,body > "$work/pr.json" 2>/dev/null ||
         wait_key "${red}GitHub won't show that PR${reset} (gh)."
       "$here/pr-view.sh" page prepare "$work/pr.json" "$work"
+      exit 0
+    fi
+    # A Notion page, Google Doc or Slides deck: through Claude's connectors,
+    # unless the link_view_docs setting is off.
+    if [[ $url =~ ^https://([a-z0-9-]+\.)?notion\.(so|site|com)/|^https://docs\.google\.com/(document|presentation)/d/ ]] &&
+      [ "$(tmux show -gqv @setting_link_view_docs 2>/dev/null)" != off ]; then
+      printf '\n  %sReading it through Claude'"'"'s connector...%s' "$dim" "$reset"
+      why=$(node "$repo/lib/link-view.js" doc "$url" "$work/page.md" 2>&1 >/dev/null) ||
+        wait_key "${red}Couldn't read it:${reset} ${why:-no answer}. M-p's \"Open the link being read in the browser\" opens it there."
+      "$here/pr-view.sh" page page "$work/page.md" "$work"
       exit 0
     fi
     # Any other page: its main text, as Markdown.

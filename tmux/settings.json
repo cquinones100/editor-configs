@@ -59,6 +59,13 @@
     "default": true
   },
   {
+    "key": "link_view_docs",
+    "category": "Integrations",
+    "label": "Docs in the link view",
+    "description": "The link view reads a Notion page or a Google Doc or Slides deck through Claude's connectors, a headless Haiku fetching it; off, they are read as any other page, which a private one won't let it",
+    "default": true
+  },
+  {
     "key": "diff_order",
     "category": "Diff",
     "label": "Files in reading order",

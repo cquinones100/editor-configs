@@ -21,11 +21,11 @@ Collect what is new for the user on Slack and save it for mission control's Slac
 
    A message found two ways goes in once, under the first of those kinds. Use `include_context: false` and a concise response format to keep the reads small.
 
-4. **Save.** Pipe them to the script as JSON, each with its kind, the channel's ID, where it was (`#channel`, or the person for a DM), the author's ID and name, the text, its `ts`, and its permalink:
+4. **Save.** Pipe them to the script as JSON, each with its kind, the channel's ID, where it was (`#channel`, or the person for a DM), the author's ID and name, the text, its `ts`, its thread's `ts` (`thread`, when it is a reply in a thread; mission control uses it to bring back a message you dismissed when its thread gets a reply), and its permalink:
 
    ```
    node ~/.claude/skills/slack-updates/scripts/save.js <<'EOF'
-   {"items": [{"kind": "mention", "channel": "C…", "where": "#general", "user": "U…", "from": "Ada", "text": "…", "ts": "1761660000.000100", "link": "https://….slack.com/archives/…"}]}
+   {"items": [{"kind": "mention", "channel": "C…", "where": "#general", "user": "U…", "from": "Ada", "text": "…", "ts": "1761660000.000100", "thread": "1761650000.000200", "link": "https://….slack.com/archives/…"}]}
    EOF
    ```
 

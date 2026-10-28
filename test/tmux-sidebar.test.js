@@ -1671,6 +1671,14 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   execFileSync("node", [save], { input: JSON.stringify({ items: [{ kind: "dm", channel: "D9", where: "Bo", user: "U9", from: "Bo", text: "new one", ts: String(Date.now() / 1000) }] }), env });
   const after = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
   assert.deepEqual(after.titles, ["DM Bo · Bo", "↳ Lin · #dev · seen", "@ Ada · #general · seen"]);
+  // x dismisses a message until its thread gets something newer.
+  const slackLib = JSON.stringify(path.join(__dirname, "../lib/sidebar/slack"));
+  execFileSync("node", ["-e", `require(${slackLib}).dismissSlack([{ channel: "C1", ts: "${items[0].ts}" }, { channel: "C3", ts: "${items[3].ts}" }])`], { env });
+  const dismissedNow = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.deepEqual(dismissedNow.titles, ["DM Bo · Bo"]);
+  execFileSync("node", [save], { input: JSON.stringify({ items: [{ kind: "mention", channel: "C1", where: "#general", user: "U5", from: "Cy", text: "a reply", ts: String(Date.now() / 1000), thread: items[0].ts }] }), env });
+  const replied = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.deepEqual(replied.titles, ["@ Cy · #general", "DM Bo · Bo"], "a reply in its thread comes back, the dismissed message itself doesn't");
   const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
   fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ ...saved, checked: Date.now() - 3_600_000 }));
   const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));

@@ -10,7 +10,8 @@
 //
 // new.json: { "items": [{ "kind": "mention" | "dm" | "thread" | "channel",
 //   "channel": "C…", "where": "#general" or a person's name, "user": "U…",
-//   "from": "Ada", "text": "…", "ts": "1761660000.000100",
+//   "from": "Ada", "text": "…", "ts": "1761660000.000100", "thread": the
+//   thread's ts when it is a reply in one,
 //   "link": "https://….slack.com/archives/…" }] }. What the Slack relay posted,
 // or anything in its DM, is left out (its state file names both), as is
 // anything over a day old. At most MAX_ITEMS are kept, newest first.
@@ -63,6 +64,7 @@ const items = (Array.isArray(found?.items) ? found.items : [])
     from: text(i.from, 80),
     text: text(i.text, 400),
     ts: String(i.ts),
+    ...(/^\d+(\.\d+)?$/.test(String(i.thread ?? "")) && { thread: String(i.thread) }),
     ...(https(i.link) && { link: https(i.link) }),
   }));
 

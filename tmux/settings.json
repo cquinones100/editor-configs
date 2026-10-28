@@ -101,6 +101,13 @@
     "default": true
   },
   {
+    "key": "view_inbox",
+    "category": "Mission control",
+    "label": "Inbox",
+    "description": "Mission control's Inbox view and the sidebar's count of it: your unread Linear mentions, comments and assignments, asked of Linear every two minutes #linear",
+    "default": true
+  },
+  {
     "key": "view_ci",
     "category": "Mission control",
     "label": "CI",

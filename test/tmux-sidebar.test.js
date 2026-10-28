@@ -1586,13 +1586,13 @@ test("each mission control view but Settings can be turned off in Settings, the 
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   try {
     fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
-    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_ci: false, view_slack: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
+    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_ci: false, view_inbox: false, view_slack: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
     sidebar.reloadSettings();
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title), ["Settings"]);
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }, { workMap: true }).map((v) => v.title), ["Work map", "Settings"]);
     fs.rmSync(settingsFile);
     sidebar.reloadSettings();
-    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Slack", "Closed", "PRs", "CI", "Tickets", "Sessions", "Settings"]);
+    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Slack", "Closed", "PRs", "CI", "Tickets", "Inbox", "Sessions", "Settings"]);
   } finally {
     fs.rmSync(settingsFile, { force: true });
     sidebar.reloadSettings();
@@ -1750,4 +1750,20 @@ test("the CI view finds a pull request's failing checks and the log line that sa
     "2026-10-28T10:00:04.0000000Z ##[error]Process completed with exit code 1.",
   ].join("\n");
   assert.equal(sidebar.whyFrom(log), "FAIL src/user.test.ts > creates a user", "the tool's own failure, not the runner's");
+});
+
+test("the Inbox lists unread Linear mentions, comments and assignments, newest first, leaving out status changes", () => {
+  const issue = { identifier: "AB-1", title: "Do it", url: "https://linear.app/x/issue/AB-1" };
+  const items = sidebar.inboxFrom([
+    { id: "1", type: "issueStatusChanged", createdAt: "2026-10-28T10:00:00Z", actor: { name: "Ada" }, issue },
+    { id: "2", type: "issueAssignedToYou", createdAt: "2026-10-28T11:00:00Z", actor: { name: "Ada" }, issue },
+    { id: "3", type: "issueCommentMention", createdAt: "2026-10-28T12:00:00Z", actor: { name: "Lin" }, issue, comment: { body: "can you\nlook", url: "https://linear.app/x/issue/AB-1#comment-1" } },
+    { id: "4", type: "issueMention", createdAt: "2026-10-28T13:00:00Z", readAt: "2026-10-28T13:05:00Z", actor: { name: "Bo" }, issue },
+    { id: "5", type: "issueNewComment", createdAt: "2026-10-28T14:00:00Z", snoozedUntilAt: "2999-01-01T00:00:00Z", actor: { name: "Cy" }, issue },
+  ]);
+  assert.deepEqual(items.map((i) => [i.notification, i.detail, i.url, i.state]), [
+    ["3", "Lin mentioned you in a comment: can you look", "https://linear.app/x/issue/AB-1#comment-1", "attention"],
+    ["2", "Ada assigned it to you", "https://linear.app/x/issue/AB-1", "attention"],
+  ], "not a status change, nor one read or snoozed");
+  assert.equal(items[0].ticket, "AB-1");
 });

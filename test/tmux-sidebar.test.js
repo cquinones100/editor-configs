@@ -1222,6 +1222,10 @@ test("the Closed view lists closed tabs newest first, one per conversation (a sh
   ], "each conversation, two in one directory included, and not the tool's window");
   assert.deepEqual(sidebar.closedItems([{ path: "/work/scratch" }]).map((i) => i.title), ["ABC-1: Feat", "ABC-1 older"], "not a shell's directory open again");
   assert.deepEqual(sidebar.closedItems([{ path: "/work/abc-1", claude: { sessionId: "9999" } }]).map((i) => i.title), ["scratch", "ABC-1: Feat"], "not a conversation open again, though a tab in its directory is no reason");
+  // x removes one, older closings of the same conversation with it.
+  sidebar.removeClosed(items[1].closed);
+  assert.deepEqual(sidebar.closedItems([]).map((i) => i.title), ["scratch", "ABC-1 older"]);
+  fs.rmSync(path.join(sidebar.STATE_DIR, "closed-removed.json"), { force: true });
   assert.ok(sidebar.builtInViews(sidebar.state).some((v) => v.title === "Closed"));
 });
 

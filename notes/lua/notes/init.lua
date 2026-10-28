@@ -302,14 +302,10 @@ local function setup_buffer(buf)
   vim.bo[buf].undofile = false
   vim.bo[buf].textwidth = 0
   -- Notes stay on this Mac: no Copilot suggestions, which would send them to
-  -- GitHub, and no completion popup but the one for [[ links.
+  -- GitHub, and no completion popup but the one for [[ links: nvim-cmp isn't
+  -- loaded in the notes app at all (nvim/lua/plugins/lsp.lua), since it set
+  -- its own Ctrl-P on a note each time typing started, over the Format menu's.
   vim.b[buf].copilot_enabled = false
-  -- cmp's setup.buffer acts on the current buffer, which isn't this one when
-  -- the note is opened from the sidebar. Left on, cmp's own Ctrl-P (open its
-  -- list, or move up it) took over the Format menu's in Insert mode.
-  vim.api.nvim_buf_call(buf, function()
-    pcall(function() require("cmp").setup.buffer({ enabled = false }) end)
-  end)
   render.attach(buf)
 
   local map = function(modes, lhs, fn, desc) vim.keymap.set(modes, lhs, fn, { buffer = buf, silent = true, desc = desc }) end

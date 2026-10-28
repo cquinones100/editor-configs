@@ -44,6 +44,9 @@ return {
   },
   {
     "hrsh7th/nvim-cmp",
+    -- Not in the notes app either: cmp sets its own Ctrl-P on a buffer each time
+    -- typing starts there, over the Format menu's, whatever setup.buffer says.
+    cond = not vim.g.notes_app,
     dependencies = {
       "hrsh7th/cmp-nvim-lsp",
       "hrsh7th/cmp-buffer",

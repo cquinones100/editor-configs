@@ -580,14 +580,15 @@ test("the note window numbers its lines relative to the cursor, and the sidebar 
 
 test("completion and Copilot are off in every note, opened at the start or from the sidebar, before its type is set", () => {
   const { result } = lua(`
-    -- A stand-in for nvim-cmp that records the buffer it was turned off in.
-    local off = {}
+    -- nvim-cmp isn't loaded in the notes app at all, so its Ctrl-P never
+    -- takes the Format menu's: its spec in the config is off with g:notes_app.
+    vim.g.notes_app = 1
+    local cmp_spec = vim.tbl_filter(function(spec) return spec[1] == "hrsh7th/nvim-cmp" end, dofile("${path.join(__dirname, "../nvim/lua/plugins/lsp.lua")}"))[1]
     -- File types are detected, as in any real config (-u NONE leaves it off).
     vim.cmd("filetype on")
     -- What a plugin attaching on FileType, as Copilot does, would see.
     local at_filetype = {}
     vim.api.nvim_create_autocmd("FileType", { pattern = "markdown", callback = function(ev) table.insert(at_filetype, vim.b[ev.buf].copilot_enabled == false) end })
-    package.loaded.cmp = { setup = { buffer = function(config) if config.enabled == false then off[vim.api.nvim_get_current_buf()] = true end end } }
     local s = require("notes.store")
     s.create("", "First")
     vim.uv.fs_utime(s.absolute("First.md"), os.time() - 60, os.time() - 60)
@@ -601,13 +602,14 @@ test("completion and Copilot are off in every note, opened at the start or from 
     n.open(s.absolute("First.md"), { stay = true })
     local from_sidebar = vim.api.nvim_win_get_buf(n.note_win)
     io.write(vim.json.encode({
-      start = off[at_start] == true, sidebar = off[from_sidebar] == true, list = off[sb.buf] == true,
+      cmp_loaded = cmp_spec.cond,
+      format_menu = { vim.api.nvim_buf_call(at_start, function() return vim.fn.maparg("<C-p>", "i", false, true).desc end), vim.api.nvim_buf_call(from_sidebar, function() return vim.fn.maparg("<C-p>", "i", false, true).desc end) },
       copilot = vim.b[from_sidebar].copilot_enabled,
       at_filetype = at_filetype,
       undofile = vim.bo[from_sidebar].undofile,
     }))
   `);
-  assert.deepEqual(result, { start: true, sidebar: true, list: false, copilot: false, at_filetype: [true, true], undofile: false });
+  assert.deepEqual(result, { cmp_loaded: false, format_menu: ["Format menu", "Format menu"], copilot: false, at_filetype: [true, true], undofile: false });
 });
 
 test("Ctrl-F lists every note for fzf, newest first, and opens the one picked", () => {

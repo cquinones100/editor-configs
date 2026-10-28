@@ -653,7 +653,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | `h` `l` | back out / go to the tab | move left or right |
 | `Enter` | go into the chosen tab's pane | go to the chosen tab, or open the item |
 | `1`–`9` | put the cursor on that tab, in its sidebar (Enter goes in) | choose that tab |
-| `p` or `:` | the `M-p` palette, in the chosen tab | the same |
+| `p` or `:` | — | the `M-p` palette, in the chosen tab |
 | `n` | a new tab running Claude in the chosen tab's directory, as `M-t` opens one | |
 | `d` `L` | the chosen tab's diff (diffview, as `M-d` there) or lazygit, in its place there, as `M-p` opens them | the same; on a Work map row with no tab, in a popup in its worktree |
 | any bound Alt or Ctrl key | runs in the chosen tab | runs in the chosen tab |

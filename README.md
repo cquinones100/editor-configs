@@ -6,7 +6,7 @@ It is opinionated: the defaults are how it is meant to be used, and Settings (`M
 
 ## Requirements
 
-- macOS, with zsh as your shell
+- macOS, with zsh as your shell. Linux isn't supported yet: the scripts use pbcopy, osascript, open and the Keychain, and `setup.sh` stops at its first check there.
 - [Homebrew](https://brew.sh)
 - A terminal that passes Option through as Alt and shows 24-bit color: [Ghostty](https://ghostty.org) (`brew install --cask ghostty`; setup links its config) or iTerm2 with the Option keys set to Esc+. Terminal.app does neither.
 - [Claude Code](https://claude.com/claude-code), which every tab runs: `curl -fsSL https://claude.ai/install.sh | bash`

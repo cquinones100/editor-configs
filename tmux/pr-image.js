@@ -5,7 +5,15 @@
 // tmux/pane-in-place.sh in place of the pane it is asked from, from the M-p
 // palette, with passthrough on for that pane alone.
 //
-//   pr-image.js [<dir>]   the PR of <dir>'s branch (default: the current directory)
+//   pr-image.js [<dir>]          the PR of <dir>'s branch (default: the current directory)
+//   pr-image.js --ticket <ID>    Linear ticket <ID> (M-p, in place of the pane, as the PR)
+//
+// A ticket comes from Linear's API, with the key the ticket scripts use
+// (LINEAR_API_KEY, else the Keychain's linear-api-key, else
+// worktree-from-ticket's linearApiKey): its title and the facts from its side
+// panel, its description, sub-issues and comments, the Markdown drawn in the
+// page by marked and cleaned by DOMPurify, since unlike GitHub's HTML nothing
+// has made it safe, then laid out and paged as a PR is.
 //
 // The description comes as GitHub renders it (the pull request's body_html,
 // read with a GET, so links, mentions and checklists are GitHub's own), into a
@@ -31,6 +39,8 @@ const path = require("node:path");
 
 const CSS = "https://cdn.jsdelivr.net/npm/github-markdown-css@5.8.1/github-markdown-dark.css";
 const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
+const MARKED = "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js";
+const PURIFY = "https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js";
 // How many device pixels to a CSS pixel: two on a Retina screen.
 const DPR = 2;
 
@@ -53,19 +63,31 @@ const puppeteer = () => {
 
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-// GitHub's HTML, Mermaid blocks turned back into their source for Mermaid to draw.
-const pageFor = (pr, html, width) => {
+// The page: a heading (title, then its number or ID dimmed), a line of facts,
+// and the body: GitHub's HTML, Mermaid blocks turned back into their source
+// for Mermaid to draw, or, for a ticket, Markdown sources, each drawn into the
+// element whose data-md names it.
+const pageFor = ({ title, number, meta, html = "", markdown = [] }, width) => {
   // GitHub wraps a diagram's source in a section its own viewer fills in.
   const diagrams = html.replace(/<section[^>]*data-type="mermaid"[^>]*>[\s\S]*?<pre lang="mermaid"[^>]*>([\s\S]*?)<\/pre>[\s\S]*?<\/section>/g, (_, inner) => `<pre class="mermaid">${inner}</pre>`);
   return `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="${CSS}">
 <style>body { background: #0d1117; margin: 0; } .markdown-body { box-sizing: border-box; width: ${width}px; padding: 24px; font-size: 14px; } pre.mermaid { background: transparent; }</style>
 </head><body><article class="markdown-body">
-<h1>${escapeHtml(pr.title)} <span style="color:#7d8590">#${pr.number}</span></h1>
-<p><em>${pr.isDraft ? "Draft" : pr.state} · ${escapeHtml(pr.author?.login ?? "")} wants to merge <code>${escapeHtml(pr.headRefName)}</code> into <code>${escapeHtml(pr.baseRefName)}</code></em></p>
+<h1>${escapeHtml(title)} <span style="color:#7d8590">${escapeHtml(number)}</span></h1>
+<p><em>${meta}</em></p>
 ${diagrams}
 </article>
+<script type="application/json" id="markdown">${JSON.stringify(markdown).replace(/</g, "\\u003c")}</script>
+<script src="${MARKED}"></script>
+<script src="${PURIFY}"></script>
 <script src="${MERMAID}"></script>
-<script>mermaid.initialize({ startOnLoad: false, theme: "dark" }); mermaid.run().finally(() => { document.body.dataset.done = "1"; });</script>
+<script>
+const sources = JSON.parse(document.getElementById("markdown").textContent);
+// In the element's place, so its paragraphs are the page's own blocks, which pages break between.
+document.querySelectorAll("[data-md]").forEach((el) => { const t = document.createElement("template"); t.innerHTML = DOMPurify.sanitize(marked.parse(sources[Number(el.dataset.md)] ?? "")); el.replaceWith(t.content); });
+document.querySelectorAll("pre > code.language-mermaid").forEach((code) => { const pre = document.createElement("pre"); pre.className = "mermaid"; pre.textContent = code.textContent; code.parentElement.replaceWith(pre); });
+mermaid.initialize({ startOnLoad: false, theme: "dark" }); mermaid.run().finally(() => { document.body.dataset.done = "1"; });
+</script>
 </body></html>`;
 };
 
@@ -169,24 +191,88 @@ const cellSize = () =>
     process.stdout.write("\x1b[16t");
   });
 
+// The Linear API key, as the ticket scripts find it.
+const linearKey = () => {
+  if (process.env.LINEAR_API_KEY) return process.env.LINEAR_API_KEY;
+  try {
+    return execFileSync("security", ["find-generic-password", "-s", "linear-api-key", "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {}
+  try {
+    return JSON.parse(fs.readFileSync(path.join(os.homedir(), ".config/worktree-from-ticket/config.json"), "utf8")).linearApiKey;
+  } catch {
+    return undefined;
+  }
+};
+
+const TICKET_QUERY = `query($id: String!) { issue(id: $id) {
+  identifier title description priorityLabel
+  state { name } assignee { name } project { name } labels { nodes { name } }
+  children { nodes { identifier title state { name } } }
+  comments(first: 100) { nodes { body createdAt user { name } botActor { name } } }
+} }`;
+
+// A ticket as the page's parts, or a reason it can't be.
+const ticketPage = async (id) => {
+  const key = linearKey();
+  if (!key) return { error: "No Linear API key: set LINEAR_API_KEY, or store it in the Keychain as linear-api-key." };
+  let issue;
+  try {
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: key },
+      body: JSON.stringify({ query: TICKET_QUERY, variables: { id } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = await res.json();
+    issue = body.data?.issue;
+    if (!issue) return { error: `Linear has no ticket ${id} (${body.errors?.[0]?.message ?? "no answer"}).` };
+  } catch {
+    return { error: "Could not reach Linear." };
+  }
+  const markdown = [issue.description || "_No description._"];
+  const facts = [issue.state?.name, issue.assignee?.name ?? "Unassigned", issue.priorityLabel, issue.project?.name, ...issue.labels.nodes.map((l) => l.name)].filter(Boolean);
+  const children = issue.children.nodes.length
+    ? `<h2>Sub-issues</h2><ul>${issue.children.nodes.map((c) => `<li><code>${escapeHtml(c.identifier)}</code> ${escapeHtml(c.title)} <span style="color:#7d8590">${escapeHtml(c.state?.name ?? "")}</span></li>`).join("")}</ul>`
+    : "";
+  const comments = [...issue.comments.nodes].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  const thread = comments.length
+    ? `<h2>Comments</h2>${comments.map((c) => {
+        markdown.push(c.body ?? "");
+        const who = c.user?.name ?? c.botActor?.name ?? "Someone";
+        return `<h4>${escapeHtml(who)} <span style="color:#7d8590">${new Date(c.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></h4><div data-md="${markdown.length - 1}"></div>`;
+      }).join("")}`
+    : "";
+  return { title: issue.title, number: issue.identifier, meta: facts.map(escapeHtml).join(" · "), html: `<div data-md="0"></div>${children}${thread}`, markdown };
+};
+
 const main = async () => {
-  const dir = path.resolve(process.argv[2] ?? process.cwd());
+  const ticket = process.argv[2] === "--ticket" ? process.argv[3] : undefined;
+  const dir = path.resolve(ticket ? process.cwd() : process.argv[2] ?? process.cwd());
   // Taken first, before anything else reads the keyboard. A guess at a
   // 13-point font when the terminal doesn't say.
   let cell = (await cellSize()) ?? { w: 16, h: 34 };
-  process.stdout.write("\n  \x1b[38;5;244mReading the PR…\x1b[0m");
-  let pr;
-  try {
-    pr = JSON.parse(execFileSync("gh", ["pr", "view", "--json", "number,title,url,state,isDraft,author,baseRefName,headRefName,body"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }));
-  } catch {
-    return fail("No PR for this branch.");
-  }
-  const repo = /github\.com\/([^/]+\/[^/]+)\/pull/.exec(pr.url)?.[1];
-  let html;
-  try {
-    html = execFileSync("gh", ["api", "-H", "Accept: application/vnd.github.full+json", `repos/${repo}/pulls/${pr.number}`, "--jq", ".body_html // \"\""], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 16 * 1024 * 1024 });
-  } catch {
-    return fail("Couldn't read the description as GitHub renders it.");
+  process.stdout.write(`\n  \x1b[38;5;244mReading the ${ticket ? "ticket" : "PR"}…\x1b[0m`);
+  let parts;
+  if (ticket) {
+    if (!/^[A-Za-z][A-Za-z0-9]*-\d+$/.test(ticket)) return fail("That isn't a Linear ticket ID.");
+    parts = await ticketPage(ticket.toUpperCase());
+    if (parts.error) return fail(parts.error);
+  } else {
+    let pr;
+    try {
+      pr = JSON.parse(execFileSync("gh", ["pr", "view", "--json", "number,title,url,state,isDraft,author,baseRefName,headRefName,body"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }));
+    } catch {
+      return fail("No PR for this branch.");
+    }
+    const repo = /github\.com\/([^/]+\/[^/]+)\/pull/.exec(pr.url)?.[1];
+    let html;
+    try {
+      html = execFileSync("gh", ["api", "-H", "Accept: application/vnd.github.full+json", `repos/${repo}/pulls/${pr.number}`, "--jq", ".body_html // \"\""], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 16 * 1024 * 1024 });
+    } catch {
+      return fail("Couldn't read the description as GitHub renders it.");
+    }
+    const meta = `${pr.isDraft ? "Draft" : pr.state} · ${escapeHtml(pr.author?.login ?? "")} wants to merge <code>${escapeHtml(pr.headRefName)}</code> into <code>${escapeHtml(pr.baseRefName)}</code>`;
+    parts = { title: pr.title, number: `#${pr.number}`, meta, html };
   }
   const lib = puppeteer();
   if (!lib) return fail("This needs mermaid-cli's puppeteer: pnpm add -g @mermaid-js/mermaid-cli");
@@ -207,7 +293,7 @@ const main = async () => {
     return { cols, rows, width: Math.max(480, Math.floor((cols * cell.w) / DPR)), pageHeight: Math.max(100, Math.floor((rows * cell.h) / DPR)) };
   };
   let view = size();
-  fs.writeFileSync(file, pageFor(pr, html, view.width));
+  fs.writeFileSync(file, pageFor(parts, view.width));
   const browser = await lib.launch({ headless: true });
   const page = await browser.newPage();
   await page.setViewport({ width: view.width, height: 800, deviceScaleFactor: DPR });

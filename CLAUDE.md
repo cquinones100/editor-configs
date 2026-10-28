@@ -200,7 +200,7 @@ description as GitHub does (its `body_html`, read with a GET, GitHub's
 stylesheet, Mermaid in mermaid-cli's headless Chrome) and shows it a page at a
 time as images, through tmux's passthrough for that pane alone. It opens in
 place of the pane, as `M-d`'s diff does (`pane-in-place.sh`'s `pr-image`), and
-`q` or asking for it again puts the pane back.
+`q` or asking for it again puts the pane back. M-p's "View the branch's Linear ticket as an image" is the same script with `--ticket <ID>` (`pane-in-place.sh`'s `ticket-image`, the ID from the branch or the tab's name as `M-i` finds it): the ticket from Linear's API, its facts, description, sub-issues and comments, the Markdown drawn in the page by marked and cleaned by DOMPurify, both pinned by version, since nothing has made Linear's Markdown safe the way GitHub's `body_html` is.
 
 `M-r` and `M-p`'s "Open the repository in the browser" go through `tmux/gh-open.sh`, which opens GitHub's page for the branch's PR or the repository, or else says in a box which any key closes why it can't: not a git repository, no remote on GitHub, `gh` missing or signed out, a repository GitHub doesn't have or won't show you, or a branch with no PR yet. tmux's own message for a failed `run-shell` says only that it returned 1, so anything else that opens a page from a binding should say why it can't the same way.
 

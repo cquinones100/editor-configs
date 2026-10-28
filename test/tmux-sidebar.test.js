@@ -1627,3 +1627,11 @@ test("each mission control view but Settings can be turned off in Settings, the 
     sidebar.reloadSettings();
   }
 });
+
+test("v and a view's name lights that view in mission control's bar, and says what is typed", () => {
+  const sections = [{ title: "Work map", items: [], loaded: true }, { title: "Calendar", items: [], loaded: true, calendar: true, today: false, day: { date: "2020-01-01" } }];
+  const lines = sidebar.missionLines({ tabs: [], sections, cols: 160, rows: 10, view: { view: 0, cursor: 0, frame: 0, jump: { text: "cal", match: 2 } }, config: {} });
+  assert.match(lines[0], /\x1b\[48;5;220m[^ ]*\x1b\[38;5;232m\x1b\[1m Calendar 0 /, "Calendar lit");
+  assert.match(lines[0].replace(/\x1b\[[0-9;]*m/g, ""), /view: cal▏/);
+  assert.match(lines.at(-1).replace(/\x1b\[[0-9;]*m/g, ""), /type a view's name {2}↵ go there {2}esc cancel/);
+});

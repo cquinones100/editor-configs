@@ -1635,3 +1635,36 @@ test("v and a view's name lights that view in mission control's bar, and says wh
   assert.match(lines[0].replace(/\x1b\[[0-9;]*m/g, ""), /view: cal▏/);
   assert.match(lines.at(-1).replace(/\x1b\[[0-9;]*m/g, ""), /type a view's name {2}↵ go there {2}esc cancel/);
 });
+
+test("the Slack view lists what /slack-updates saved, newest first, without the relay's own messages, and says when it is out of date", () => {
+  const stateDir = fs.mkdtempSync(path.join(tmp, "slack-"));
+  const relayDir = fs.mkdtempSync(path.join(tmp, "relay-"));
+  fs.writeFileSync(path.join(relayDir, "state.json"), JSON.stringify({ dm: { channel: "DRELAY", bot: "UBOT" } }));
+  const env = { ...process.env, TMUX_SIDEBAR_STATE_DIR: stateDir, SLACK_RELAY_STATE: relayDir };
+  const save = path.join(__dirname, "../claude/skills/slack-updates/scripts/save.js");
+  const now = Date.now() / 1000;
+  const first = execFileSync("node", [save, "--since"], { env, encoding: "utf8" });
+  assert.ok(Math.abs(Number(first.trim().split(" ")[1]) - (now - 86400)) < 60, "a day back the first time");
+  const items = [
+    { kind: "mention", channel: "C1", where: "#general", user: "U1", from: "Ada", text: "can you look\nat this", ts: String(now - 60), link: "https://x.slack.com/archives/C1/p1" },
+    { kind: "dm", channel: "DRELAY", where: "relay", user: "U2", from: "Me", text: "editor configs: tests failed", ts: String(now - 30) },
+    { kind: "channel", channel: "C2", where: "#ops", user: "UBOT", from: "relay bot", text: "notice", ts: String(now - 20) },
+    { kind: "thread", channel: "C3", where: "#dev", user: "U3", from: "Lin", text: "replied", ts: String(now - 10), link: "javascript:alert(1)" },
+    { kind: "dm", channel: "D4", where: "Old", user: "U4", from: "Old", text: "stale", ts: String(now - 2 * 86400) },
+  ];
+  execFileSync("node", [save], { input: JSON.stringify({ items }), env });
+  execFileSync("node", [save], { input: JSON.stringify({ items: [items[0]] }), env });
+  const script = `
+    const { slackView, slackStale } = require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/slack"))});
+    const view = slackView([]);
+    console.log(JSON.stringify({ titles: view.items.map((i) => i.title), urls: view.items.map((i) => i.url ?? null), details: view.items.map((i) => i.detail), error: view.error ?? null }));`;
+  const out = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.deepEqual(out.titles, ["↳ Lin · #dev", "@ Ada · #general"], "newest first, once each, no relay DM or bot, nothing over a day old");
+  assert.deepEqual(out.urls, [null, "https://x.slack.com/archives/C1/p1"], "only https links");
+  assert.equal(out.details[1], "can you look at this");
+  assert.equal(out.error, null);
+  const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
+  fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ ...saved, checked: Date.now() - 3_600_000 }));
+  const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.match(old.error, /^Out of date, last looked 1h ago: opening a Slack tab to catch up\.$/);
+});

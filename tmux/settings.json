@@ -66,6 +66,13 @@
     "default": true
   },
   {
+    "key": "view_slack",
+    "category": "Mission control",
+    "label": "Slack",
+    "description": "Mission control's Slack view: your mentions, DMs, thread replies and chosen channels from the last day, as /slack-updates saved them",
+    "default": true
+  },
+  {
     "key": "view_activity",
     "category": "Mission control",
     "label": "Activity",

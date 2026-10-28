@@ -214,9 +214,9 @@ place of the pane, as `M-d`'s diff does (`pane-in-place.sh`'s `pr-image`), and
 
 `test/tmux-conf.test.js` loads `tmux.conf` into a throwaway server and checks it loads without an error and that every `bind` runs as many commands as the file gives it, which a `\;` that lost its backslash breaks silently. The file skips what reaches beyond that server (starting the sidebar daemon, the plugins, the theme) while `@conf_check` is set, inside `%if`; anything new it runs at load belongs inside one too.
 
-## The Calendar view
+## The Calendar and Slack views
 
-Mission control's Calendar view (`lib/sidebar/calendar.js`) draws the day `/today` last saved with its `scripts/save.js` to `~/.local/state/tmux-sidebar/calendar.json`, since the daemon can't reach the Google Calendar connector; a change to the file's shape belongs in both. The Calendar tab is opened by `tmux/calendar-open.sh`, which `M-p`'s command runs and the daemon runs with `--background` when the saved day is out of date and no tab is keeping it, at most every ten minutes.
+Mission control's Calendar view (`lib/sidebar/calendar.js`) draws the day `/today` last saved with its `scripts/save.js` to `~/.local/state/tmux-sidebar/calendar.json`, since the daemon can't reach the Google Calendar connector; a change to the file's shape belongs in both. The Calendar tab is opened by `tmux/loop-tab.sh Calendar 30m /today`, which `M-p`'s command runs and the daemon runs with `--background` when the saved day is out of date and no tab is keeping it, at most every ten minutes. The Slack view (`lib/sidebar/slack.js`) works the same way, from what `/slack-updates` saves with its `scripts/save.js` to `slack.json` beside it, its tab opened by `loop-tab.sh Slack 5m /slack-updates`; that script drops anything in the relay's DM or from its bot, as named in the relay's state file, and going to the view types `/slack-updates` into the Slack tab's Claude while it sits between ticks (`slackNow` in the daemon). The skill only reads Slack.
 
 ## Context use, for the sidebar
 

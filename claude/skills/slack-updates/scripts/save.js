@@ -1,0 +1,79 @@
+#!/usr/bin/env node
+// Keeps what is new for you on Slack for mission control's Slack view
+// (lib/sidebar/slack.js), which can't reach Slack itself:
+// ~/.local/state/tmux-sidebar/slack.json, written to a temporary file and
+// renamed into place, then the sidebar is nudged to draw it. Plain Node.
+//
+//   node save.js --since    prints when to look back to: the last look, or a
+//                           day ago the first time (ISO 8601, and the Unix time)
+//   node save.js < new.json  adds what this look found and marks the look
+//
+// new.json: { "items": [{ "kind": "mention" | "dm" | "thread" | "channel",
+//   "channel": "C…", "where": "#general" or a person's name, "user": "U…",
+//   "from": "Ada", "text": "…", "ts": "1761660000.000100",
+//   "link": "https://….slack.com/archives/…" }] }. What the Slack relay posted,
+// or anything in its DM, is left out (its state file names both), as is
+// anything over a day old. At most MAX_ITEMS are kept, newest first.
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const dir = process.env.TMUX_SIDEBAR_STATE_DIR || path.join(os.homedir(), ".local/state/tmux-sidebar");
+const file = path.join(dir, "slack.json");
+const KEEP_MS = 24 * 60 * 60_000;
+const MAX_ITEMS = 300;
+const KINDS = ["mention", "dm", "thread", "channel"];
+
+const read = (p) => {
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {
+    return undefined;
+  }
+};
+const saved = read(file) ?? { items: [] };
+
+if (process.argv[2] === "--since") {
+  const since = Number(saved.checked) || Date.now() - KEEP_MS;
+  console.log(`${new Date(since).toISOString()} ${Math.floor(since / 1000)}`);
+  process.exit(0);
+}
+
+let found;
+try {
+  found = JSON.parse(fs.readFileSync(0, "utf8"));
+} catch (err) {
+  console.error(`Not JSON: ${err.message}`);
+  process.exit(1);
+}
+const relay = read(path.join(process.env.SLACK_RELAY_STATE ?? path.join(os.homedir(), ".local/state/slack-relay"), "state.json"))?.dm ?? {};
+const text = (value, max) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+const https = (url) => (typeof url === "string" && /^https:\/\/[^\s]+$/.test(url) ? url : undefined);
+const items = (Array.isArray(found?.items) ? found.items : [])
+  .filter((i) => i && KINDS.includes(i.kind) && /^\d+(\.\d+)?$/.test(String(i.ts ?? "")))
+  .filter((i) => !(relay.channel && i.channel === relay.channel) && !(relay.bot && i.user === relay.bot))
+  .map((i) => ({
+    kind: i.kind,
+    channel: text(i.channel, 40),
+    where: text(i.where, 80),
+    user: text(i.user, 40),
+    from: text(i.from, 80),
+    text: text(i.text, 400),
+    ts: String(i.ts),
+    ...(https(i.link) && { link: https(i.link) }),
+  }));
+
+const key = (i) => `${i.channel}:${i.ts}`;
+const now = Date.now();
+const merged = new Map([...saved.items, ...items].map((i) => [key(i), i]));
+const kept = [...merged.values()]
+  .filter((i) => now - Number(i.ts) * 1000 < KEEP_MS)
+  .sort((a, b) => Number(b.ts) - Number(a.ts))
+  .slice(0, MAX_ITEMS);
+
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(`${file}.tmp`, JSON.stringify({ checked: now, items: kept }));
+fs.renameSync(`${file}.tmp`, file);
+fs.appendFileSync(path.join(dir, "nudge"), "\n");
+console.log(`Saved ${items.length} new, ${kept.length} in the last day.`);

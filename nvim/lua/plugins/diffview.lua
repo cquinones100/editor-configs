@@ -367,12 +367,15 @@ local function wrap_set_file(view)
   end
 end
 
--- Quieter highlighting, in diffview's windows only, so what changed stands
--- out: a changed line gets no tint, only its changed words do (the
--- colourscheme's DiffText); added and removed lines a faint one, a quarter of
--- the colourscheme's own, over the background; and the gap where the other
--- side has no lines is left blank rather than hatched. Worked out again when
--- the colourscheme changes.
+-- Git's own colors, in diffview's windows only, whatever the colorscheme,
+-- as GitHub shows a diff: on the left every line that changed or went is
+-- tinted red, on the right every line that changed or came is tinted green,
+-- and the words that changed within a line stand out in a stronger shade of
+-- the same; the gap where the other side has no lines is left blank rather
+-- than hatched. Both are mixed over the terminal's background
+-- (vim.g.ghostty_background, colors/ghostty.lua), so they read on a dark or
+-- light theme. Worked out again when the colorscheme changes.
+local ADDED, REMOVED = 0x2ea043, 0xf85149
 local function blend(fg, bg, amount)
   local function channel(c, shift) return math.floor(c / 2 ^ shift) % 256 end
   local mix = 0
@@ -382,15 +385,17 @@ local function blend(fg, bg, amount)
   return mix
 end
 
--- Syntax groups that paint a background of their own, as tokyonight does for
+-- Syntax groups that paint a background of their own, as some colorschemes do for
 -- a Markdown heading or inline code: in a diff those read as more
 -- highlighting, so there each is drawn by a copy without its background,
 -- keeping its colour. Found again with every colourscheme.
 local unpainted = {}
 
 local function minimal_highlights()
-  -- tokyonight is transparent, with no Normal background, so its storm one.
-  local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg or 0x24283b
+  -- Normal is transparent, so the terminal's background, as the colorscheme read it.
+  local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg
+    or (vim.g.ghostty_background and tonumber(vim.g.ghostty_background:sub(2), 16))
+    or (vim.o.background == "light" and 0xffffff or 0x1d1f21)
   unpainted = {}
   for name in pairs(vim.api.nvim_get_hl(0, {})) do
     local hl = vim.api.nvim_get_hl(0, { name = name, link = false })
@@ -401,26 +406,26 @@ local function minimal_highlights()
       table.insert(unpainted, name .. ":" .. copy)
     end
   end
-  local function faint(name)
-    local bg = vim.api.nvim_get_hl(0, { name = name, link = false }).bg
-    return bg and { bg = blend(bg, normal, 0.25) } or {}
-  end
-  vim.api.nvim_set_hl(0, "DiffviewMinimalAdd", faint("DiffAdd"))
-  vim.api.nvim_set_hl(0, "DiffviewMinimalDelete", faint("DiffDelete"))
-  vim.api.nvim_set_hl(0, "DiffviewMinimalChange", {})
-  vim.api.nvim_set_hl(0, "DiffviewMinimalText", { link = "DiffText" })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalAdd", { bg = blend(ADDED, normal, 0.22) })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalAddText", { bg = blend(ADDED, normal, 0.5) })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalDelete", { bg = blend(REMOVED, normal, 0.22) })
+  vim.api.nvim_set_hl(0, "DiffviewMinimalDeleteText", { bg = blend(REMOVED, normal, 0.5) })
   vim.api.nvim_set_hl(0, "DiffviewMinimalFiller", { fg = normal, bg = normal })
 end
 
--- Per side: Vim calls a line only one side has an addition on that side, so
--- on the left (the old side, diffview's "a") it is a removed line, and on the
--- right an added one. The gap facing it (DiffDelete) is blank on both.
+-- Per side: Vim calls a line only one side has an addition on that side, and
+-- a line both have but that differs a change on both, so on the left (the old
+-- side, diffview's "a") both are red and on the right both green, the
+-- changed words (DiffText) in the stronger shade. The gap facing a line
+-- (DiffDelete) is blank on both.
 local function minimal_for(side)
+  local line, words = "DiffviewMinimalAdd", "DiffviewMinimalAddText"
+  if side == "a" then line, words = "DiffviewMinimalDelete", "DiffviewMinimalDeleteText" end
   return table.concat({
-    side == "a" and "DiffAdd:DiffviewMinimalDelete" or "DiffAdd:DiffviewMinimalAdd",
+    "DiffAdd:" .. line,
+    "DiffChange:" .. line,
+    "DiffText:" .. words,
     "DiffDelete:DiffviewMinimalFiller",
-    "DiffChange:DiffviewMinimalChange",
-    "DiffText:DiffviewMinimalText",
     unpack(unpainted),
   }, ",")
 end

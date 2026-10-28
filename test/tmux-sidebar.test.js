@@ -1572,12 +1572,13 @@ test("Enter on a board's PR or ticket offers what to do with it, and each item s
   assert.deepEqual(prs.flatMap((c) => c.items)[0].pr, { number: 7, repo: "o/r" });
   const tickets = sidebar.ticketsFrom([{ identifier: "AB-1", title: "Do it", url: "https://linear.app/x/issue/AB-1", priority: 0, state: { name: "Todo", type: "unstarted" }, project: null, updatedAt: "2026-10-01T00:00:00Z" }]);
   assert.equal(tickets.flatMap((c) => c.items)[0].ticket, "AB-1");
-  const lines = sidebar.chooseLines({ title: "AB-1 Do it", choices: [{ key: "w", label: "Start work on it in a new tab (wt)" }, { key: "o", label: "Open it in the browser" }], cursor: 1 }, 60, 10)
-    .map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
-  assert.equal(lines.length, 10);
-  assert.match(lines[1], /AB-1 Do it/);
-  assert.match(lines[3], /^ {4}w {2}Start work on it in a new tab \(wt\)/);
-  assert.match(lines[4], /^ {4}o {2}Open it in the browser/);
+  const modal = sidebar.chooseModal({ title: "AB-1 Do it", choices: [{ key: "w", label: "Start work on it in a new tab (wt)" }, { key: "o", label: "Open it in the browser" }], cursor: 1 }, 100, 30);
+  const placed = [...modal.matchAll(/\x1b\[(\d+);(\d+)H([^\x1b]*(?:\x1b\[[0-9;]*m[^\x1b]*)*)/g)].map((m) => [Number(m[1]), Number(m[2]), m[3].replace(/\x1b\[[0-9;]*m/g, "")]);
+  assert.equal(placed.length, 6, "a box of its own lines, the view left around it");
+  assert.ok(placed.every(([row, col]) => row > 1 && col > 1), "set in, not over the whole frame");
+  assert.match(placed[0][2], /AB-1 Do it/);
+  assert.match(placed[1][2], /w {2}Start work on it in a new tab \(wt\)/);
+  assert.match(placed[2][2], /o {2}Open it in the browser/);
 });
 
 test("each mission control view but Settings can be turned off in Settings, the Work map staying for M-j and M-o", () => {

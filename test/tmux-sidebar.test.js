@@ -1586,13 +1586,13 @@ test("each mission control view but Settings can be turned off in Settings, the 
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   try {
     fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
-    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_slack: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
+    fs.writeFileSync(settingsFile, JSON.stringify({ view_work_map: false, view_ci: false, view_slack: false, view_closed: false, view_sessions: false, view_calendar: false, pr_board: false, ticket_board: false }));
     sidebar.reloadSettings();
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title), ["Settings"]);
     assert.deepEqual(sidebar.builtInViews({ tabs: [] }, { workMap: true }).map((v) => v.title), ["Work map", "Settings"]);
     fs.rmSync(settingsFile);
     sidebar.reloadSettings();
-    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Slack", "Closed", "PRs", "Tickets", "Sessions", "Settings"]);
+    assert.deepEqual(sidebar.builtInViews({ tabs: [] }).map((v) => v.title).filter((t) => t !== "Calendar"), ["Work map", "Slack", "Closed", "PRs", "CI", "Tickets", "Sessions", "Settings"]);
   } finally {
     fs.rmSync(settingsFile, { force: true });
     sidebar.reloadSettings();
@@ -1728,4 +1728,24 @@ test("Enter on an item in a built-in view offers its actions as a menu, its usua
   assert.deepEqual(client.choose.choices.map((c) => [c.key, c.label]), [["r", "Reopen it, resuming its Claude"], ["x", "Remove it from this list"], ["y", "Copy its directory"]]);
   await sidebar.missionKey(client, { key: "Escape" });
   assert.equal(client.choose, undefined, "any other key closes it");
+});
+
+test("the CI view finds a pull request's failing checks and the log line that says why", () => {
+  const pr = { commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [
+    { __typename: "CheckRun", name: "lint", conclusion: "SUCCESS", detailsUrl: "https://github.com/o/r/actions/runs/1/job/10" },
+    { __typename: "CheckRun", name: "test", conclusion: "FAILURE", detailsUrl: "https://github.com/o/r/actions/runs/1/job/11" },
+    { __typename: "StatusContext", context: "deploy/preview", state: "ERROR", targetUrl: "https://ci.example/2" },
+  ] } } } }] } };
+  assert.deepEqual(sidebar.failingOf(pr), [
+    { name: "test", url: "https://github.com/o/r/actions/runs/1/job/11", job: "11" },
+    { name: "deploy/preview", url: "https://ci.example/2", job: undefined },
+  ]);
+  const log = [
+    "2026-10-28T10:00:00.0000000Z \x1b[36mRunning tests\x1b[0m",
+    "2026-10-28T10:00:01.0000000Z some error happened in a dependency, ignored",
+    "2026-10-28T10:00:02.0000000Z FAIL src/user.test.ts > creates a user",
+    "2026-10-28T10:00:03.0000000Z  ELIFECYCLE  Command failed with exit code 1.",
+    "2026-10-28T10:00:04.0000000Z ##[error]Process completed with exit code 1.",
+  ].join("\n");
+  assert.equal(sidebar.whyFrom(log), "FAIL src/user.test.ts > creates a user", "the tool's own failure, not the runner's");
 });

@@ -101,6 +101,13 @@
     "default": true
   },
   {
+    "key": "view_ci",
+    "category": "Mission control",
+    "label": "CI",
+    "description": "Mission control's CI view: your pull requests with failing checks and why, asked of GitHub every two minutes #github",
+    "default": true
+  },
+  {
     "key": "second_status",
     "category": "Tabs and status bar",
     "label": "Second status line",

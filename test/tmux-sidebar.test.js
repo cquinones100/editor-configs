@@ -852,7 +852,8 @@ test("a waiting tab is answered from mission control: its options shown, a numbe
     await sidebar.missionKey(client, { key: "a" });
     assert.equal(client.answering.found.question, "Do you want to proceed?");
     assert.deepEqual(client.answering.found.options.map((o) => o.label), ["Yes", "No, and tell Claude what to do differently"]);
-    assert.match(plain(sent.at(-1)), /ANSWER .*Do you want to proceed\?.*1 +Yes.*2 +No/s);
+    // A box over the view, the tabs still in sight around it.
+    assert.match(plain(sent.at(-1)), /MISSION CONTROL.*╭─ Answer \d+ .*Do you want to proceed\?.*1 +Yes.*2 +No/s);
 
     await sidebar.missionKey(client, { key: "2" });
     assert.ok(await until(() => tmux("capture-pane", "-p", "-t", pane).includes("2")), "2 was pressed in the tab");

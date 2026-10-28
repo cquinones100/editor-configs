@@ -198,14 +198,20 @@ end
 -- The changed files in the order a reviewer reads them, as a flat list rather
 -- than diffview's tree (folders first, then A to Z), which can't put tests
 -- last when they sit beside the code: documentation first (CLAUDE.md, other
--- Markdown, docs/), then the implementation, then tests, then generated
--- files. Within the implementation, Haiku orders them from the most abstract
+-- Markdown, docs/), then the database's changes (migrations, SQL, schema
+-- files, DB), which the code that follows is written against, then the
+-- implementation, then tests, then generated files (a migration tool's
+-- snapshots among them). Within the implementation, Haiku orders them from the most abstract
 -- to the most concrete, asked in the background once the list is known, from
 -- the paths and their changed line counts; until it answers, and if it
 -- can't, they stay A to Z. Its answer is kept per repository, commits and
 -- paths in Neovim's cache, so the same diff opens in its order at once. The
 -- diff_order setting (M-p, Settings) turns it off, back to the tree.
 local DOCS = { "%.md$", "%.mdx$", "%.rst$", "%.adoc$", "/docs?/", "/README[^/]*$", "/CHANGELOG[^/]*$" }
+local DATABASE = {
+  "%.sql$", "%.prisma$", "/migrations?/", "/migrate/", "/db/", "/database/", "/drizzle/",
+  "/schema%.rb$", "/structure%.sql$", "/schema%.[jt]s$", "%.schema%.[jt]s$",
+}
 local TESTS = {
   "/tests?/", "/spec/", "/__tests__/", "/e2e/", "/__mocks__/", "/fixtures/",
   "%.test%.[^/]+$", "%.spec%.[^/]+$", "_test%.[^/]+$", "_spec%.[^/]+$", "/test_[^/]+%.py$",
@@ -216,11 +222,13 @@ local function matches(path, patterns)
   end
   return false
 end
+local IMPLEMENTATION = 3
 local function kind(path)
-  if generated(path) then return 4 end
-  if matches(path, TESTS) then return 3 end
+  if generated(path) then return 5 end
+  if matches(path, TESTS) then return 4 end
   if matches(path, DOCS) then return 1 end
-  return 2
+  if matches(path, DATABASE) then return 2 end
+  return IMPLEMENTATION
 end
 
 -- Haiku's order: path -> place.
@@ -276,7 +284,7 @@ local asked = {}
 local function ask_order(view)
   local entries = {}
   for _, entry in view.files:iter() do
-    if kind(entry.path) == 2 then table.insert(entries, entry) end
+    if kind(entry.path) == IMPLEMENTATION then table.insert(entries, entry) end
   end
   if #entries < 2 then return end
   local paths = vim.tbl_map(function(e) return e.path end, entries)

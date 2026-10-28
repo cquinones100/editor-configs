@@ -1722,3 +1722,8 @@ test("the Calendar view's iCal feed gives today's events, repeats and moved occu
   assert.equal(byTitle.Holiday.allDay, true);
   assert.equal(byTitle.Holiday.you, "yours");
 });
+
+test("an event link leaves out a split series' _R part, as Google's links do", () => {
+  const link = sidebar.linkOf("abc_R20261020T170000@google.com", "me@example.com", new Date("2026-10-28T17:00:00Z"), false, true);
+  assert.equal(Buffer.from(link.split("eid=")[1], "base64").toString(), "abc_20261028T170000Z me@example.com");
+});

@@ -31,15 +31,38 @@ case "${1:-}" in
   pick)
     pane=${2:-}
     [ -n "$pane" ] || exit 0
-    # Every link in what the pane shows and has scrolled past, newest first.
-    links=$(tmux capture-pane -p -J -S -3000 -t "$pane" | grep -oE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' | sed -E 's/[.,;:!?)]+$//' | awk '!seen[$0]++' | tail -r 2>/dev/null)
+    # Every link in what the pane shows and has scrolled past, newest first, a
+    # line each: what fzf shows, a tab, the URL. A link written into text (an
+    # OSC 8 hyperlink, kept by capture-pane -e) shows its text before its URL.
+    # perl, not node: popups have no nvm.
+    links=$(tmux capture-pane -p -e -J -S -3000 -t "$pane" | perl -CSD -ne '
+      s/\e\[[0-9;:?<=>]*[ -\/]*[@-~]//g;
+      while (m{\e\]8;[^;\e\a]*;([^\e\a]*)(?:\e\\|\a)(.*?)\e\]8;[^;\e\a]*;(?:\e\\|\a)|(https?://[A-Za-z0-9._~:/?#\@!\$&()*+,;=%-]+)}g) {
+        if (defined $3) { (my $url = $3) =~ s/[.,;:!?)]+$//; push @found, [$url, ""]; next }
+        my ($url, $text) = ($1, $2);
+        $text =~ s/\e[^\\]*\\?//g; $text =~ s/[\x00-\x1f]+/ /g; $text =~ s/\s+/ /g; $text =~ s/^ | $//g;
+        push @found, [$url, $text eq $url ? "" : $text] if $url =~ m{^https?://[A-Za-z0-9._~:/?#\@!\$&()*+,;=%-]+$};
+      }
+      END {
+        my (%text, %seen, @order);
+        for (reverse @found) {
+          my ($url, $text) = @$_;
+          push @order, $url unless $seen{$url}++;
+          $text{$url} //= $text if length $text;
+        }
+        for (@order) {
+          my $text = $text{$_} // "";
+          $text = substr($text, 0, 57) . "..." if length $text > 60;
+          print length $text ? "$text  \e[38;5;244m$_\e[0m\t$_\n" : "$_\t$_\n";
+        }
+      }')
     if [ -z "$links" ]; then
       tmux display-message "No links in this pane"
       exit 0
     fi
-    choice=$(printf '%s\n' "$links" | fzf --prompt 'Read: ' --header 'Enter reads it beside the pane · Ctrl-O opens it in the browser' --expect ctrl-o --layout reverse) || exit 0
+    choice=$(printf '%s\n' "$links" | fzf --ansi --delimiter '\t' --with-nth 1 --prompt 'Read: ' --header 'Enter reads it beside the pane · Ctrl-O opens it in the browser' --expect ctrl-o --layout reverse) || exit 0
     key=$(printf '%s' "$choice" | sed -n 1p)
-    url=$(printf '%s' "$choice" | sed -n 2p)
+    url=$(printf '%s' "$choice" | sed -n 2p | cut -f2)
     [ -n "$url" ] || exit 0
     if [ "$key" = ctrl-o ]; then exec "$here/open-url.sh" "$url"; fi
     exec "$0" open "$pane" "$url"

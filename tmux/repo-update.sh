@@ -13,6 +13,11 @@
 #                                      seconds, and offering each new tip only
 #                                      once, so a "no" isn't asked again until
 #                                      more commits land. Started by health.sh.
+#   repo-update.sh now <client>       M-p's "Update Switchboard": the same as
+#                                      check, whatever the update_check setting
+#                                      and however recently it looked, and says
+#                                      on <client> when there is nothing new or
+#                                      it can't look.
 #   repo-update.sh prompt             the popup itself.
 #
 # It runs in the background, never on a key press or redraw, since it waits
@@ -30,12 +35,14 @@ CHECK_EVERY=3600
 git_() { git -C "$REPO" "$@"; }
 
 case "${1:-}" in
-  check | periodic)
+  check | periodic | now)
     # The update_check setting (tmux/settings.sh): off never checks, and
-    # "open" leaves out the hourly one.
+    # "open" leaves out the hourly one. Asked for, it always looks.
     case "$1:$(tmux show -gqv @setting_update_check 2>/dev/null)" in
-      *:off | periodic:open) exit 0 ;;
+      check:off | periodic:off | periodic:open) exit 0 ;;
     esac
+    # What happened, said on the client that asked; nothing for the others.
+    say() { [ "$1" = now ] && tmux display-message -c "${2:-}" "$3"; return 0; }
     mkdir -p "$STATE"
     now=$(date +%s)
     if [ "$1" = periodic ]; then
@@ -45,16 +52,17 @@ case "${1:-}" in
     # Recorded first, so health.sh, which starts this when the hour is up,
     # doesn't start it again on every redraw while it runs or has nothing to do.
     echo "$now" > "$STATE/update-checked"
-    [ -d "$REPO/.git" ] || exit 0
+    [ -d "$REPO/.git" ] || { say "$1" "${2:-}" "Switchboard isn't a git clone at $REPO, so it can't update."; exit 0; }
     # One check at a time; a lock left by a check that died goes after ten minutes.
     lock="$STATE/update.lock"
     if ! mkdir "$lock" 2>/dev/null; then
-      [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || exit 0
+      [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || { say "$1" "${2:-}" "Switchboard is already looking for updates."; exit 0; }
     fi
     trap 'rmdir "$lock" 2>/dev/null' EXIT
-    GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git_ fetch --quiet origin main 2>/dev/null || exit 0
+    [ "$1" = now ] && tmux display-message -c "${2:-}" "Looking for Switchboard updates…"
+    GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git_ fetch --quiet origin main 2>/dev/null || { say "$1" "${2:-}" "Couldn't reach GitHub to look for Switchboard updates."; exit 0; }
     behind=$(git_ rev-list --count main..origin/main 2>/dev/null) || exit 0
-    [ "${behind:-0}" -gt 0 ] || exit 0
+    [ "${behind:-0}" -gt 0 ] || { say "$1" "${2:-}" "Switchboard is up to date ($(git_ log -1 --format=%h main))."; exit 0; }
     tip=$(git_ rev-parse origin/main)
     if [ "$1" = periodic ]; then
       read -r offered 2>/dev/null < "$STATE/update-offered"
@@ -117,7 +125,7 @@ case "${1:-}" in
     ;;
 
   *)
-    echo "Usage: $0 check [<client>] | periodic | prompt" >&2
+    echo "Usage: $0 check [<client>] | periodic | now <client> | prompt" >&2
     exit 1
     ;;
 esac

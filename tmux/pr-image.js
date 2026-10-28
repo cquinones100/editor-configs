@@ -199,9 +199,11 @@ const main = async () => {
   // screen's own pixels, so it fills the pane at its own size, sharp. The
   // browser stays open, so a resize lays the same page out again rather than
   // reading and drawing it all over.
+  // No wider or taller than the marks go, since a cell past the last has no
+  // mark to say where it is, and that part of the image would never show.
   const size = () => {
-    const cols = process.stdout.columns || 80;
-    const rows = (process.stdout.rows || 24) - 1;
+    const cols = Math.min(process.stdout.columns || 80, MARKS.length);
+    const rows = Math.min((process.stdout.rows || 24) - 1, MARKS.length);
     return { cols, rows, width: Math.max(480, Math.floor((cols * cell.w) / DPR)), pageHeight: Math.max(100, Math.floor((rows * cell.h) / DPR)) };
   };
   let view = size();

@@ -11,10 +11,10 @@ Collect what is new for the user on Slack and save it for mission control's Slac
 
 1. **Check the connector.** Load the Slack connector's search, read-channel and read-thread tools. If they are missing, or a call says it needs signing in, say to run `/mcp` and sign in to Slack, copy `/mcp` to the clipboard, and stop.
 
-2. **Since when.** Run `node ~/.claude/skills/slack-updates/scripts/save.js --since`. It prints the time of the last look (ISO and Unix), or an hour ago the first time. Look for messages after it. The user's own member ID is in the search tool's description (and `slack_read_user_profile` with no user).
+2. **Since when.** Run `node ~/.claude/skills/slack-updates/scripts/save.js --since`. It prints when to look from (ISO and Unix): ten minutes before the last look, so nothing sent while that look ran, or not yet in Slack's search, is missed; or an hour ago the first time. Look for messages after it. The user's own member ID is in the search tool's description (and `slack_read_user_profile` with no user).
 
 3. **Gather**, leaving out messages the user wrote:
-   - **mention**: messages that mention them: search with the filter `<@ID>` and `after` set to the Unix time.
+   - **mention**: messages that mention them. Slack's search has no filter for this (a bare `<@ID>` in its filters is ignored, and every message comes back), so search with `after` set to the Unix time, `sort: timestamp`, and no keywords, following its pages to the end, and keep only the messages whose text contains `<@ID>`.
    - **dm**: new messages in their direct messages and group DMs: search with `channel_types` `im,mpim` and `after` set to the Unix time.
    - **thread**: new replies by others in threads the user started: search `from:<@ID> is:thread` over the last day, keep only their messages that begin a thread (the message's `ts` is its thread's `ts`), and read each of those threads with the read-thread tool from the Unix time on. Replies in other people's threads count only when they mention the user, which the mentions search already finds.
    - **channel**: everything new in the channels listed in `~/.config/slack-updates/config.json` (`{"channels": ["C…"]}`), each read with the read-channel tool from the Unix time on. No file, no channels.

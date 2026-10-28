@@ -4,8 +4,9 @@
 // ~/.local/state/tmux-sidebar/slack.json, written to a temporary file and
 // renamed into place, then the sidebar is nudged to draw it. Plain Node.
 //
-//   node save.js --since    prints when to look back to: the last look, or an
-//                           hour ago the first time (ISO 8601, and the Unix time)
+//   node save.js --since    prints when to look back to: OVERLAP_MS before the
+//                           last look, or an hour ago the first time (ISO 8601,
+//                           and the Unix time)
 //   node save.js < new.json  adds what this look found and marks the look
 //
 // new.json: { "items": [{ "kind": "mention" | "dm" | "thread" | "channel",
@@ -25,6 +26,10 @@ const file = path.join(dir, "slack.json");
 const KEEP_MS = 24 * 60 * 60_000;
 // The first look goes back only this far: a day's worth is mostly read.
 const FIRST_MS = 60 * 60_000;
+// Each look starts this long before the last one was saved: a message sent
+// while that look was searching, or one Slack's search had yet to index, is
+// found the next time. Messages already saved aren't saved twice.
+const OVERLAP_MS = 10 * 60_000;
 const MAX_ITEMS = 300;
 const KINDS = ["mention", "dm", "thread", "channel"];
 
@@ -38,7 +43,7 @@ const read = (p) => {
 const saved = read(file) ?? { items: [] };
 
 if (process.argv[2] === "--since") {
-  const since = Number(saved.checked) || Date.now() - FIRST_MS;
+  const since = Number(saved.checked) ? Number(saved.checked) - OVERLAP_MS : Date.now() - FIRST_MS;
   console.log(`${new Date(since).toISOString()} ${Math.floor(since / 1000)}`);
   process.exit(0);
 }

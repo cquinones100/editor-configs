@@ -1628,6 +1628,8 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   ];
   execFileSync("node", [save], { input: JSON.stringify({ items }), env });
   execFileSync("node", [save], { input: JSON.stringify({ items: [items[0]] }), env });
+  const next = Number(execFileSync("node", [save, "--since"], { env, encoding: "utf8" }).trim().split(" ")[1]);
+  assert.ok(Math.abs(next - (Date.now() / 1000 - 600)) < 60, "the next look starts ten minutes before this one");
   const script = `
     const { slackView, slackStale } = require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/slack"))});
     const view = slackView([]);

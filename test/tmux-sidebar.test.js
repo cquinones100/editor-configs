@@ -1779,3 +1779,69 @@ test("a meeting's description gives the tickets and pull requests it names, link
     { id: "CD-7" },
   ]);
 });
+
+test("the standup note lists the last working day's PRs, reviews, ticket moves and commits, then today's work", () => {
+  const monday = new Date(2026, 9, 26, 7);
+  const friday = (hour) => new Date(2026, 9, 23, hour).toISOString();
+  const repository = { nameWithOwner: "o/repo" };
+  const note = sidebar.standupFrom({
+    github: {
+      viewer: { login: "me" },
+      mine: { nodes: [
+        { number: 1, title: "Merged it", url: "https://github.com/o/repo/pull/1", state: "MERGED", createdAt: friday(9), mergedAt: friday(15), repository },
+        { number: 2, title: "Opened it", url: "https://github.com/o/repo/pull/2", state: "OPEN", isDraft: true, createdAt: friday(10), repository },
+        { number: 3, title: "Older", url: "https://github.com/o/repo/pull/3", state: "OPEN", createdAt: "2026-10-01T00:00:00Z", repository },
+        { number: 4, title: "Merged Thursday", url: "https://github.com/o/repo/pull/4", state: "MERGED", createdAt: "2026-10-01T00:00:00Z", mergedAt: new Date(2026, 9, 22, 12).toISOString(), repository },
+      ] },
+      reviewed: { nodes: [
+        { number: 5, title: "Theirs", url: "https://github.com/o/repo/pull/5", repository, reviews: { nodes: [{ author: { login: "me" }, submittedAt: friday(11) }] } },
+        { number: 6, title: "Reviewed by someone else", url: "https://github.com/o/repo/pull/6", repository, reviews: { nodes: [{ author: { login: "ada" }, submittedAt: friday(11) }] } },
+      ] },
+      waiting: { nodes: [{ number: 7, title: "Asked of me", url: "https://github.com/o/repo/pull/7", repository }] },
+    },
+    linear: {
+      changed: { nodes: [
+        { identifier: "AB-1", title: "Moved", url: "https://linear.app/x/issue/AB-1", history: { nodes: [
+          { createdAt: friday(16), fromState: { name: "In Review" }, toState: { name: "Done" } },
+          { createdAt: friday(9), fromState: { name: "Todo" }, toState: { name: "In Review" } },
+          { createdAt: friday(12), fromState: null, toState: null },
+        ] } },
+        { identifier: "AB-2", title: "Only edited", url: "https://linear.app/x/issue/AB-2", history: { nodes: [{ createdAt: friday(9), fromState: null, toState: null }] } },
+      ] },
+      started: { nodes: [{ identifier: "AB-3", title: "Going", url: "https://linear.app/x/issue/AB-3", state: { name: "In Progress" } }] },
+    },
+    commits: [{ repo: "o/repo", subjects: ["Do a", "Do b"] }, { repo: "o/quiet", subjects: [] }],
+  }, monday);
+  assert.equal(note, `# Standup 2026-10-26
+
+## Friday, Oct 23
+
+- Merged [repo#1 Merged it](https://github.com/o/repo/pull/1)
+- Opened [repo#2 Opened it](https://github.com/o/repo/pull/2) (draft)
+- Worked on [repo#3 Older](https://github.com/o/repo/pull/3)
+- Reviewed [repo#5 Theirs](https://github.com/o/repo/pull/5)
+- [AB-1 Moved](https://linear.app/x/issue/AB-1): Todo → Done
+- Commits in o/repo: Do a; Do b
+
+## Today
+
+- [AB-3 Going](https://linear.app/x/issue/AB-3) (In Progress)
+- Review [repo#7 Asked of me](https://github.com/o/repo/pull/7)
+
+## Blockers
+
+- 
+`, "Monday's note covers Friday, from where each ticket started to where it ended");
+
+  const notes = fs.mkdtempSync("/tmp/standup-");
+  process.env.NOTES_DIR = notes;
+  assert.equal(sidebar.standupDue(new Date(2026, 9, 26, 5)), false, "not before six");
+  assert.equal(sidebar.standupDue(new Date(2026, 9, 25, 9)), false, "nor on a weekend");
+  assert.equal(sidebar.standupDue(monday, monday - 60_000), false, "nor a minute after trying");
+  assert.equal(sidebar.standupDue(monday), true);
+  fs.mkdirSync(path.join(notes, "Standups"));
+  fs.writeFileSync(path.join(notes, "Standups", "Standup 2026-10-26.md"), "mine");
+  assert.equal(sidebar.standupDue(monday), false, "nor once the note is there");
+  delete process.env.NOTES_DIR;
+  fs.rmSync(notes, { recursive: true, force: true });
+});

@@ -66,6 +66,13 @@
     "default": true
   },
   {
+    "key": "standup_note",
+    "category": "Integrations",
+    "label": "Standup note",
+    "description": "Each weekday from 6am, a note in Standups written from the last working day: the PRs you merged, opened, worked on and reviewed, your tickets that changed state and your commits, then what is in progress today and the reviews waiting on you",
+    "default": true
+  },
+  {
     "key": "diff_order",
     "category": "Diff",
     "label": "Files in reading order",

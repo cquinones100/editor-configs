@@ -48,7 +48,8 @@ local commits = {
   "n",
   "c",
   function()
-    vim.cmd("DiffviewFileHistory --range=" .. base() .. "..HEAD")
+    -- Oldest first, so the branch reads in the order it was written.
+    vim.cmd("DiffviewFileHistory --reverse --range=" .. base() .. "..HEAD")
   end,
   { desc = "The branch's commits" },
 }

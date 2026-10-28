@@ -210,7 +210,14 @@ Once the worktree is gone, this session runs in a directory that no longer exist
 Only when `$TMUX_PANE` and `$CLAUDE_CODE_SESSION_ID` are set and this session was running in the worktree just removed. Otherwise, reply with the final line as usual and stop here.
 
 1. If the main clone's path contains a single quote, reply with the final line and stop: it goes into the command below between single quotes.
-2. Write the final line, `queue-and-clean: success (…)` as above, as your reply's text, and in the same reply, as its final action, on its own and not chained to anything:
+2. Keep the tab's title. It comes from the worktree's branch (its ticket and PR), so in the main clone, on its default branch, it would change to the repository's name. Pin the title it has now as the tab's name, which wins over the branch:
+
+   ```
+   tmux set-option -w -t "$TMUX_PANE" @tab_name "$(tmux show-option -wqv -t "$TMUX_PANE" @tab_label)"
+   ```
+
+   Skip this if `@tab_label` is empty.
+3. Write the final line, `queue-and-clean: success (…)` as above, as your reply's text, and in the same reply, as its final action, on its own and not chained to anything:
 
    ```
    tmux respawn-pane -k -t "$TMUX_PANE" -c '<main-clone>' "zsh -i -c 'claude --resume $CLAUDE_CODE_SESSION_ID; exec zsh -i'"

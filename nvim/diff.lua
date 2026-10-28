@@ -27,6 +27,9 @@ vim.o.showmode = false
 vim.o.swapfile = false
 vim.o.shadafile = "NONE"
 vim.o.clipboard = "unnamedplus"
+-- Search as in the editor (init.lua): any case, until the search has a capital.
+vim.o.ignorecase = true
+vim.o.smartcase = true
 
 -- Syntax from tree-sitter where Neovim has the language's parser.
 vim.api.nvim_create_autocmd("FileType", {

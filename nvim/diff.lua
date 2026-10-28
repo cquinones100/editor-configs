@@ -11,7 +11,7 @@
 
 local lazy = vim.fn.stdpath("data") .. "/lazy"
 local config = vim.fn.stdpath("config")
-for _, name in ipairs({ "diffview.nvim", "tokyonight.nvim", "nvim-web-devicons" }) do
+for _, name in ipairs({ "diffview.nvim", "mini.base16", "nvim-web-devicons" }) do
   if vim.uv.fs_stat(lazy .. "/" .. name) then vim.opt.runtimepath:prepend(lazy .. "/" .. name) end
 end
 

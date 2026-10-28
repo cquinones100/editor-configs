@@ -7,6 +7,7 @@
 //
 //   pr-view.js prepare <pr.json> <dir> <columns>       writes <dir>/pr.md
 //   pr-view.js ticket <ticket.json> <dir> <columns>    writes <dir>/pr.md
+//   pr-view.js page <page.md> <dir> <columns>          writes <dir>/pr.md, a web page link-view.sh read
 //   pr-view.js splice <dir> < glow's output            prints it with the drawings in
 //   pr-view.js top <pr.txt> <line>                     the line of <pr.txt> that shows <line>
 //
@@ -65,6 +66,12 @@ const prepare = (prFile, dir, columns) => {
   const pr = JSON.parse(fs.readFileSync(prFile, "utf8"));
   const header = `# ${pr.title} #${pr.number}\n\n_${pr.isDraft ? "Draft" : pr.state} · ${pr.author?.login ?? "someone"} wants to merge \`${pr.headRefName}\` into \`${pr.baseRefName}\`_\n\n---\n\n`;
   fs.writeFileSync(path.join(dir, "pr.md"), linkify(header + diagrams(pr.body, dir, columns, "M-r on GitHub"), dir));
+};
+
+// A web page link-view.sh read (lib/link-view.js), its diagrams and links as a
+// PR's.
+const webPage = (mdFile, dir, columns) => {
+  fs.writeFileSync(path.join(dir, "pr.md"), linkify(diagrams(fs.readFileSync(mdFile, "utf8"), dir, columns, "the page in the browser"), dir));
 };
 
 // A Linear ticket as its page lays it out: title, the facts in its side panel,
@@ -185,6 +192,7 @@ const splice = (dir) => {
 const [mode, ...args] = process.argv.slice(2);
 if (mode === "prepare") prepare(args[0], args[1], Number(args[2]) || 80);
 else if (mode === "ticket") ticket(args[0], args[1], Number(args[2]) || 80);
+else if (mode === "page") webPage(args[0], args[1], Number(args[2]) || 80);
 else if (mode === "top") {
   // The first line of the new drawing that starts as <line> did, after a
   // resize, to open it there again; 1 when none does.

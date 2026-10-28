@@ -9,10 +9,11 @@
 # Usage:
 #   pr-view.sh toggle <pane>   M-v: open the view beside <pane>, or close it
 #   pr-view.sh show            in the view's pane: render the PR of $PWD's branch
-#   pr-view.sh page <prepare|ticket> <file.json> <dir>
+#   pr-view.sh page <prepare|ticket|page> <file> <dir>
 #                              render <file.json> (pr-view.js's mode for it) into
 #                              <dir> and page it, drawn again at the pane's new
-#                              width whenever it is resized; ticket-view.sh's too
+#                              width whenever it is resized; ticket-view.sh's
+#                              and link-view.sh's too
 #
 # A resize is caught by the WINCH trap while less runs in the background (less
 # reads keys from /dev/tty, so it still has the keyboard): it closes less, and

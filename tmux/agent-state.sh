@@ -307,6 +307,9 @@ case "${1:-}" in
     ;;
 
   next)
+    # Pressed from a sidebar, the cursor stays in a sidebar: the next tab's
+    # (sidebar.sh refocus), rather than its pane.
+    from_sidebar=$(tmux display -p '#{@sidebar}')
     # The sidebar's Needs you, as its daemon writes it (lib/sidebar/daemon.js,
     # writeNeeds), when the daemon runs: pinned tabs first, then waiting and
     # done, and none that only looks done here while it works in the
@@ -351,7 +354,11 @@ case "${1:-}" in
       tmux set -g @agent_walk_window "${windows[$to]}"
       tmux set -g @agent_walk_rest "${windows[*]:$((to + 1))}"
       tmux select-window -t "${windows[$to]}"
-      [ "${panes[$to]}" != - ] && tmux select-pane -t "${panes[$to]}"
+      if [ "$from_sidebar" = 1 ]; then
+        "${0%/*}/sidebar.sh" refocus "${windows[$to]}" &
+      elif [ "${panes[$to]}" != - ]; then
+        tmux select-pane -t "${panes[$to]}"
+      fi
       [ "${sessions[$to]}" != "$(tmux display -p '#{session_id}')" ] && tmux switch-client -t "${sessions[$to]}"
       exit 0
     fi
@@ -401,7 +408,12 @@ case "${1:-}" in
     # select-window first, so switching sessions lands on it rather than on
     # whatever was last focused there. switch-client only when the session
     # changes, since it needs a client and the rest do not.
-    tmux select-window -t "$window" \; select-pane -t "$pane"
+    if [ "$from_sidebar" = 1 ]; then
+      tmux select-window -t "$window"
+      "${0%/*}/sidebar.sh" refocus "$window" &
+    else
+      tmux select-window -t "$window" \; select-pane -t "$pane"
+    fi
     [ "$session" != "$(tmux display -p '#{session_name}')" ] && tmux switch-client -t "$session"
     ;;
 esac

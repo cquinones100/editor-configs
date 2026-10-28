@@ -123,7 +123,7 @@ the tab is still in front a second later, so passing over a tab, as moving the
 sidebar's cursor does, leaves it, and a session that finishes in the tab you
 are looking at never gets it. A pane that
 is no longer running Claude loses its state on the next focus, so a session
-that died without `SessionEnd` leaves nothing behind. `M-a` walks the sidebar's
+that died without `SessionEnd` leaves nothing behind. Pressed from a sidebar, `M-a` and `M-1`…`M-9` leave the cursor in the new tab's sidebar (`sidebar.sh refocus`), as the sidebar's own number keys do. `M-a` walks the sidebar's
 Needs you in its order (pinned, then waiting, then done), from the list the
 sidebar daemon writes to `~/.local/state/tmux-sidebar/needs` whenever it
 changes, since only the daemon knows a tab that looks done is still looping

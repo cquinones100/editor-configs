@@ -1196,7 +1196,7 @@ test("the activity feed records what changed across the tabs, newest first, a tu
   assert.deepEqual(feed([]), expected);
 });
 
-test("the Closed view lists closed tabs newest first, one per directory, to reopen with their Claude resumed", (t) => {
+test("the Closed view lists closed tabs newest first, one per conversation (a shell, one per directory), to reopen with their Claude resumed", (t) => {
   fs.rmSync(path.join(sidebar.STATE_DIR, "activity.jsonl"), { force: true });
   sidebar.resetActivity();
   const realNow = Date.now;
@@ -1218,8 +1218,10 @@ test("the Closed view lists closed tabs newest first, one per directory, to reop
   assert.deepEqual(items.map((i) => [i.title, i.detail, i.dir, i.command, i.shell]), [
     ["scratch", "closed <1m ago · a shell · /work/scratch", "/work/scratch", undefined, true],
     ["ABC-1: Feat", "closed <1m ago · resumes its Claude · /work/abc-1", "/work/abc-1", "zsh -i -c 'claude --resume 1234-abcd; exec zsh -i'", false],
-  ], "the newest per directory, and not the tool's window");
-  assert.deepEqual(sidebar.closedItems([{ path: "/work/scratch" }]).map((i) => i.title), ["ABC-1: Feat"], "not a directory open again");
+    ["ABC-1 older", "closed <1m ago · resumes its Claude · /work/abc-1", "/work/abc-1", "zsh -i -c 'claude --resume 9999; exec zsh -i'", false],
+  ], "each conversation, two in one directory included, and not the tool's window");
+  assert.deepEqual(sidebar.closedItems([{ path: "/work/scratch" }]).map((i) => i.title), ["ABC-1: Feat", "ABC-1 older"], "not a shell's directory open again");
+  assert.deepEqual(sidebar.closedItems([{ path: "/work/abc-1", claude: { sessionId: "9999" } }]).map((i) => i.title), ["scratch", "ABC-1: Feat"], "not a conversation open again, though a tab in its directory is no reason");
   assert.ok(sidebar.builtInViews(sidebar.state).some((v) => v.title === "Closed"));
 });
 

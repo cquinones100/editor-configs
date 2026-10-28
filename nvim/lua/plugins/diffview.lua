@@ -114,6 +114,27 @@ local copies = {
   { "x", "yl", copy_link, { desc = "Copy a GitHub link to the lines" } },
 }
 
+-- J and K in the file tree or history scroll the diff beside it, down and up
+-- SCROLL lines at a time (a count multiplies it), without leaving the tree.
+-- The diff's sides are scroll-bound, so both move.
+local SCROLL = 5
+local function scroll(keys)
+  return function()
+    local view = require("diffview.lib").get_current_view()
+    local win = view and view.cur_layout and view.cur_layout:get_main_win()
+    if not (win and vim.api.nvim_win_is_valid(win.id)) then return end
+    local times = SCROLL * vim.v.count1
+    vim.api.nvim_win_call(win.id, function()
+      vim.cmd("normal! " .. times .. vim.api.nvim_replace_termcodes(keys, true, false, true))
+    end)
+  end
+end
+
+local scrolls = {
+  { "n", "J", scroll("<C-e>"), { desc = "Scroll the diff down" } },
+  { "n", "K", scroll("<C-y>"), { desc = "Scroll the diff up" } },
+}
+
 -- Shows the file under the cursor in the tree, or a commit's first file in
 -- the history, without moving the cursor. A folder or commit is never folded
 -- by moving over it. Waits for the cursor to settle, so holding j doesn't load
@@ -286,8 +307,8 @@ return {
     },
     keymaps = {
       view = { close, quit, unpack(copies) },
-      file_panel = { close, escape, quit, commits, unpack(copies) },
-      file_history_panel = { close, escape, quit, back, unpack(copies) },
+      file_panel = { close, escape, quit, commits, scrolls[1], scrolls[2], unpack(copies) },
+      file_history_panel = { close, escape, quit, back, scrolls[1], scrolls[2], unpack(copies) },
     },
   },
   config = function(_, opts)

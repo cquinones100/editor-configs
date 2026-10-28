@@ -1696,3 +1696,14 @@ test("an event link leaves out a split series' _R part, as Google's links do", (
   const link = sidebar.linkOf("abc_R20261020T170000@google.com", "me@example.com", new Date("2026-10-28T17:00:00Z"), false, true);
   assert.equal(Buffer.from(link.split("eid=")[1], "base64").toString(), "abc_20261028T170000Z me@example.com");
 });
+
+test("the sidebar's notifications sit at its bottom under their own heading, and a click on one names where it goes", () => {
+  const tabs = [{ id: "@1", index: 1, name: "work", state: "idle", session: "$1", sessionName: "s", panes: [], sidebars: [], claude: { sessionId: "x" } }];
+  const out = sidebar.sidebarLines({ tabs, sections: [], cols: 40, rows: 20, view: { focused: false, cursor: "@1", here: "@1", frame: 0 }, notices: [{ owner: "notice:slack", title: "3 new on Slack", detail: "Ada · #general" }] });
+  const plain = out.lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+  assert.equal(out.lines.length, 20);
+  assert.deepEqual(plain.slice(-4), [" " + "═".repeat(38), " NOTIFICATIONS", "  ● 3 new on Slack", "    Ada · #general"]);
+  assert.deepEqual(out.owners.slice(-2), ["notice:slack", "notice:slack"]);
+  const none = sidebar.sidebarLines({ tabs, sections: [], cols: 40, rows: 20, view: { focused: false, cursor: "@1", here: "@1", frame: 0 } });
+  assert.ok(!none.lines.some((l) => l.includes("NOTIFICATIONS")), "nothing new, no block");
+});

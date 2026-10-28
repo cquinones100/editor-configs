@@ -1707,3 +1707,23 @@ test("the sidebar's notifications sit at its bottom under their own heading, and
   const none = sidebar.sidebarLines({ tabs, sections: [], cols: 40, rows: 20, view: { focused: false, cursor: "@1", here: "@1", frame: 0 } });
   assert.ok(!none.lines.some((l) => l.includes("NOTIFICATIONS")), "nothing new, no block");
 });
+
+test("Enter on an item in a built-in view offers its actions as a menu, its usual one first", async (t) => {
+  fs.rmSync(path.join(sidebar.STATE_DIR, "closed.jsonl"), { force: true });
+  sidebar.resetClosed();
+  const realNow = Date.now;
+  t.after(() => (Date.now = realNow));
+  const gone = { id: "@91", index: 9, name: "ABC-2: Thing", state: "idle", path: "/work/abc-2", claude: { sessionId: "5555" } };
+  Date.now = () => realNow() - 60_000;
+  sidebar.record([]);
+  sidebar.record([gone]);
+  Date.now = realNow;
+  sidebar.record([]);
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 30, tmuxClient: "none" };
+  client.view.view = sidebar.builtInViews(sidebar.state).findIndex((v) => v.title === "Closed") + 1;
+  await sidebar.missionKey(client, { key: "Enter" });
+  assert.deepEqual(client.choose.choices.map((c) => [c.key, c.label]), [["r", "Reopen it, resuming its Claude"], ["x", "Remove it from this list"], ["y", "Copy its directory"]]);
+  await sidebar.missionKey(client, { key: "Escape" });
+  assert.equal(client.choose, undefined, "any other key closes it");
+});

@@ -1706,7 +1706,8 @@ test("the sidebar's notifications sit at its bottom under their own heading, and
   const out = sidebar.sidebarLines({ tabs, sections: [], cols: 40, rows: 20, view: { focused: false, cursor: "@1", here: "@1", frame: 0 }, notices: [{ owner: "notice:slack", title: "3 new on Slack", detail: "Ada · #general" }] });
   const plain = out.lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
   assert.equal(out.lines.length, 20);
-  assert.deepEqual(plain.slice(-4), [" " + "═".repeat(38), " NOTIFICATIONS", "  ● 3 new on Slack", "    Ada · #general"]);
+  // The last line is the keys' hint, kept blank while the sidebar hasn't focus.
+  assert.deepEqual(plain.slice(-5), [" " + "═".repeat(38), " NOTIFICATIONS", "  ● 3 new on Slack", "    Ada · #general", ""]);
   assert.deepEqual(out.owners.slice(-2), ["notice:slack", "notice:slack"]);
   // With the sidebar's cursor moved onto it, it is lit as a chosen tab is.
   const chosen = sidebar.sidebarLines({ tabs, sections: [], cols: 40, rows: 20, view: { focused: true, cursor: "notice:slack", here: "@1", frame: 0 }, notices: [{ owner: "notice:slack", title: "3 new on Slack", detail: "Ada · #general" }] });

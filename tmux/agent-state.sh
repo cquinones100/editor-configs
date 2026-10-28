@@ -20,8 +20,9 @@
 # (PreToolUse) and kept until the next, and @agent_wait, what it waits on
 # ("permission: Bash git push", "asks: Which layout?"), while it waits. An
 # AskUserQuestion call is a wait from the moment it starts. @agent_loop names
-# the loop a session is running (review, ci or queue) from the moment its
-# skill is asked for, typed as /review-loop, /ci-loop or /queue-and-clean or
+# the loop a session is running (review, ci, queue or deploy) from the moment its
+# skill is asked for, typed as /review-loop, /ci-loop, /queue-and-clean or
+# /deploy-test or
 # run by the Skill tool, until a new prompt or session: the turns between a
 # loop's rounds are the loop's too.
 #
@@ -215,7 +216,7 @@ DETAILS='
       ( if .hook_event_name == "PermissionRequest" then "permission: " + $tool + (if $in.command then " " + ($in.command | split("\n")[0]) else "" end) | short(80)
         elif $tool == "AskUserQuestion" then "asks: " + ((($in.questions // [])[0].question) // "") | short(80)
         else "" end),
-      ( {"review-loop": "review", "ci-loop": "ci", "queue-and-clean": "queue"}[
+      ( {"review-loop": "review", "ci-loop": "ci", "queue-and-clean": "queue", "deploy-test": "deploy"}[
           if .hook_event_name == "UserPromptSubmit" then ((.prompt // "") | capture("^\\s*/(?<s>[a-z-]+)")?.s // "")
           elif $tool == "Skill" then ($in.skill // "")
           else "" end ] // "") ]

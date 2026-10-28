@@ -86,8 +86,8 @@ the `@agent_marker` format in `tmux.conf` shows in the tab. From the same hooks'
 the pane also carries `@agent_activity`, the tool call in a few words, set by
 a `PreToolUse` hook as each tool starts, and `@agent_wait`, what a permission
 request or an `AskUserQuestion` waits on (a question is a wait from the moment
-it is asked); and `@agent_loop`, the loop the session runs (review, ci or queue) from the
-moment `/review-loop`, `/ci-loop` or `/queue-and-clean` is asked for, typed
+it is asked); and `@agent_loop`, the loop the session runs (review, ci, queue or deploy) from the
+moment `/review-loop`, `/ci-loop`, `/queue-and-clean` or `/deploy-test` is asked for, typed
 or through the Skill tool, until a new prompt or session. The sidebar shows
 all three. One `jq` reads them, as the relay's event already does. No hook
 fires when a background task ends, so the sidebar still counts running tasks

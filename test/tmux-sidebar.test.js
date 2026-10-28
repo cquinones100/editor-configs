@@ -1549,3 +1549,19 @@ test("the ticket board puts your Linear issues in columns by state, urgent first
   assert.equal(columns[1].items[0].detail, "In Progress · tab 4");
   assert.equal(columns[0].items[1].detail, "Todo · Medium");
 });
+
+test("a merged tab still waiting on its deploy or testing it is under Testing Deploy, before Merged", () => {
+  const base = { session: "$1", sessionName: "test", panes: [], sidebars: [], since: undefined, command: "claude", claude: { sessionId: "s" }, merge: "merged" };
+  const tabs = [
+    { ...base, id: "@1", index: 1, name: "waiting on deploy", state: "background", loop: { kind: "deploy", round: 1 } },
+    { ...base, id: "@2", index: 2, name: "recording", state: "working", loopSkill: "queue" },
+    { ...base, id: "@3", index: 3, name: "approve the video", state: "waiting", loopSkill: "deploy" },
+    { ...base, id: "@4", index: 4, name: "done with it", state: "idle" },
+  ];
+  assert.deepEqual(sidebar.grouped(tabs).map((g) => [g.title, g.tabs.map((x) => x.name)]), [
+    ["Needs you", ["approve the video"]],
+    ["Testing Deploy", ["waiting on deploy", "recording"]],
+    ["Merged", ["done with it"]],
+  ]);
+  assert.deepEqual(sidebar.staged(tabs).map((g) => g.title), ["Needs you", "Testing Deploy", "Merged"]);
+});

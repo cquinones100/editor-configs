@@ -2048,6 +2048,38 @@ test("n in the sidebar goes to the notifications when there are any, and t opens
   assert.equal(sidebar.state.cursors.get(session), "notice:slack");
 });
 
+test("on the notifications, j and k in the sidebar step through each one, not each kind, and up from the first goes back to the tabs", async (t) => {
+  const stateDir = sidebar.STATE_DIR;
+  fs.mkdirSync(stateDir, { recursive: true });
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const side = tmux("split-window", "-hb", "-d", "-t", window, "-P", "-F", "#{pane_id}");
+  tmux("set", "-p", "-t", side, "@sidebar", "1");
+  t.after(() => {
+    tmux("kill-window", "-t", window);
+    fs.rmSync(path.join(stateDir, "slack.json"), { force: true });
+  });
+  const now = Date.now() / 1000;
+  fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ checked: Date.now(), items: [
+    { kind: "dm", channel: "D1", where: "Dee", user: "U1", from: "Dee", text: "first", ts: String(now - 20) },
+    { kind: "dm", channel: "D2", where: "Bo", user: "U2", from: "Bo", text: "second", ts: String(now - 10) },
+  ] }));
+  await new Promise((resolve) => setTimeout(resolve, 2_100));
+  await sidebar.refresh();
+  const session = tmux("display", "-p", "-t", window, "#{session_id}");
+  const client = { kind: "sidebar", pane: side, socket: { write() {}, end() {} } };
+  sidebar.state.cursors.set(session, "notice:slack");
+  sidebar.state.noticeCursor.set(session, 0);
+
+  await sidebar.sidebarKey(client, { key: "j" });
+  assert.equal(sidebar.state.noticeCursor.get(session), 1, "the second message, though both are Slack's");
+  assert.equal(sidebar.state.cursors.get(session), "notice:slack");
+  await sidebar.sidebarKey(client, { key: "j" });
+  assert.equal(sidebar.state.noticeCursor.get(session), 1, "down from the last stays");
+  await sidebar.sidebarKey(client, { key: "k" });
+  await sidebar.sidebarKey(client, { key: "k" });
+  assert.ok(!String(sidebar.state.cursors.get(session)).startsWith("notice:"), "up from the first, back on a tab");
+});
+
 test("a Slack message is drawn as Slack draws it: its lines, bullets hanging, quotes, code blocks, styles, links and mentions as their text", () => {
   const message = "Hey *team*, two things:\n• first _thing_ is ~old~ `x = 1`\n• a long bullet that wraps onto the next line and hangs under its text\n2. numbered\n> a quote\n```\nconst y = 2;\n```\nsee <https://x.example|the doc> &amp; <@U1|ada>";
   const lines = sidebar.slackLines(message, 40);

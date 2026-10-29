@@ -38,6 +38,7 @@ Check these on the first tick, and stop with what is missing rather than watchin
   - `rules`: optional, the path of a Markdown file with the team's own rules, read every tick and followed over the general ones below where they differ: its alert sources, what pages, runbooks, worked examples. Keep it in the team's repository or beside the config, not here.
   - `repo`: optional, the GitHub repository (`owner/name`) runbooks, workflow runs and code are looked up in.
   - `from`: optional, the name shown above each notice (default `oncall`).
+  - `addressed` and `taking`: optional, the team's own reaction names (without colons) for an alert that is handled and one someone is on, added to the ones under "Reactions".
 - **slack-relay running**: `slack-relay notify` refuses at once when it isn't, and the tick says so (see "Reaching the user").
 - **The Slack connector** (`mcp__claude_ai_Slack__*`) for reading the channels. It reads as the user, so it sees what they see.
 - Optional: a Datadog MCP, Sentry, or `gh`, used only for reading, where the alerts come from them and the tools are there.
@@ -75,7 +76,17 @@ Tell the user about each urgent problem once, even if it recovered before you sa
 
 ### Not urgent: wait
 
-Everything else goes to pending. Tell the user about it only when it is still a problem after about 30 minutes, or keeps coming back, and nobody (the user included) has said in its thread or with 👀 that they have it. Informational notices never need telling.
+Everything else goes to pending. Tell the user about it only when it is still a problem after about 30 minutes, or keeps coming back, and nobody (the user included) has said in its thread or with a reaction that they have it. Informational notices never need telling.
+
+### Reactions
+
+A reaction from a person, the user included, says something about an alert, and teams use them instead of a reply:
+
+- **Addressed**: ✅ (`white_check_mark`), ✔️ (`heavy_check_mark`), ☑️ (`ballot_box_with_check`), `done`, `resolved`, `fixed`, `ack`, or any in the config's `addressed` list. The alert is handled: it gets no notice, and comes out of pending into Recent as resolved, as if its monitor had recovered. An urgent alert already addressed before the tick that saw it gets no notice either.
+- **Someone has it**: 👀 (`eyes`), or any in the config's `taking` list. No notice while it lasts; if the alert is still a problem 2 hours later with nothing more in its thread, it has earned its notice again.
+- Anything else (a custom emoji, a 😬) is not a judgment. A custom emoji named after the person reacting, alongside a ✅, is their mark, not a second meaning.
+
+Only a person's reaction counts, never a bot's. Read reactions with `slack_get_reactions` on every pending alert each tick, not only new ones, since a reaction comes after the alert does. A reaction that says addressed while the monitor is still in its alert state is still addressed: the person reacting knows more than the monitor's next post.
 
 ### Recovered is not resolved
 

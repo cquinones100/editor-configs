@@ -7,7 +7,10 @@
 #
 # For a note (note-tab.sh sets NEW_TAB_NOTE, a path in the notes directory, and
 # NEW_TAB_NAME, its title): the tab is linked to the note (@tab_note) and named
-# after it, rather than asked for a name.
+# after it, rather than asked for a name. NEW_TAB_NAME alone names it, and
+# NEW_TAB_PROMPT is Claude's first prompt (mission control's "Open a tab for
+# this thread with Claude" on a Slack message), passed in the tab's
+# environment, so nothing in it is read by a shell.
 #
 # The directory comes from pick-dir.zsh, which shape-open.zsh asks with too.
 
@@ -24,9 +27,13 @@ fail() {
 dir=$("$script_dir/pick-dir.zsh" "A new tab running Claude: Enter opens it there") || exit 0
 
 # tmux expands formats in -c, so a # in the path is doubled.
-window=$(tmux new-window -P -F '#{window_id}' -c "${dir//\#/##}" "zsh -i -c 'claude; exec zsh -i'") || fail "tmux could not open a tab."
-if [[ -n ${NEW_TAB_NOTE:-} ]]; then
-  tmux set-option -w -t "$window" @tab_note "$NEW_TAB_NOTE"
+if [[ -n ${NEW_TAB_PROMPT:-} ]]; then
+  window=$(tmux new-window -P -F '#{window_id}' -c "${dir//\#/##}" -e "NEW_TAB_PROMPT=$NEW_TAB_PROMPT" "zsh -i -c 'claude \"\$NEW_TAB_PROMPT\"; exec zsh -i'") || fail "tmux could not open a tab."
+else
+  window=$(tmux new-window -P -F '#{window_id}' -c "${dir//\#/##}" "zsh -i -c 'claude; exec zsh -i'") || fail "tmux could not open a tab."
+fi
+if [[ -n ${NEW_TAB_NOTE:-} || -n ${NEW_TAB_NAME:-} ]]; then
+  [[ -n ${NEW_TAB_NOTE:-} ]] && tmux set-option -w -t "$window" @tab_note "$NEW_TAB_NOTE"
   tmux set-option -w -t "$window" @tab_name "${NEW_TAB_NAME:-${NEW_TAB_NOTE:r}}"
   "$script_dir/window-names.sh" "$(tmux display -p -t "$window" '#{session_name}')"
   exit 0

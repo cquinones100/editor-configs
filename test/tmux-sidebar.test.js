@@ -2103,6 +2103,17 @@ test("n in the sidebar goes to the notifications when there are any, and t opens
   assert.equal(sidebar.state.cursors.get(session), "notice:slack");
 });
 
+test("a Slack message's menu offers a tab of its own for the thread, with Claude", async (t) => {
+  const stateDir = sidebar.STATE_DIR;
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ checked: Date.now(), items: [{ kind: "dm", channel: "D1", where: "Dee", user: "U1", from: "Dee", text: "can you look?", ts: String(Date.now() / 1000), link: "https://x.slack.com/archives/D1/p1" }] }));
+  t.after(() => fs.rmSync(path.join(stateDir, "slack.json"), { force: true }));
+  const client = { kind: "mission", socket: { write() {}, end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 30, tmuxClient: "none" };
+  client.view.view = sidebar.builtInViews(sidebar.state).findIndex((v) => v.slack) + 1;
+  await sidebar.missionKey(client, { key: "Enter" });
+  assert.ok(client.choose.choices.some((c) => c.key === "t" && c.label === "Open a tab for this thread with Claude"));
+});
+
 test("moving onto the notifications focuses the Notifications window's sidebar, as browsing to a tab does, never its view", async (t) => {
   const stateDir = sidebar.STATE_DIR;
   fs.mkdirSync(stateDir, { recursive: true });

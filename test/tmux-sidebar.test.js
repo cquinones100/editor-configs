@@ -1640,6 +1640,15 @@ test("Enter on a board's PR or ticket offers what to do with it, and each item s
   assert.match(placed[2][2], /o {2}Open it in the browser/);
 });
 
+test("Enter on a Slack message shows the message whole above what to do with it", () => {
+  const body = `Can you look at the deploy?\n${"word ".repeat(40).trim()}`;
+  const modal = sidebar.chooseModal({ title: "@ Ann · #eng", body, choices: [{ key: "o", label: "Open it in Slack" }], cursor: 0 }, 100, 40);
+  const rows = [...modal.matchAll(/\x1b\[\d+;\d+H([^\x1b]*(?:\x1b\[[0-9;]*m[^\x1b]*)*)/g)].map((m) => m[1].replace(/\x1b\[[0-9;]*m/g, ""));
+  assert.match(rows[1], /Can you look at the deploy\?/);
+  assert.ok(rows.filter((row) => /word/.test(row)).length > 1, "a long line is wrapped, not cut");
+  assert.ok(rows.findIndex((row) => /o {2}Open it in Slack/.test(row)) > rows.findLastIndex((row) => /word/.test(row)), "the choices after it");
+});
+
 test("each mission control view but Settings can be turned off in Settings, the Work map staying for M-j and M-o", () => {
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   try {

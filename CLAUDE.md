@@ -60,6 +60,8 @@ the cut one. The second status line, `tmux/tab-status.sh`, starts
 with the same label uncut, so any change to what a window is called belongs in
 `tab-label.sh` and reaches both.
 
+`window-names.sh` keeps the directory each name came from in the window's `@tab_path`, and at the end of a Claude turn `agent-state.sh` names the tabs again (one tmux format check, then `run-shell -b`) when the pane is no longer there, since a command can take the pane's terminal somewhere else between focus changes.
+
 All of this runs on every pane focus, for every window in the session, or on
 every status redraw, so none of it may wait on the network.
 `tmux/window-pr.sh` and `tmux/ticket-title.sh` answer from a cache and refresh

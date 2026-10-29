@@ -54,11 +54,13 @@ tmux list-panes -s -t "$session" -F $'#{window_index}\t#{?@sidebar,s,p}#{pane_ac
     # ##, tmux stores it as the #<number> wt-jump reads back.
     [ -n "$pr" ] && name="##${pr} ${name}" && full="#${pr} ${full}"
 
-    # One tmux call for all three, since this runs for every window on every
-    # pane focus.
+    # One tmux call for all four, since this runs for every window on every
+    # pane focus. @tab_path is the directory the name was worked out from,
+    # which agent-state.sh compares at the end of a turn.
     tmux setw -t "${session}:${idx}" window-status-format "#[fg=#${whex}] #I:#{E:@agent_marker}#[bg=default,fg=#${whex},nobold]#{?@agent, ,}#W " \; \
       rename-window -t "${session}:${idx}" "$name" \; \
-      setw -t "${session}:${idx}" @tab_label "$full"
+      setw -t "${session}:${idx}" @tab_label "$full" \; \
+      setw -t "${session}:${idx}" @tab_path "$path"
   done
 
 # bin/tmux-sidebar shows the same names, and redraws when told (see

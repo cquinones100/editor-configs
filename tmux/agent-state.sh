@@ -261,6 +261,14 @@ case "${1:-}" in
     [ "${event:-}:${tool:-}" = PreToolUse:AskUserQuestion ] && state=waiting
     set_state "$TMUX_PANE" "$state"
     details "$TMUX_PANE" "$state" "${event:-}" "${activity:-}" "${wait:-}" "${loop:-}"
+    # Tabs are named on a focus change, so a turn that ran a command elsewhere
+    # (an interactive shell takes the pane's terminal, and its directory with
+    # it) can leave the tab named for that place. At the end of a turn, a pane
+    # no longer where its tab's name came from (window-names.sh's @tab_path)
+    # names the tabs again, in the background.
+    if [ "${event:-}" = Stop ]; then
+      tmux if -F -t "$TMUX_PANE" '#{!=:#{pane_current_path},#{@tab_path}}' "run-shell -b '~/.config/tmux/window-names.sh #{q:session_name}'" 2>/dev/null
+    fi
     # The first Claude to start in a worktree brings the tip on its PR's keys
     # (tip.sh), with GitHub on.
     if [ "${event:-}" = SessionStart ]; then

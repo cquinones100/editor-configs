@@ -287,6 +287,30 @@ test("a tab is named after its own pane's directory, not its sidebar's, while th
   assert.equal(tmux("display", "-p", "-t", window, "#{@tab_label}"), "named-work");
 });
 
+test("a turn that ends with its pane no longer where the tab's name came from names the tabs again", async (t) => {
+  const work = path.join(tmp, "renamed-work");
+  fs.mkdirSync(work, { recursive: true });
+  // agent-state.sh runs the installed scripts, as setup.sh links them.
+  const installed = path.join(home, ".config/tmux");
+  fs.mkdirSync(installed, { recursive: true });
+  fs.readdirSync(path.join(__dirname, "../tmux"))
+    .filter((name) => name.endsWith(".sh") && !fs.existsSync(path.join(installed, name)))
+    .forEach((name) => fs.symlinkSync(path.join(__dirname, "../tmux", name), path.join(installed, name)));
+  const window = tmux("new-window", "-d", "-t", "test", "-c", work, "-P", "-F", "#{window_id}");
+  t.after(() => tmux("kill-window", "-t", window));
+  const pane = tmux("display", "-p", "-t", window, "#{pane_id}");
+  execFileSync("bash", [path.join(__dirname, "../tmux/window-names.sh"), "test"]);
+  assert.equal(tmux("display", "-p", "-t", window, "#{@tab_path}"), work, "the name's directory is kept");
+  // Named while a command had the pane somewhere else.
+  tmux("setw", "-t", window, "@tab_path", "/elsewhere");
+  tmux("rename-window", "-t", window, "elsewhere");
+
+  execFileSync("bash", [path.join(__dirname, "../tmux/agent-state.sh"), "set", "done"], { env: { ...process.env, TMUX_PANE: pane }, input: JSON.stringify({ hook_event_name: "Stop", session_id: "s" }) });
+
+  assert.ok(await until(() => tmux("display", "-p", "-t", window, "#{@tab_path}") === work), "named again from where the pane is");
+  assert.equal(tmux("display", "-p", "-t", window, "#{window_name}"), "renamed-work");
+});
+
 test("the status line is about the tab's own pane, not its sidebar, while the sidebar has focus", (t) => {
   const work = path.join(tmp, "status-work");
   const elsewhere = path.join(tmp, "status-elsewhere");

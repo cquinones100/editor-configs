@@ -335,9 +335,13 @@ directories.
 Unlike `wt`, claude opens with no prompt — you say what you want when you get
 there.
 
-Only PRs whose branch lives on the repo's own remote. Fork PRs are rejected with
-a pointer to `gh pr checkout`, which is the tool that knows how to wire up a
-contributor's fork.
+A PR from a fork is set up as `gh pr checkout` sets one up: the fork is added
+as a remote named after its owner (or a remote already pointing at it is
+used), its branch is fetched from there onto a local branch named
+`<owner>-<branch>`, since a fork's PR often comes from its `main`, and that
+branch tracks the fork's, so `git push` updates the PR. When the fork's owner
+hasn't let maintainers push to it, it says so. A fork or branch since deleted
+is opened from the PR's last commit, as for any PR.
 
 ### Setup
 

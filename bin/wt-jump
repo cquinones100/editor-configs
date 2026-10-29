@@ -153,7 +153,7 @@ const viewPr = (number, root) => {
     const pr = JSON.parse(
       execFileSync(
         "gh",
-        ["pr", "view", String(number), "--json", "headRefName,state,title"],
+        ["pr", "view", String(number), "--json", "headRefName,headRepositoryOwner,isCrossRepository,state,title"],
         { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
       ),
     );
@@ -250,9 +250,11 @@ const matchesFor = (target, panes) => {
           roots.map((root) => `  ${root}`).join("\n"),
       );
     }
+    // A fork's PR is checked out by wtpr as <owner>-<branch>.
+    const branch = pr.isCrossRepository ? `${pr.headRepositoryOwner.login}-${pr.headRefName}` : pr.headRefName;
     return {
-      matched: described.filter((pane) => pane.branch === pr.headRefName),
-      label: `${label} (${pr.headRefName})`,
+      matched: described.filter((pane) => pane.branch === branch),
+      label: `${label} (${branch})`,
       create: `wtpr ${number}`,
     };
   }

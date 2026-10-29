@@ -97,3 +97,40 @@ test("a PR URL from another repository opens in a clone of that one found among 
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("a fork's PR opens on <owner>-<branch>, tracking the fork's branch from a remote named after its owner", () => {
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "wtpr-test-")));
+  const env = { ...process.env, HOME: tmp, GIT_CONFIG_GLOBAL: path.join(tmp, "gitconfig"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e", PATH: `${path.join(tmp, "bin")}:${process.env.PATH}` };
+  const git = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    // acme/widgets and alice's fork of it, each a bare repository reached
+    // through insteadOf, so the remotes still read as GitHub's.
+    const origin = path.join(tmp, "widgets.git");
+    const forkOrigin = path.join(tmp, "fork.git");
+    const clone = path.join(tmp, "clone");
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin], { env });
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", forkOrigin], { env });
+    fs.writeFileSync(path.join(tmp, "gitconfig"), `[url "${origin}"]\n\tinsteadOf = git@github.com:acme/widgets.git\n[url "${forkOrigin}"]\n\tinsteadOf = git@github.com:alice/widgets.git\n`);
+    execFileSync("git", ["clone", "-q", "git@github.com:acme/widgets.git", clone], { env, stdio: "ignore" });
+    git(clone, "commit", "-q", "--allow-empty", "-m", "start");
+    git(clone, "push", "-q", "origin", "main");
+    // The fork's PR comes from its main, which also names a branch here.
+    git(clone, "commit", "-q", "--allow-empty", "-m", "alice's fix");
+    const last = git(clone, "rev-parse", "HEAD");
+    git(clone, "push", "-q", "git@github.com:alice/widgets.git", "HEAD:main");
+    git(clone, "reset", "-q", "--hard", "HEAD~1");
+
+    fs.mkdirSync(path.join(tmp, "bin"));
+    fs.writeFileSync(path.join(tmp, "bin/gh"), `#!/bin/sh\necho '${JSON.stringify({ number: 9, title: "Fix", author: { login: "alice" }, headRefName: "main", headRepository: { name: "widgets" }, headRepositoryOwner: { login: "alice" }, isCrossRepository: true, maintainerCanModify: true, state: "OPEN", url: "https://github.com/acme/widgets/pull/9" })}'\n`, { mode: 0o755 });
+
+    const cdFile = path.join(tmp, "cd");
+    execFileSync(process.execPath, [script, "--no-claude", "--cd-file", cdFile, "9"], { cwd: clone, env, stdio: ["ignore", "ignore", "pipe"] });
+    const worktree = fs.readFileSync(cdFile, "utf8").trim();
+    assert.equal(git(clone, "config", "remote.alice.url"), "git@github.com:alice/widgets.git", "the fork added as a remote, over SSH as origin is");
+    assert.equal(git(worktree, "rev-parse", "HEAD"), last, "at the fork's commit");
+    assert.equal(git(worktree, "branch", "--show-current"), "alice-main", "on a branch that leaves your main alone");
+    assert.equal(git(worktree, "rev-parse", "--abbrev-ref", "@{upstream}"), "alice/main", "tracking the fork's branch, so a push updates the PR");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

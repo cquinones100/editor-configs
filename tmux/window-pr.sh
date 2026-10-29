@@ -83,8 +83,15 @@ mkdir "$lock" 2>/dev/null || exit 0
 
   # --state all so a merged PR keeps its number in the tab; the work in that
   # window is the same work it was before it merged.
-  found=$(cd "$path" && gh pr list --head "$branch" --state all --limit 1 \
-    --json number --jq '.[0].number' 2>/dev/null)
+  # A fork's PR (wtpr) is on a branch named <owner>-<branch> that tracks the
+  # fork's, which only gh pr view finds, from that upstream.
+  merge=$(git -C "$path" config "branch.$branch.merge" 2>/dev/null)
+  if [ -n "$merge" ] && [ "${merge#refs/heads/}" != "$branch" ]; then
+    found=$(cd "$path" && gh pr view --json number --jq .number 2>/dev/null)
+  else
+    found=$(cd "$path" && gh pr list --head "$branch" --state all --limit 1 \
+      --json number --jq '.[0].number' 2>/dev/null)
+  fi
 
   printf '%s' "$found" > "$cache.$$" && mv "$cache.$$" "$cache"
 

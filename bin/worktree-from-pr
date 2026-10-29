@@ -6,8 +6,9 @@
 // claude in it. <path> defaults to .claude/worktrees, resolved against the main
 // repo root so this works from inside an existing worktree.
 //
-// Only PRs whose branch lives on this repo's remote — fork PRs are `gh pr
-// checkout` territory and are rejected up front. A PR's state doesn't matter:
+// A fork's PR is set up as `gh pr checkout` sets it up: the fork becomes a
+// remote named after its owner, and the worktree's branch, <owner>-<branch>,
+// tracks the fork's, so a push updates the PR. A PR's state doesn't matter:
 // a merged or closed one whose branch the remote has since deleted is opened
 // from the commits GitHub keeps for it (refs/pull/<n>/head), on a local branch
 // of the same name with no upstream.
@@ -172,7 +173,10 @@ const fetchPullRequest = (ref, cwd) => {
     "title",
     "author",
     "headRefName",
+    "headRepository",
+    "headRepositoryOwner",
     "isCrossRepository",
+    "maintainerCanModify",
     "state",
     "url",
   ];
@@ -218,6 +222,24 @@ const defaultRemote = (cwd) => {
   const remotes = gitOutput(["remote"], { cwd }).split("\n").filter(Boolean);
   if (!remotes.length) fail("repository has no remotes");
   return remotes.includes("origin") ? "origin" : remotes[0];
+};
+
+// The remote a fork's PR is fetched from: one already pointing at the fork,
+// else one added, named after its owner (or owner-name when that is taken),
+// in the protocol the base remote uses. Undefined when the fork is gone.
+const forkRemote = (pr, base, root) => {
+  if (!pr.headRepository) return undefined;
+  const owner = pr.headRepositoryOwner.login;
+  const repo = `${owner}/${pr.headRepository.name}`;
+  const urlOf = (remote) => gitOutput(["config", "--get", `remote.${remote}.url`], { cwd: root });
+  const remotes = gitOutput(["remote"], { cwd: root }).split("\n").filter(Boolean);
+  const existing = remotes.find((remote) => urlOf(remote).match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?\/?$/)?.[1].toLowerCase() === repo.toLowerCase());
+  if (existing) return existing;
+  const name = remotes.includes(owner) ? `${owner}-${pr.headRepository.name}` : owner;
+  const url = /^(git@|ssh:)/.test(urlOf(base)) ? `git@github.com:${repo}.git` : `https://github.com/${repo}.git`;
+  gitRun(["remote", "add", name, url], { cwd: root });
+  console.error(`Remote:   added ${name} (${url})`);
+  return name;
 };
 
 const branchExists = (branch, cwd) => {
@@ -294,9 +316,9 @@ const fetchPullHead = (number, remote, root) => {
 // Written by hand rather than via `worktree add --track`: --track insists the
 // start point be covered by the remote's fetch refspec, which a single-branch
 // or partial clone's refspec is not, and it fails outright when it isn't.
-const setUpstream = (branch, remote, root) => {
+const setUpstream = (branch, remote, remoteBranch, root) => {
   gitRun(["config", `branch.${branch}.remote`, remote], { cwd: root });
-  gitRun(["config", `branch.${branch}.merge`, `refs/heads/${branch}`], {
+  gitRun(["config", `branch.${branch}.merge`, `refs/heads/${remoteBranch}`], {
     cwd: root,
   });
 };
@@ -313,14 +335,17 @@ const linkLocalSettings = (root, worktreePath) => {
   fs.symlinkSync(source, target);
 };
 
-const createWorktree = (worktreePath, branch, remote, root, number) => {
-  const onRemote = fetchBranch(branch, remote, root);
+// branch is the local branch, remoteBranch the PR's on remote (the fork's,
+// for a fork's PR, else base, where the PR's last commit is always kept).
+// They differ only for a fork's PR, whose local branch is <owner>-<branch>.
+const createWorktree = (worktreePath, { branch, remoteBranch, remote, base }, root, number) => {
+  const onRemote = Boolean(remote) && fetchBranch(remoteBranch, remote, root);
   // Widened only for a branch the remote has: a refspec naming one it doesn't
   // would fail every later fetch.
-  if (onRemote) ensureRefspecCovers(branch, remote, root);
-  const start = onRemote ? `${remote}/${branch}` : fetchPullHead(number, remote, root);
+  if (onRemote) ensureRefspecCovers(remoteBranch, remote, root);
+  const start = onRemote ? `${remote}/${remoteBranch}` : fetchPullHead(number, base, root);
   if (!onRemote) {
-    console.error(`${branch} is gone from ${remote}, so the worktree starts at the PR's last commit, with no upstream.`);
+    console.error(`${remoteBranch} is gone from ${remote ?? "the deleted fork"}, so the worktree starts at the PR's last commit, with no upstream.`);
   }
 
   // A branch that already exists locally keeps its own commits; -b would refuse
@@ -337,7 +362,7 @@ const createWorktree = (worktreePath, branch, remote, root, number) => {
   }
 
   if (!existingBranch) {
-    if (onRemote) setUpstream(branch, remote, root);
+    if (onRemote) setUpstream(branch, remote, remoteBranch, root);
     return;
   }
   if (!onRemote) return;
@@ -345,10 +370,10 @@ const createWorktree = (worktreePath, branch, remote, root, number) => {
   // Catches up a local branch left behind by an earlier run. --ff-only so a
   // branch carrying your own unpushed commits is reported, never rewritten.
   try {
-    gitRun(["merge", "--ff-only", `${remote}/${branch}`], { cwd: worktreePath });
+    gitRun(["merge", "--ff-only", `${remote}/${remoteBranch}`], { cwd: worktreePath });
   } catch {
     console.error(
-      `Note: ${branch} has diverged from ${remote}/${branch} and was left as-is.`,
+      `Note: ${branch} has diverged from ${remote}/${remoteBranch} and was left as-is.`,
     );
   }
 };
@@ -405,22 +430,19 @@ const main = async () => {
   if (!root) fail("not inside a git repository: give the PR's URL, or run this from its repository");
   const pr = fetchPullRequest(ref, root);
 
-  // Fork branches do not live on this repo's remote, so there is nothing to
-  // make a worktree from. Saying so beats a confusing fetch failure.
-  if (pr.isCrossRepository) {
-    fail(
-      `PR #${pr.number} comes from a fork, and its branch is not on this repo's remote.\n` +
-        "Use `gh pr checkout` for fork PRs.",
-    );
-  }
-
-  const branch = pr.headRefName;
+  // A fork's branch is on the fork, not this repo's remote, and is often its
+  // main, so it is checked out as <owner>-<branch>.
+  const fork = pr.isCrossRepository;
+  const branch = fork ? `${pr.headRepositoryOwner.login}-${pr.headRefName}` : pr.headRefName;
   const worktreePath = path.resolve(root, targetPath, worktreeNameFor(pr));
 
   console.error(`PR:       #${pr.number} — ${pr.title}`);
   console.error(`Author:   ${pr.author?.login ?? "unknown"}`);
   console.error(`Branch:   ${branch}`);
   if (pr.state !== "OPEN") console.error(`State:    ${pr.state}`);
+  if (fork && pr.state === "OPEN" && !pr.maintainerCanModify) {
+    console.error(`Note:     ${pr.headRepositoryOwner.login} hasn't let maintainers push to the fork, so a push may be refused.`);
+  }
 
   // Reusing rather than erroring keeps a rerun on the same PR cheap. The branch
   // check comes second because an existing worktree at our own path is already
@@ -450,7 +472,11 @@ const main = async () => {
   const finalPath = existing ?? worktreePath;
   console.error(`Worktree: ${finalPath}`);
 
-  if (!existing) createWorktree(worktreePath, branch, defaultRemote(root), root, pr.number);
+  if (!existing) {
+    const base = defaultRemote(root);
+    const remote = fork ? forkRemote(pr, base, root) : base;
+    createWorktree(worktreePath, { branch, remoteBranch: pr.headRefName, remote, base }, root, pr.number);
+  }
   linkLocalSettings(root, finalPath);
 
   // Read by the `wtpr` shell function.

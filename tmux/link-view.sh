@@ -10,9 +10,12 @@
 # (tmux/open-url.sh); q closes the pane.
 #
 # Usage:
-#   link-view.sh pick <pane>         M-p: choose a link shown in <pane>, with fzf;
+#   link-view.sh pick <pane> [browser]
+#                                    M-p: choose a link shown in <pane>, with fzf;
 #                                    Enter reads it beside the pane, Ctrl-O opens
-#                                    it in the browser
+#                                    it in the browser; with browser, the other
+#                                    way round (M-p's "Open a link from this
+#                                    pane in the browser")
 #   link-view.sh open <pane> <url>   read <url> in a pane beside <pane>
 #   link-view.sh show [<url>]        in that pane: read it, else LINK_VIEW_URL
 #   link-view.sh browser <pane>      open the link read in <pane>'s window
@@ -31,7 +34,7 @@ safe='^(https?|file)://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$'
 
 case "${1:-}" in
   pick)
-    pane=${2:-}
+    pane=${2:-} first=${3:-read}
     [ -n "$pane" ] || exit 0
     # Every link in what the pane shows and has scrolled past, newest first, a
     # line each: what fzf shows, a tab, the URL. A link written into text (an
@@ -62,11 +65,17 @@ case "${1:-}" in
       tmux display-message "No links in this pane"
       exit 0
     fi
-    choice=$(printf '%s\n' "$links" | fzf --ansi --delimiter '\t' --with-nth 1 --prompt 'Read: ' --header 'Enter reads it beside the pane · Ctrl-O opens it in the browser' --expect ctrl-o --layout reverse) || exit 0
+    # The same list either way; Enter does what was asked for, Ctrl-O the other.
+    if [ "$first" = browser ]; then
+      prompt='Open: ' header='Enter opens it in the browser · Ctrl-O reads it beside the pane'
+    else
+      prompt='Read: ' header='Enter reads it beside the pane · Ctrl-O opens it in the browser'
+    fi
+    choice=$(printf '%s\n' "$links" | fzf --ansi --delimiter '\t' --with-nth 1 --prompt "$prompt" --header "$header" --expect ctrl-o --layout reverse) || exit 0
     key=$(printf '%s' "$choice" | sed -n 1p)
     url=$(printf '%s' "$choice" | sed -n 2p | cut -f2)
     [ -n "$url" ] || exit 0
-    if [ "$key" = ctrl-o ]; then exec "$here/open-url.sh" "$url"; fi
+    if { [ "$first" = browser ] && [ "$key" != ctrl-o ]; } || { [ "$first" != browser ] && [ "$key" = ctrl-o ]; }; then exec "$here/open-url.sh" "$url"; fi
     exec "$0" open "$pane" "$url"
     ;;
 

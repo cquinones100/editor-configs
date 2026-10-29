@@ -1185,7 +1185,7 @@ test("/ filters mission control's cards, and X closes every merged tab and remov
     client.view.cursor = sidebar.missionGrid(sidebar.state.tabs).order.findIndex((t) => t.id === landed);
     await sidebar.missionKey(client, { key: "Enter" });
     await sidebar.missionKey(client, { key: "X" });
-    assert.match(plain(sent.at(-1)), /Close 1 merged tab and remove their worktrees\? \(y\/n\)[\s\S]*feat landed/);
+    assert.match(plain(sent.at(-1)), /Close 1 merged tab and remove their worktrees\? \[Y\/n\][\s\S]*feat landed/);
     await sidebar.missionKey(client, { key: "n" });
     assert.ok(fs.existsSync(worktree));
     // y closes the tab and removes its worktree, and says so.

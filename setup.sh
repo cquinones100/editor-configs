@@ -564,8 +564,9 @@ optional() { echo "  – $1"; }
 ask() {
   $CHECK && return 1
   local answer
-  read -rp "    $1 [y/N] " answer
-  [[ $answer == [yY]* ]]
+  # Enter is yes, as in every yes/no question here; a closed input is no.
+  read -rp "    $1 [Y/n] " answer || return 1
+  [[ -z $answer || $answer == [yY]* ]]
 }
 # What an interactive zsh sees, since tmux starts new tabs from `zsh -i` and
 # nvm is set up only there.

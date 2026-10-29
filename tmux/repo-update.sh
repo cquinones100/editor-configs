@@ -109,9 +109,10 @@ case "${1:-}" in
       printf '  %s has %s checked out, not main. Update it by hand.\n' "$REPO" "$(git_ branch --show-current)"
       done_
     fi
-    read -rsn 1 -p "  Update now? [y/N] " answer
+    # Enter is yes, as in every yes/no question here; a closed input is no.
+    read -rsn 1 -p "  Update now? [Y/n] " answer || exit 0
     printf '\n\n'
-    [[ $answer == [yY] ]] || exit 0
+    [[ -z $answer || $answer == [yY] ]] || exit 0
     printf '  \033[2mUpdating…\033[0m\n'
     old=$(git_ rev-parse HEAD)
     if ! out=$(git_ merge --ff-only --quiet origin/main 2>&1); then

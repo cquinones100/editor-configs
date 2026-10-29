@@ -15,7 +15,7 @@ target=${2:-$(tmux show -gqv @confirm_pane)}
 if [ "$prompt" = --yes ]; then
   ans=y
 else
-  text="$prompt (y/n) "
+  text="$prompt [Y/n] "
   cols=$(tput cols)
   lines=$(tput lines)
   pad_left=$(( (cols - ${#text}) / 2 ))

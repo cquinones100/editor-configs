@@ -348,8 +348,10 @@ const confirm = (question) => {
     // is a wait rather than a failure.
     for (;;) {
       try {
+        // Enter alone is yes, as in every yes/no question here; a closed
+        // terminal (no bytes) is no.
         const bytes = fs.readSync(fd, buffer, 0, buffer.length, null);
-        return /^y(es)?$/i.test(buffer.subarray(0, bytes).toString().trim());
+        return bytes > 0 && /^(y(es)?)?$/i.test(buffer.subarray(0, bytes).toString().trim());
       } catch (err) {
         if (err.code !== "EAGAIN") throw err;
       }
@@ -508,7 +510,7 @@ const main = async () => {
   // whether it arrived by C-a or by holding Tab down. Anything short of all of
   // them was chosen row by row and speaks for itself.
   if (selected.length === done.length && done.length > 1) {
-    const ok = confirm(`Remove all ${done.length} finished worktrees? [y/N]`);
+    const ok = confirm(`Remove all ${done.length} finished worktrees? [Y/n]`);
     if (!ok) {
       status("Cancelled.");
       return;

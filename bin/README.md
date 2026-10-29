@@ -1285,7 +1285,7 @@ yours first, each linking to its moment in the recording, Fathom's summary,
 and the whole transcript, each line's timestamp a link back. A meeting is
 yours when you recorded it or were invited, by your Fathom email or your git
 name. The sidebar daemon asks Fathom through Claude's connector (a headless
-Haiku allowed that one call) every 30 minutes from 7am to 9pm, then twice for
+Haiku allowed that one call) every 30 minutes from 7am to 9pm, and every five minutes for the half hour after a meeting on your calendar ends, since Fathom has its summary a few minutes after the call, then twice for
 each new meeting, the first look going back two days; a meeting whose summary
 isn't ready is asked about again next time. Each is written once, and a note
 already there is never written over. It needs the Fathom connector in Claude;

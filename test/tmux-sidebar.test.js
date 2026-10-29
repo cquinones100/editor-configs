@@ -2236,6 +2236,12 @@ Agree the plan.
   assert.equal(sidebar.meetingsDue(new Date(2026, 9, 28, 6, 30)), false, "not before seven");
   assert.equal(sidebar.meetingsDue(now, now - 60_000), false, "nor a minute after looking");
   assert.equal(sidebar.meetingsDue(now), true);
+  // In the half hour after a meeting on the calendar ends, every five minutes.
+  const ended = [{ start: new Date(now - 40 * 60_000).toISOString(), end: new Date(now - 10 * 60_000).toISOString() }];
+  assert.equal(sidebar.meetingsDue(now, now - 6 * 60_000, ended), true, "a meeting just ended: again after five minutes");
+  assert.equal(sidebar.meetingsDue(now, now - 4 * 60_000, ended), false);
+  assert.equal(sidebar.meetingsDue(now, now - 6 * 60_000, [{ ...ended[0], end: new Date(now - 40 * 60_000).toISOString() }]), false, "over half an hour since, back to every thirty");
+  assert.equal(sidebar.meetingsDue(now, now - 6 * 60_000, [{ allDay: true }]), false);
   delete process.env.NOTES_DIR;
   fs.rmSync(notes, { recursive: true, force: true });
 });

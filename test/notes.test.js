@@ -291,8 +291,8 @@ test("checklists tick, move ticked items down, uncheck all and delete checked", 
   assert.equal(result.on_by_default, true, "a list leads with what is left unless turned off");
   assert.equal(result.not_item, false);
   assert.deepEqual(result.seen[0].slice(1, 4), ["- [x] eggs", "- [ ] milk", "- [ ] bread"]);
-  assert.deepEqual(result.seen[1].slice(1, 4), ["- [ ] bread", "- [x] eggs", "- [x] milk"], "ticked items under the rest, in order");
-  assert.deepEqual(result.seen[2].slice(1, 4), ["- [ ] bread", "- [ ] eggs", "- [ ] milk"]);
+  assert.deepEqual(result.seen[1].slice(1, 5), ["- [ ] bread", "", "- [x] eggs", "- [x] milk"], "ticked items under the rest, in order, a blank line between");
+  assert.deepEqual(result.seen[2].slice(1, 5), ["- [ ] bread", "- [ ] eggs", "- [ ] milk", ""], "the gap goes with the ticks");
   assert.deepEqual(result.seen[3], ["# List", "- [ ] eggs", "- [ ] milk", "", "after"]);
 });
 
@@ -317,7 +317,19 @@ test("a ticked item moves down with its details and sub-items, and sub-items sor
     io.write(vim.json.encode({ seen = seen }))
   `);
   assert.deepEqual(result.seen[0], ["# Trip", "- [ ] book flights", "  compare two airlines", "  - [ ] return", "  - [x] outbound", "- [ ] pack", "", "after"], "a sub-item sorts under its item, its details first");
-  assert.deepEqual(result.seen[1], ["# Trip", "- [ ] pack", "- [x] book flights", "  compare two airlines", "  - [ ] return", "  - [x] outbound", "", "after"], "an item moves with everything under it");
+  assert.deepEqual(result.seen[1], ["# Trip", "- [ ] pack", "", "- [x] book flights", "  compare two airlines", "  - [ ] return", "  - [x] outbound", "", "after"], "an item moves with everything under it");
+});
+
+test("the gap before ticked items keeps the list one list", () => {
+  const { result } = lua(`
+    local f = require("notes.format")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "# List", "- [ ] a", "- [ ] b", "", "- [x] c", "  why c", "  - more", "", "after" })
+    f.toggle_check(buf, 2)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    io.write(vim.json.encode({ lines = lines }))
+  `);
+  assert.deepEqual(result.lines, ["# List", "- [ ] b", "", "- [x] a", "- [x] c", "  why c", "  - more", "", "after"], "ticked across the gap joins the ticked half");
 });
 
 test("Enter carries a list on and ends it on an empty item; Tab indents an item and renumbers", () => {
@@ -507,8 +519,8 @@ test("an item ticked from outside moves under the ones left to do, and the note 
     local buf = vim.api.nvim_get_current_buf()
     local function lines() return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\\n") end
     local g = io.open(path, "w"); g:write("# Errands\\n\\n- [x] milk\\n- [ ] eggs\\n- [ ] bread\\n"); g:close()
-    local moved = vim.wait(3000, function() return lines():find("bread\\n%- %[x%] milk") ~= nil end, 20)
-    local saved = vim.wait(3000, function() return io.open(path):read("*a"):find("bread\\n%- %[x%] milk") ~= nil end, 20)
+    local moved = vim.wait(3000, function() return lines():find("bread\\n\\n%- %[x%] milk") ~= nil end, 20)
+    local saved = vim.wait(3000, function() return io.open(path):read("*a"):find("bread\\n\\n%- %[x%] milk") ~= nil end, 20)
     io.write(vim.json.encode({ moved = moved, saved = saved, text = io.open(path):read("*a") }))
   `);
   assert.equal(result.moved, true, "ticked from outside, it moved down in the open note");

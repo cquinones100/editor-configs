@@ -1372,7 +1372,8 @@ a table's add and delete row and column.
 - **Checklists.** Click a ☐, or press Enter on its line, to tick it. A ticked
   item moves under the ones left to do, with its details and sub-items, so a
   list leads with what is left, as Notes' "Move checked items to bottom"
-  does; sub-items sort the same way under their item.
+  does; sub-items sort the same way under their item. A blank line parts
+  the ticked items from the rest (`gap_before_checked`).
   `require("notes").setup({ move_checked_to_bottom = false })` turns it off.
 - **Line numbers.** The note window numbers its lines relative to the
   cursor, with the cursor's line showing its own, as your Neovim does, for

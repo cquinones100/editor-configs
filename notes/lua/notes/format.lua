@@ -16,7 +16,9 @@ local render = require("notes.render")
 -- under the ones still to do, so a list leads with what is left. On by
 -- default; turn it off with
 -- `require("notes").setup({ move_checked_to_bottom = false })`.
-M.options = { move_checked_to_bottom = true }
+-- With it, a blank line parts the ticked items from the rest
+-- (`gap_before_checked`), so the list's two halves read apart.
+M.options = { move_checked_to_bottom = true, gap_before_checked = true }
 
 local function get_line(buf, row)
   return vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ""
@@ -284,7 +286,8 @@ local function is_check(line) return render.line_kind(line).kind == "check" end
 
 -- The rows of the checklist around `row`: the run of checklist items either
 -- side of it, with whatever is indented under them (an item's details and
--- sub-items), starting and ending on an item.
+-- sub-items), starting and ending on an item. One blank line before ticked
+-- items is the gap sorted leaves, and the list goes on across it.
 local function checklist_bounds(buf, row)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local function part(r)
@@ -292,9 +295,19 @@ local function checklist_bounds(buf, row)
     return line ~= nil and (is_check(line) or (line:match("%S") ~= nil and indent_of(line) > 0))
   end
   if not part(row) then return nil end
+  local function blank(r) return lines[r] ~= nil and lines[r]:match("%S") == nil end
+  local function ticked(r) return lines[r] ~= nil and render.line_kind(lines[r]).done == true end
   local first, last = row, row
-  while part(first - 1) do first = first - 1 end
-  while part(last + 1) do last = last + 1 end
+  local grew = true
+  while grew do
+    grew = false
+    while part(first - 1) do first, grew = first - 1, true end
+    while part(last + 1) do last, grew = last + 1, true end
+    if blank(last + 1) and ticked(last + 2) then
+      last, grew = last + 2, true
+    end
+    if ticked(first) and blank(first - 1) and part(first - 2) then first, grew = first - 2, true end
+  end
   while first <= last and not is_check(lines[first]) do first = first + 1 end
   while last >= first and not is_check(lines[last]) do last = last - 1 end
   if first > last then return nil end
@@ -304,7 +317,8 @@ end
 -- Lines of a list, ticked items under the rest at every level: each item
 -- moves with everything indented under it, and each group keeps its order.
 -- Lines before the first item at the shallowest level stay first.
-local function sorted(lines)
+local function sorted(lines, top)
+  if top then lines = vim.tbl_filter(function(line) return line:match("%S") ~= nil end, lines) end
   local base
   for _, line in ipairs(lines) do
     if is_check(line) and (not base or indent_of(line) < base) then base = indent_of(line) end
@@ -327,7 +341,9 @@ local function sorted(lines)
     table.insert(render.line_kind(item[1]).done and done or todo, whole)
   end
   local out = head
-  for _, group in ipairs(vim.list_extend(todo, done)) do vim.list_extend(out, group) end
+  for _, group in ipairs(todo) do vim.list_extend(out, group) end
+  if top and M.options.gap_before_checked and #todo > 0 and #done > 0 then table.insert(out, "") end
+  for _, group in ipairs(done) do vim.list_extend(out, group) end
   return out
 end
 
@@ -337,7 +353,7 @@ function M.sort_checked(buf, row)
   local first, last = checklist_bounds(buf, row)
   if not first then return end
   local lines = vim.api.nvim_buf_get_lines(buf, first - 1, last, false)
-  local out = sorted(lines)
+  local out = sorted(lines, true)
   if not vim.deep_equal(out, lines) then vim.api.nvim_buf_set_lines(buf, first - 1, last, false, out) end
 end
 
@@ -361,8 +377,21 @@ local function each_check(buf, fn)
   end
 end
 
+-- Takes out the blank lines sorted left before ticked items, bottom up, for
+-- a change that leaves no ticked items there.
+local function close_gaps(buf)
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  for row = #lines - 1, 2, -1 do
+    local above, below = lines[row - 1], lines[row + 1]
+    if lines[row]:match("%S") == nil and render.line_kind(below).done == true and (is_check(above) or (above:match("%S") and indent_of(above) > 0)) then
+      vim.api.nvim_buf_set_lines(buf, row - 1, row, false, {})
+    end
+  end
+end
+
 -- Notes' Uncheck All and Delete Checked Items, for the whole note.
 function M.uncheck_all(buf)
+  close_gaps(buf)
   each_check(buf, function(row, line, kind)
     if kind.done then
       local box = line:find("[", kind.indent + 1, true)
@@ -372,6 +401,7 @@ function M.uncheck_all(buf)
 end
 
 function M.delete_checked(buf)
+  close_gaps(buf)
   each_check(buf, function(row, _, kind)
     if kind.done then vim.api.nvim_buf_set_lines(buf, row - 1, row, false, {}) end
   end)

@@ -40,11 +40,14 @@ M.options = {
   -- Line numbers in the note window, relative to the cursor's line (which
   -- shows its own), for jumps like 5j; off, the note is bare, as in Notes.
   relative_line_numbers = true,
+  -- A blank line between the items left to do and the ticked ones.
+  gap_before_checked = true,
 }
 
 function M.setup(opts)
   M.options = vim.tbl_extend("force", M.options, opts or {})
   format.options.move_checked_to_bottom = M.options.move_checked_to_bottom
+  format.options.gap_before_checked = M.options.gap_before_checked
 end
 
 -- ── Notes and their buffers ────────────────────────────────────────────────

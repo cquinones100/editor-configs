@@ -14,6 +14,12 @@ It is opinionated: the defaults are how it is meant to be used, and Settings (`M
 ## Set up
 
 ```
+curl -fsSL https://raw.githubusercontent.com/cquinones100/switchboard/main/install.sh | bash
+```
+
+It clones `main` into `~/switchboard`, the same branch updates come from, and runs the guided `setup.sh` there. Or do the same by hand:
+
+```
 git clone https://github.com/cquinones100/switchboard.git ~/switchboard
 ~/switchboard/setup.sh
 ```

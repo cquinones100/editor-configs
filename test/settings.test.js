@@ -37,7 +37,7 @@ test("settings.sh sets every option from its default or your file, and set write
   execFileSync("bash", [path.join(repo, "tmux/settings.sh"), "apply", "--load"], { env });
   assert.equal(show("@setting_notifications"), "on");
   assert.equal(show("@setting_update_check"), "hourly");
-  assert.equal(show("status"), "2");
+  assert.equal(show("status"), "on", "one status line unless the second is turned on");
   fs.writeFileSync(file, JSON.stringify({ second_status: false, save_contents: false, theme: "purple", notifications: "nope" }));
   execFileSync("bash", [path.join(repo, "tmux/settings.sh"), "apply", "--load"], { env });
   assert.equal(show("status"), "on");
@@ -50,7 +50,7 @@ test("settings.sh sets every option from its default or your file, and set write
   assert.equal(show("@setting_confirm_close"), "off");
   execFileSync("bash", [path.join(repo, "tmux/settings.sh"), "set", "second_status", "on"], { env });
   assert.equal(show("status"), "2");
-  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), { save_contents: false, theme: "purple", notifications: "nope", confirm_close: false });
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), { save_contents: false, theme: "purple", notifications: "nope", confirm_close: false, second_status: true });
   assert.throws(() => execFileSync("bash", [path.join(repo, "tmux/settings.sh"), "set", "update_check", "weekly"], { env, stdio: "pipe" }));
 
   // lib/settings.js reads the same file the same way.

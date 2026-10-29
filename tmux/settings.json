@@ -210,7 +210,7 @@
     "category": "Tabs and status bar",
     "label": "Second status line",
     "description": "The line under the tabs with the tab's name, branch, PR and Claude session",
-    "default": true
+    "default": false
   },
   {
     "key": "tab_lookups",

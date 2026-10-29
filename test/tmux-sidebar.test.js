@@ -2114,6 +2114,26 @@ test("a Slack message's menu offers a tab of its own for the thread, with Claude
   assert.ok(client.choose.choices.some((c) => c.key === "t" && c.label === "Open a tab for this thread with Claude"));
 });
 
+test("acting on a Slack message marks it seen, and only it", async (t) => {
+  const stateDir = sidebar.STATE_DIR;
+  fs.mkdirSync(stateDir, { recursive: true });
+  const now = Date.now() / 1000;
+  fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ checked: Date.now(), items: [
+    { kind: "dm", channel: "D1", where: "Dee", user: "U1", from: "Dee", text: "first", ts: String(now - 20), link: "https://x.slack.com/archives/D1/p1" },
+    { kind: "dm", channel: "D2", where: "Bo", user: "U2", from: "Bo", text: "second", ts: String(now - 10), link: "https://x.slack.com/archives/D2/p2" },
+  ] }));
+  ["slack-seen", "slack-seen-items.json"].forEach((name) => fs.rmSync(path.join(stateDir, name), { force: true }));
+  t.after(() => ["slack.json", "slack-seen-items.json"].forEach((name) => fs.rmSync(path.join(stateDir, name), { force: true })));
+  const client = { kind: "mission", socket: { write() {}, end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 30, tmuxClient: "none" };
+  client.view.view = sidebar.builtInViews(sidebar.state).findIndex((v) => v.slack) + 1;
+  const titles = () => sidebar.slackView([]).items.map((i) => i.title);
+  assert.deepEqual(titles(), ["DM Bo · Bo", "DM Dee · Dee"], "both new");
+  // The newest first: Bo's. Its menu's thread tab, which only opens a popup.
+  await sidebar.missionKey(client, { key: "Enter" });
+  await sidebar.missionKey(client, { key: "t" });
+  assert.deepEqual(titles(), ["DM Dee · Dee", "DM Bo · Bo · seen"], "Bo's seen, below the new one");
+});
+
 test("moving onto the notifications focuses the Notifications window's sidebar, as browsing to a tab does, never its view", async (t) => {
   const stateDir = sidebar.STATE_DIR;
   fs.mkdirSync(stateDir, { recursive: true });

@@ -708,7 +708,7 @@ test("deleting the open note from the sidebar moves it to Recently Deleted and s
 
 test("bin/notes adds the plugin after your config loads, which lazy.nvim's reset would otherwise drop, and keeps Copilot out", () => {
   const script = fs.readFileSync(path.join(__dirname, "../bin/notes"), "utf8");
-  assert.match(script, /exec nvim --cmd "let g:notes_app = 1" -c/, "set before the config, so lazy.nvim sees it");
+  assert.match(script, /exec nvim "\$\{listen\[@\]\}" --cmd "let g:notes_app = 1" -c/, "set before the config, so lazy.nvim sees it");
   assert.match(fs.readFileSync(path.join(__dirname, "../nvim/lua/plugins/copilot.lua"), "utf8"), /cond = not vim\.g\.notes_app/);
   assert.match(script, /-c "set rtp\^=\$here\/notes" -c "runtime plugin\/notes\.lua" -c "Notes"/);
   assert.doesNotMatch(script, /--cmd "set rtp/);

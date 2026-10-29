@@ -24,11 +24,12 @@ else
   for ((i = 0; i < pad_top; i++)); do echo; done
   printf "%*s%s" "$pad_left" "" "$text"
 
-  read -rsn 1 ans
+  # Enter reads as an empty key and confirms too; a closed input does not.
+  read -rsn 1 ans || exit 0
 fi
 
 case "$ans" in
-  y|Y)
+  ""|y|Y)
     # A pane standing in for another (pane-in-place.sh) puts it back first, so
     # closing it never leaves that pane parked out of sight.
     parked=$(tmux show -pqv -t "$target" @parked_pane 2>/dev/null)

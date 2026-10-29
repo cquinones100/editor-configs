@@ -1170,7 +1170,12 @@ for a crash.
 
 A lock file keeps it to one relay at a time. State, the events file and a log
 (`relay.log`, which keeps what the tab shows) live in
-`~/.local/state/slack-relay/`, readable only by you.
+`~/.local/state/slack-relay/`, readable only by you. The log says where each post went
+and whether Slack notified you of it (the main DM does, a thread reply only
+when also sent there), when you count as at the Mac or away and why (idle,
+screen locked, writing from Slack), and each notice held while you were here;
+the same failure again within ten minutes is counted, not written. Three old
+logs are kept beside it, `relay.log.1` to `.3`.
 
 ### The Slack app, and keeping it yours
 

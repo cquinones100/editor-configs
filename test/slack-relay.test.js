@@ -456,6 +456,19 @@ test("state, log and their directory are owner-only", () => {
   assert.match(fs.readFileSync(relay.LOG_FILE, "utf8"), /^\S+Z a line for the log$/m);
 });
 
+test("the log says where a post went, and writes a failure that repeats only once a while", async () => {
+  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {} };
+  await relay.post(state, "to the DM");
+  await relay.post(state, "to a thread", "1791500000.000100");
+  await relay.post(state, "to both", "1791500000.000100", { broadcast: true });
+  [1, 2, 3].forEach(() => relay.log("dashboard failed: views.publish: not_enabled (log test)"));
+  const lines = fs.readFileSync(relay.LOG_FILE, "utf8").split("\n");
+  assert.ok(lines.some((l) => /posted 9 characters in the main DM \(notifies\)$/.test(l)));
+  assert.ok(lines.some((l) => /posted 11 characters in a thread$/.test(l)));
+  assert.ok(lines.some((l) => /posted 7 characters in a thread and the main DM \(notifies\)$/.test(l)));
+  assert.equal(lines.filter((l) => l.includes("(log test)")).length, 1, "the repeats counted, not written");
+});
+
 test("lastError finds the reason for the latest crash in the log", () => {
   const since = Date.now();
   fs.appendFileSync(relay.LOG_FILE, `${new Date(since - 60_000).toISOString()} Error: an older crash\n`);

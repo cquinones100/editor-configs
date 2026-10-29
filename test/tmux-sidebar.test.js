@@ -978,6 +978,8 @@ test("a waiting tab is answered from mission control: its options shown, a numbe
     client.view.cursor = order.findIndex((t) => t.id === window);
     assert.ok(client.view.cursor >= 0, "the waiting tab is a card");
 
+    // Enter's menu answers it, as the a key used to.
+    await sidebar.missionKey(client, { key: "Enter" });
     await sidebar.missionKey(client, { key: "a" });
     assert.equal(client.answering.found.question, "Do you want to proceed?");
     assert.deepEqual(client.answering.found.options.map((o) => o.label), ["Yes", "No, and tell Claude what to do differently"]);
@@ -1069,8 +1071,9 @@ test("Space peeks at a tab from mission control: its screen, or its whole last t
     await wait(300);
     await sidebar.refresh();
     client.view.cursor = sidebar.missionGrid(sidebar.state.tabs).order.findIndex((t) => t.id === window);
-    // No Claude there: its screen, scrolled to the end, and up with k.
-    await sidebar.missionKey(client, { key: "Space" });
+    // No Claude there: its screen, scrolled to the end, and up with k, from Enter's menu.
+    await sidebar.missionKey(client, { key: "Enter" });
+    await sidebar.missionKey(client, { key: "v" });
     assert.equal(client.peek.mode, "screen");
     assert.match(plain(sent.at(-1)), /PEEK.*60/s);
     await sidebar.missionKey(client, { key: "g" });
@@ -1123,12 +1126,15 @@ test("/ filters mission control's cards, and X closes every merged tab and remov
     await sidebar.missionKey(client, { key: "Escape" });
     assert.match(plain(sent.at(-1)), /something else/);
 
-    // X asks first; n leaves everything as it was.
+    // From Enter's menu on the merged tab: X asks first; n leaves everything as it was.
+    client.view.cursor = sidebar.missionGrid(sidebar.state.tabs).order.findIndex((t) => t.id === landed);
+    await sidebar.missionKey(client, { key: "Enter" });
     await sidebar.missionKey(client, { key: "X" });
     assert.match(plain(sent.at(-1)), /Close 1 merged tab and remove their worktrees\? \(y\/n\)[\s\S]*feat landed/);
     await sidebar.missionKey(client, { key: "n" });
     assert.ok(fs.existsSync(worktree));
     // y closes the tab and removes its worktree, and says so.
+    await sidebar.missionKey(client, { key: "Enter" });
     await sidebar.missionKey(client, { key: "X" });
     await sidebar.missionKey(client, { key: "y" });
     assert.ok(!tmux("list-windows", "-a", "-F", "#{window_id}").split("\n").includes(landed), "the tab is closed");
@@ -1215,7 +1221,7 @@ test("the work map adds wt-revive's worktrees with when and what you last asked 
   assert.equal(client.ended, true, "Esc closes the picker");
 });
 
-test("the work map lists every open tab, lines its rows up in columns, and keeps merged work under a header, removable with x", async (t) => {
+test("the work map lists every open tab, lines its rows up in columns, and keeps merged work under a header, removable from Enter's menu", async (t) => {
   const repo = path.join(tmp, "workmerged-repo");
   const git = (...args) => execFileSync("git", ["-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { stdio: "ignore" });
   fs.mkdirSync(repo, { recursive: true });
@@ -1272,17 +1278,20 @@ test("the work map lists every open tab, lines its rows up in columns, and keeps
   assert.equal(chosen.indexOf("done"), other.indexOf("Going"), "titles start in the same column");
   assert.ok(chosen.includes(done.replace(home, "~")) && !other.includes(working.replace(home, "~")), "the directory on the chosen row only");
 
-  // x asks first, and git keeps a worktree with a file it doesn't track.
+  // x in Enter's menu asks first, and git keeps a worktree with a file it doesn't track.
   fs.writeFileSync(path.join(done, "notes.txt"), "keep me");
+  await sidebar.missionKey(client, { key: "Enter" });
   await sidebar.missionKey(client, { key: "x" });
   assert.match(client.confirm.text, /Remove this merged worktree\?/);
   await sidebar.missionKey(client, { key: "y" });
   assert.match(client.note, /^Kept abc-31-done: /);
   assert.ok(fs.existsSync(done));
   fs.rmSync(path.join(done, "notes.txt"));
+  await sidebar.missionKey(client, { key: "Enter" });
   await sidebar.missionKey(client, { key: "x" });
   await sidebar.missionKey(client, { key: "n" });
   assert.ok(fs.existsSync(done), "n keeps it");
+  await sidebar.missionKey(client, { key: "Enter" });
   await sidebar.missionKey(client, { key: "x" });
   await sidebar.missionKey(client, { key: "y" });
   assert.equal(client.note, "Removed abc-31-done.");
@@ -1567,10 +1576,10 @@ test("mission control's Settings view lists the options by category, / narrows t
     await sidebar.missionKey(client, { key: "Enter" });
     assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile, "utf8")), { notifications: false });
     assert.match(plain(sent.at(-1)), /Push notifications +off/);
-    // Space on a choice goes to its next one; turning the first back on leaves only that.
+    // Enter on a choice goes to its next one; turning the first back on leaves only that.
     await sidebar.missionKey(client, { key: "Enter" });
     await sidebar.missionKey(client, { key: "j" });
-    await sidebar.missionKey(client, { key: "Space" });
+    await sidebar.missionKey(client, { key: "Enter" });
     assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile, "utf8")), { done_clears: "prompt" });
     assert.match(plain(sent.at(-1)), /Finished tabs clear +on prompt/);
   } finally {

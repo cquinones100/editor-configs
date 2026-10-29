@@ -67,8 +67,10 @@ journey; only a change of scope stops and waits for an answer. Then it works on
 the ticket without running tests, lint, or any other checks, runs the
 `review-loop` skill, and pushes and creates a PR. Its final message has only a
 ticket check ("Unchanged." or the edits made to the ticket), "PR pushed" or "PR
-not pushed" with the reason, and a note about the review loop only when it hit
-its round cap.
+not pushed" with the reason, a note about the review loop only when it hit
+its round cap, then "Preview:" and "Prod:", a few steps each to try the work
+in the PR's preview environment and to check it in production once deployed
+(kept out of the PR, which has no test plan).
 
 ```
 wt ABC-123

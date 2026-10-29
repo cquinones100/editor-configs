@@ -421,6 +421,10 @@ const main = async () => {
     "otherwise the edits you made to it, as tersely as possible. Then \"PR pushed\" or \"PR not pushed\", " +
     "and if not pushed, why. Then, only if the review loop stopped at its round cap, say so, " +
     "since that means it needs to run again. " +
+    // How to try it, for me alone: the PR description carries no test plan.
+    "Then \"Preview:\" and how to try the work in the PR's preview environment, then \"Prod:\" and how to check it " +
+    "in production once it is deployed, each a few terse steps saying where to go and what to look for, changing " +
+    "nothing real in production; \"None.\" for either when the work can't be seen there. " +
     "Don't summarize what changed, because I review the PR itself; " +
     "don't mention the review loop otherwise; and don't mention that tests, lint, or checks weren't run.";
 

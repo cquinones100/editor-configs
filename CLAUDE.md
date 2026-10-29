@@ -287,6 +287,8 @@ table before binding it (`unbind -aq -T palette`), so a command taken out of
 the file leaves the palette on the next reload; a binding removed from the
 root or prefix table still needs `tmux unbind` by hand.
 
+A terminal that reports Shift as a modifier of its own sends Alt+Shift+J as `M-S-J` or `M-S-j`, which tmux takes for a key other than `M-J`, so each `M-<capital>` binding has two lines after the split bindings that press it with `send-keys -K`; a new `M-<capital>` binding gets the same two.
+
 Every format inside a shell command (`run-shell`, `if-shell` without `-F`,
 `#(...)`) is written `#{q:...}`, never bare or in quotes. tmux pastes the value
 into the command before the shell parses it, so a directory named

@@ -22,6 +22,13 @@ One line per pane: the tab's number, its name (with the PR number and the Linear
 
 Don't look on turns that can't depend on it. Reading another tab's screen or typing into it is a different thing: only when I ask.
 
+To name a tab, set its `@tab_name` and have the tabs named again; never `tmux rename-window`, which the workspace names over on the next focus. Leave out the PR number, which the tab adds itself:
+
+```
+tmux set-option -w -t "$TMUX_PANE" @tab_name 'Review loop: settings page layout' &&
+  ~/.config/tmux/window-names.sh "$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}')"
+```
+
 # Skills
 
 - When a skill exists both in the repository (`.claude/skills/<name>/`, in the worktree or its main clone) and as my personal one, use the repository's: read its SKILL.md and follow it instead of the personal one.

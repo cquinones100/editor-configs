@@ -46,6 +46,19 @@ tmux new-session -A -s main
 
 Each time tmux opens, and hourly after that, it checks GitHub for new commits and offers them in a popup that updates the clone and runs `setup.sh`. With the git hooks on, a `git pull` links whatever it added too.
 
+## Making it yours
+
+Your own settings go in `~/.config/switchboard/`, which is never in this repository, so updates leave them be. Each file is read after Switchboard's own, so what it sets wins:
+
+| File | Read by |
+|---|---|
+| `tmux.conf` | tmux, at the end of its config |
+| `nvim.lua` | Neovim, at the end of its config |
+| `ghostty` | Ghostty, after its config |
+| `lazygit.yml` | lazygit, over its config, in panes tmux starts |
+
+Settings (`M-p`) keeps what you change there in the same folder, as `settings.json`.
+
 ## Where things are
 
 | Directory | What is in it |

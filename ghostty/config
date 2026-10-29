@@ -28,3 +28,7 @@ mouse-shift-capture = false
 
 # Theme override — written by tmux/theme.sh; optional so missing file is fine
 config-file = ?~/.config/ghostty/theme-mode.conf
+
+# The user layer: your own Ghostty settings, read last so they win, and never
+# in this repository, so updates leave them be.
+config-file = ?~/.config/switchboard/ghostty

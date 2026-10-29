@@ -132,3 +132,10 @@ vim.api.nvim_create_autocmd("LspAttach", {
     map("<C-S-j>", vim.diagnostic.goto_next)
   end,
 })
+
+-- The user layer: your own Neovim settings, in ~/.config/switchboard/nvim.lua,
+-- run last so they win, and never in this repository, so updates leave them be.
+local user_layer = vim.fn.expand("~/.config/switchboard/nvim.lua")
+if vim.uv.fs_stat(user_layer) then
+  dofile(user_layer)
+end

@@ -6,7 +6,9 @@
 //
 //   node save.js --since    prints when to look back to: OVERLAP_MS before the
 //                           last look, or an hour ago the first time (ISO 8601,
-//                           and the Unix time)
+//                           and the Unix time), then the Unix time to look
+//                           for your own messages from: the same, or a day
+//                           back while none have been kept yet
 //   node save.js < new.json  adds what this look found and marks the look
 //
 // new.json: { "items": [{ "kind": "mention" | "dm" | "thread" | "channel",
@@ -48,7 +50,8 @@ const saved = read(file) ?? { items: [] };
 
 if (process.argv[2] === "--since") {
   const since = Number(saved.checked) ? Number(saved.checked) - OVERLAP_MS : Date.now() - FIRST_MS;
-  console.log(`${new Date(since).toISOString()} ${Math.floor(since / 1000)}`);
+  const mine = saved.replied ? since : Date.now() - KEEP_MS;
+  console.log(`${new Date(since).toISOString()} ${Math.floor(since / 1000)} ${Math.floor(mine / 1000)}`);
   process.exit(0);
 }
 

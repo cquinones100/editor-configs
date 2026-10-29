@@ -2103,6 +2103,33 @@ test("n in the sidebar goes to the notifications when there are any, and t opens
   assert.equal(sidebar.state.cursors.get(session), "notice:slack");
 });
 
+test("moving onto the notifications focuses the Notifications window's sidebar, as browsing to a tab does, never its view", async (t) => {
+  const stateDir = sidebar.STATE_DIR;
+  fs.mkdirSync(stateDir, { recursive: true });
+  const tab = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const tabSide = tmux("split-window", "-hb", "-d", "-t", tab, "-P", "-F", "#{pane_id}");
+  tmux("set", "-p", "-t", tabSide, "@sidebar", "1");
+  // The Notifications window, with its view and its sidebar, the view active as a new window's would be.
+  const notices = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}", "cat");
+  const view = tmux("display", "-p", "-t", notices, "#{pane_id}");
+  const noticesSide = tmux("split-window", "-hb", "-d", "-t", notices, "-P", "-F", "#{pane_id}", "cat");
+  tmux("set", "-p", "-t", noticesSide, "@sidebar", "1");
+  tmux("setw", "-t", notices, "@notices_window", "1");
+  tmux("select-pane", "-t", view);
+  t.after(() => {
+    [tab, notices].forEach((w) => tmux("kill-window", "-t", w));
+    fs.rmSync(path.join(stateDir, "slack.json"), { force: true });
+  });
+  fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ checked: Date.now(), items: [{ kind: "dm", channel: "D1", where: "Dee", user: "U1", from: "Dee", text: "hi", ts: String(Date.now() / 1000) }] }));
+  tmux("select-window", "-t", tab);
+  tmux("select-pane", "-t", tabSide);
+  await new Promise((resolve) => setTimeout(resolve, 2_100));
+  await sidebar.refresh();
+  await sidebar.sidebarKey({ kind: "sidebar", pane: tabSide, socket: { write() {}, end() {} } }, { key: "n" });
+  assert.equal(tmux("display", "-p", "-t", "test", "#{window_id}"), notices, "the Notifications window in front");
+  assert.equal(tmux("display", "-p", "-t", notices, "#{pane_id}"), noticesSide, "its sidebar focused, not the view");
+});
+
 test("on the notifications, j and k in the sidebar step through each one, not each kind, and up from the first goes back to the tabs", async (t) => {
   const stateDir = sidebar.STATE_DIR;
   fs.mkdirSync(stateDir, { recursive: true });

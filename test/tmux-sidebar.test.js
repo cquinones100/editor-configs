@@ -549,6 +549,27 @@ test("the tabs' PRs are asked about in one query, a gone worktree's by its branc
   );
 });
 
+test("a repository is found from its origin in every form git takes, SSH over port 443 included", () => {
+  // GitHub's SSH over 443, for networks that block port 22, names a port
+  // between the host and the path; a numeric owner in the scp form isn't one.
+  const remotes = {
+    "https://github.com/acme/widgets.git": "acme/widgets",
+    "https://github.com/acme/widgets": "acme/widgets",
+    "git@github.com:acme/widgets.git": "acme/widgets",
+    "ssh://git@github.com/acme/widgets.git": "acme/widgets",
+    "ssh://git@ssh.github.com:443/acme/widgets.git": "acme/widgets",
+    "git@github.com:1234/widgets.git": "1234/widgets",
+    "git@gitlab.com:acme/widgets.git": null,
+  };
+  Object.entries(remotes).forEach(([url, want], i) => {
+    const repo = path.join(tmp, `origin-form-${i}`);
+    fs.mkdirSync(repo, { recursive: true });
+    execFileSync("git", ["init", "-q", repo]);
+    execFileSync("git", ["-C", repo, "remote", "add", "origin", url]);
+    assert.equal(sidebar.repoOf(repo), want, url);
+  });
+});
+
 test("a tab whose turn ended with background tasks still running reads as working in the background", () => {
   const file = path.join(home, ".claude/projects/-work/background.jsonl");
   const now = Date.now();

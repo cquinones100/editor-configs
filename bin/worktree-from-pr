@@ -134,7 +134,7 @@ const remoteRepo = (root) => {
     if (!remote) return undefined;
     // As configured, before any insteadOf rewrite: the name it stands for.
     const url = gitOutput(["config", "--get", `remote.${remote}.url`], { cwd: root, stdio: ["ignore", "pipe", "ignore"] });
-    const m = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
+    const m = url.match(/github\.com(?::\d+)?[:/]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
     return m ? `${m[1]}/${m[2]}` : undefined;
   } catch {
     return undefined;

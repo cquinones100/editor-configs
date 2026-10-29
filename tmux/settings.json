@@ -129,6 +129,13 @@
     "default": true
   },
   {
+    "key": "usage",
+    "category": "Mission control",
+    "label": "Usage",
+    "description": "Today's Claude spend and how much of the rate limits is used, atop the Sessions view",
+    "default": true
+  },
+  {
     "key": "pr_board",
     "category": "Mission control",
     "label": "PR board",

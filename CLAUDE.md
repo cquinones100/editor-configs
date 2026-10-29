@@ -226,7 +226,7 @@ Mission control's Calendar view (`lib/sidebar/calendar.js`) reads your Google Ca
 
 ## Context use, for the sidebar
 
-`claude/statusline-command.sh` writes each session's context use and model, which Claude Code gives only to the statusline, to `~/.local/state/tmux-sidebar/context/<session id>` (`<percent>\t<model>`), when they change, for mission control's Sessions view (`lib/sidebar/sessions.js`) and the Slack relay (`contextOf` in `lib/slack-relay/tabs.js`), which shows it on each turn, the Home tab and a tab's screen, and warns a thread once a session passes 90%. A change to that line's shape belongs in all three.
+`claude/statusline-command.sh` writes each session's context use and model, which Claude Code gives only to the statusline, to `~/.local/state/tmux-sidebar/context/<session id>` (`<percent>\t<model>`), when they change, for mission control's Sessions view (`lib/sidebar/sessions.js`) and the Slack relay (`contextOf` in `lib/slack-relay/tabs.js`), which shows it on each turn, the Home tab and a tab's screen, and warns a thread once a session passes 90%. A change to that line's shape belongs in all three. It writes the session's cost the same way, for the Sessions view's usage rows (`usageItems`): `usage/spend-<session>` holds `<day>\t<spent that day>\t<cost so far>`, kept with one awk so a session running across midnight or restarted counts only what it spent today, and `usage/limits` the account's `rate_limits` as Claude Code gives them.
 
 ## Settings
 

@@ -20,6 +20,32 @@ if [[ $session =~ ^[A-Za-z0-9-]+$ && -n $used ]]; then
   fi
 fi
 
+# Spend and rate limits, for the Sessions view's usage rows, which the
+# statusline alone is told: spend/<session> is "<day>\t<spent that day>\t<the
+# session's cost so far>", the day's share kept across days and restarts (a
+# cost lower than the last one is a new process, counted from nothing), and
+# limits is the account's rate_limits, the same for every session.
+cost=$(echo "$input" | jq -r '.cost.total_cost_usd // empty')
+if [[ $session =~ ^[A-Za-z0-9-]+$ && $cost =~ ^[0-9.]+$ ]]; then
+  usage_dir=~/.local/state/tmux-sidebar/usage
+  spend_file=$usage_dir/spend-$session
+  old=$(cat "$spend_file" 2>/dev/null)
+  new=$(printf '%s' "$old" | awk -F'\t' -v today="$(date +%F)" -v cost="$cost" '
+    { day = $1; spent = $2; last = $3 }
+    END {
+      if (day != today) spent = 0
+      delta = cost - last; if (delta < 0) delta = cost
+      printf "%s\t%.4f\t%s", today, spent + delta, cost
+    }')
+  if [ "$new" != "$old" ]; then
+    mkdir -p "$usage_dir" && printf '%s' "$new" >"$spend_file"
+  fi
+  limits=$(echo "$input" | jq -c '.rate_limits // empty')
+  if [ -n "$limits" ] && [ "$(cat "$usage_dir/limits" 2>/dev/null)" != "$limits" ]; then
+    printf '%s' "$limits" >"$usage_dir/limits"
+  fi
+fi
+
 branch=$(git -C "$raw_cwd" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null)
 
 # Derive a deterministic accent color from the directory + git context.

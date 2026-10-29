@@ -1256,6 +1256,35 @@ test("the Sessions view lists each Claude session by how full its context is, as
   ], "fullest first, a full one needing you, a tab without Claude left out");
 });
 
+test("the Sessions view starts with today's spend and the rate limits, as the statusline recorded them", () => {
+  // Three draws of one session, the last after a restart, and one of another.
+  const statusline = path.join(__dirname, "../claude/statusline-command.sh");
+  const now = Math.floor(Date.now() / 1000);
+  [
+    ["spend-a", 1.5],
+    ["spend-a", 2.25],
+    ["spend-a", 0.5],
+    ["spend-b", 1, { five_hour: { used_percentage: 42.4, resets_at: now + 7_830 }, seven_day: { used_percentage: 85, resets_at: now + 3_030 } }],
+  ].forEach(([session, cost, limits]) =>
+    execFileSync("bash", [statusline], {
+      input: JSON.stringify({ session_id: session, model: { display_name: "Opus" }, workspace: { current_dir: tmp }, context_window: { used_percentage: 5 }, cost: { total_cost_usd: cost }, rate_limits: limits }),
+      env: { ...process.env, HOME: home },
+    }),
+  );
+  const usage = path.join(home, ".local/state/tmux-sidebar/usage");
+  const ownDir = path.join(sidebar.STATE_DIR, "usage");
+  fs.mkdirSync(ownDir, { recursive: true });
+  fs.readdirSync(usage).forEach((f) => fs.copyFileSync(path.join(usage, f), path.join(ownDir, f)));
+  // A session last used on another day counts for nothing today.
+  fs.writeFileSync(path.join(ownDir, "spend-old"), "2020-01-01\t9\t3");
+
+  assert.deepEqual(sidebar.usageItems().map((i) => [i.title, i.detail, i.state]), [
+    ["Spent today $3.75", "2 sessions, at API prices", "idle"],
+    ["5-hour limit 42% used", "resets in 2h 10m", "idle"],
+    ["Weekly limit 85% used", "resets in 50m", "attention"],
+  ]);
+});
+
 test("tabs in the sidebar are set apart by a rule", async () => {
   tmux("new-window", "-t", "test", "-c", tmp);
   const snap = await sidebar.snapshot();

@@ -738,6 +738,11 @@ test("a tab pinned by hand needs you, whatever Claude is doing in it, until it i
     assert.deepEqual(sidebar.missionGrid([tab], 100, 20).shelves[0].blocks.map((b) => b.stage.title), ["Needs you"]);
     assert.match(sidebar.stateWords(tab), /^pinned · /);
     assert.match(sidebar.sidebarLines({ tabs: [tab], sections: [], cols: 40, rows: 10, view: { focused: false, cursor: window, frame: 0, here: window } }).lines.join(""), /📌/);
+    // Waiting or finished, it keeps its pin, its words saying the rest.
+    ["waiting", "done", "working"].forEach((state) => {
+      const lines = sidebar.sidebarLines({ tabs: [{ ...tab, state }], sections: [], cols: 40, rows: 10, view: { focused: false, cursor: window, frame: 0, here: window } }).lines.join("");
+      assert.match(lines, /📌/, `pinned while ${state}`);
+    });
     tmux("setw", "-u", "-t", window, "@pinned");
     tab = sidebar.tabsFrom(await sidebar.snapshot()).find((x) => x.id === window);
     assert.deepEqual(sidebar.grouped([tab]).map((g) => g.title), ["Other"], "a shell, with no Claude");

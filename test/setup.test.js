@@ -183,15 +183,22 @@ test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or
   }
 });
 
-test("setup.sh claude leaves a CLAUDE.md linked into the repo alone until your rules are named", () => {
+test("setup.sh claude turns a CLAUDE.md linked into the repo's old claude/CLAUDE.md into your own rules file, from git once it is gone", () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-claude-link-")));
   const env = { ...process.env, HOME: home };
   try {
     fs.symlinkSync(repo, path.join(home, "switchboard"));
     fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
     fs.symlinkSync(path.join(repo, "claude/CLAUDE.md"), path.join(home, ".claude/CLAUDE.md"));
-    spawnSync("bash", [script, "claude"], { env, encoding: "utf8" });
-    assert.equal(fs.readlinkSync(path.join(home, ".claude/CLAUDE.md")), path.join(repo, "claude/CLAUDE.md"));
+    fs.mkdirSync(path.join(home, ".config/switchboard"), { recursive: true });
+    const result = spawnSync("bash", [script, "claude"], { env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    const rules = fs.readFileSync(path.join(home, ".config/switchboard/CLAUDE.md"), "utf8");
+    assert.match(rules, /^# /, "the rules it linked to, from git history");
+    assert.doesNotMatch(rules, /^@~\/switchboard\/claude\/switchboard\.md$/m);
+    assert.ok(!fs.lstatSync(path.join(home, ".claude/CLAUDE.md")).isSymbolicLink());
+    assert.match(fs.readFileSync(path.join(home, ".claude/CLAUDE.md"), "utf8"), /\n@~\/\.config\/switchboard\/CLAUDE\.md\n@~\/switchboard\/claude\/switchboard\.md\n$/);
+    assert.match(spawnSync("bash", [script, "claude"], { env, encoding: "utf8" }).stdout, /claude: up to date/, "a second run changes nothing");
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

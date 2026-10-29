@@ -174,13 +174,23 @@ claude_settings() {
 # to either shows at once; a real file in its way that isn't one of these is
 # moved aside first. With no rules named, a CLAUDE.md of your own gets only the
 # line importing Switchboard's part, and a missing one is made with it. A link
-# into this repo's claude/CLAUDE.md (the whole setup, from before) is left
-# alone until rules are named.
+# into this repo's claude/CLAUDE.md (the whole setup, from before it held its
+# owner's rules) becomes ~/.config/switchboard/CLAUDE.md: what it linked to,
+# from git once the file is gone, copied there without the import line.
 SWITCHBOARD_MD="@~/switchboard/claude/switchboard.md"
 WRITTEN_MARK="<!-- Written by Switchboard's setup.sh: your rules, then Switchboard's. Edit them where they live, not here. -->"
 claude_md() {
   local file=~/.claude/CLAUDE.md config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md
-  local repo mine="" want backup
+  local repo mine="" want backup target
+  if [[ -L $file ]] && target=$(readlink "$file") && [[ $target == */claude/CLAUDE.md && ! -e ~/.config/switchboard/CLAUDE.md ]]; then
+    if ! $CHECK; then
+      mkdir -p ~/.config/switchboard &&
+        { cat "$file" 2>/dev/null || git -C "$REPO_DIR" show "$(git -C "$REPO_DIR" log -1 --format=%H --diff-filter=d -- claude/CLAUDE.md):claude/CLAUDE.md"; } |
+        sed "\|^$SWITCHBOARD_MD\$|d" >~/.config/switchboard/CLAUDE.md && [[ -s ~/.config/switchboard/CLAUDE.md ]] ||
+        { rm -f ~/.config/switchboard/CLAUDE.md; echo "  could not copy your rules from $target" >&2; return 1; }
+    fi
+    change "copy your rules from the repo's claude/CLAUDE.md, which your ~/.claude/CLAUDE.md linked to, to ~/.config/switchboard/CLAUDE.md"
+  fi
   repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
   if [[ -n $repo ]]; then
     # A clone of another repository, from before the setting changed, is

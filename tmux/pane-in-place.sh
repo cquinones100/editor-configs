@@ -56,11 +56,22 @@ tool_command() {
     # GitHub. gh and the fetch each wait on the network, about a second, so a
     # popup says it is loading until they are done. It is started in the
     # background, since display-popup holds until the popup closes, and closes
-    # itself after 30 seconds should nothing close it.
+    # itself after 30 seconds should nothing close it. Both are skipped while
+    # the branch is at the commit last compared: its merge base with the base
+    # can't have moved, so neither can the diff. The cache holds, per
+    # worktree, that commit and the base it was compared with.
     diffview)
-      if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
+      if ! facts=$(git -C "$dir" rev-parse --absolute-git-dir HEAD 2>/dev/null); then
         tmux display-message "Not in a git repository: ${dir//\#/##}"
         exit 0
+      fi
+      head=${facts##*$'\n'}
+      cache="${XDG_CACHE_HOME:-$HOME/.cache}/switchboard/diff-base/$(printf '%s' "${facts%%$'\n'*}" | tr / %)"
+      cached_head= ref=
+      IFS=$'\t' read -r cached_head ref 2>/dev/null <"$cache"
+      if [ "$cached_head" = "$head" ] && [[ $ref =~ ^[A-Za-z0-9._/-]+$ ]] && git -C "$dir" rev-parse --verify --quiet "$ref" >/dev/null; then
+        echo "nvim -u ~/.config/nvim/diff.lua --noplugin --cmd 'let g:diff_pane = 1' --cmd 'let g:diff_base = \"$ref\"' -c 'DiffviewOpen $ref...HEAD'"
+        return
       fi
       tmux display-popup -c "$client" -E -w 60 -h 9 -T " diffview " \
         "printf '\\n\\n\\n%14s\\033[1mFetching the PR base branch...\\033[0m' ''; sleep 30" </dev/null >/dev/null 2>&1 &
@@ -77,6 +88,8 @@ tool_command() {
       # A repository with no origin compares with its own branch.
       ref=origin/$base
       git -C "$dir" rev-parse --verify --quiet "$ref" >/dev/null || ref=$base
+      # Only a comparison with a freshly fetched base is worth keeping.
+      [ -z "$fetched" ] || { mkdir -p "${cache%/*}" && printf '%s\t%s\n' "$head" "$ref" >"$cache"; }
       echo "nvim -u ~/.config/nvim/diff.lua --noplugin --cmd 'let g:diff_pane = 1' --cmd 'let g:diff_base = \"$ref\"' -c 'DiffviewOpen $ref...HEAD'"
       ;;
   esac

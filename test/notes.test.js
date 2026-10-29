@@ -834,3 +834,44 @@ test("tabs linked to squashed notes link to the new note", (t) => {
   assert.equal(show(window, "@tab_note"), "Both.md");
   assert.equal(show(other, "@tab_note_last"), "Both.md");
 });
+
+test("a squash shows a box while Claude works, with the notes and the time so far, and Esc in it cancels, leaving the notes as they were", (t) => {
+  const bin = fs.mkdtempSync(path.join(tmp, "claude-bin-"));
+  // A stand-in claude that takes its time.
+  fs.writeFileSync(path.join(bin, "claude"), "#!/bin/sh\ncat >/dev/null\nsleep 5\nprintf '# Both\\n'\n", { mode: 0o755 });
+  const saved = { PATH: process.env.PATH, TMUX: process.env.TMUX };
+  process.env.PATH = `${bin}:${saved.PATH}`;
+  delete process.env.TMUX;
+  t.after(() => Object.assign(process.env, saved));
+  const { result, dir } = lua(`
+    local s = require("notes.store")
+    local sidebar = require("notes.sidebar")
+    local a = s.create("", "First")
+    local b = s.create("", "Second")
+    sidebar.state.marked = { a, b }
+    vim.ui.select = function(_, _, choose) choose("Squash them") end
+    local said = {}
+    vim.notify = function(msg) table.insert(said, msg) end
+    sidebar.squash()
+    local box = function()
+      for _, w in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_config(w).relative ~= "" then return table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false), "\\n") end
+      end
+    end
+    local shown = box()
+    vim.wait(1200)
+    local later = box()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
+    vim.wait(1500, function() return box() == nil end, 20)
+    vim.wait(300)
+    io.write(vim.json.encode({ shown = shown, later = later, gone = box() == nil, a = vim.uv.fs_stat(a) ~= nil, b = vim.uv.fs_stat(b) ~= nil, said = said }))
+  `);
+  assert.match(result.shown, /Squashing 2 notes with Claude \(sonnet\)/);
+  assert.match(result.shown, /· First[\s\S]*· Second/);
+  assert.match(result.shown, /Esc cancels/);
+  assert.match(result.later, /[1-9]s so far/, "the time counts up");
+  assert.equal(result.gone, true, "Esc closes it");
+  assert.equal(result.a && result.b, true, "the notes are untouched");
+  assert.ok(result.said.some((m) => /canceled/.test(m)));
+  assert.ok(!fs.existsSync(path.join(dir, "Both.md")));
+});

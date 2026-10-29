@@ -266,8 +266,16 @@ function M.squash()
     prompt = ("Squash %d notes into one? Their text goes to Claude (%s) to merge; the originals go to Recently Deleted."):format(#marked, squash.options.model),
   }, function(choice)
     if choice ~= "Squash them" then return end
-    vim.notify(("Squashing %d notes…"):format(#marked))
-    squash.run(marked, function(path, why)
+    local titles = vim.tbl_map(function(p) return store.title_of(io.open(p):read("*a")) end, marked)
+    local job, cancelled
+    local close = squash.progress(titles, squash.options.model, function()
+      cancelled = true
+      if job then job:kill(15) end
+      vim.notify("Squash canceled; the notes are as they were.")
+    end)
+    job = squash.run(marked, function(path, why)
+      close()
+      if cancelled then return end
       if not path then return vim.notify("Notes weren't squashed: " .. why, vim.log.levels.WARN) end
       M.state.marked = {}
       require("notes").open(path)

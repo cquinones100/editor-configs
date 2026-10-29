@@ -71,4 +71,49 @@ function M.run(paths, done)
   return job
 end
 
+-- A box over the notes while a squash runs: a spinner, the notes being merged,
+-- the seconds so far, and Esc to cancel, since Claude takes a while. Returns a
+-- function that closes it. `cancel` is called on Esc.
+function M.progress(titles, model, cancel)
+  local frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+  local started = vim.uv.now()
+  local buf = vim.api.nvim_create_buf(false, true)
+  local lines = function(frame)
+    local out = { "", ("  %s Squashing %d notes with Claude (%s)"):format(frames[frame], #titles, model), "" }
+    for _, title in ipairs(titles) do table.insert(out, "    · " .. title) end
+    table.insert(out, "")
+    table.insert(out, ("  %ds so far · it usually takes up to half a minute · Esc cancels"):format(math.floor((vim.uv.now() - started) / 1000)))
+    table.insert(out, "")
+    return out
+  end
+  local width = 4
+  for _, line in ipairs(lines(1)) do width = math.max(width, vim.fn.strdisplaywidth(line) + 2) end
+  width = math.min(width, vim.o.columns - 4)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines(1))
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor", style = "minimal", border = "rounded", title = " Squash ", title_pos = "center",
+    width = width, height = #titles + 6, row = math.max(1, math.floor((vim.o.lines - #titles - 6) / 2) - 1), col = math.floor((vim.o.columns - width) / 2),
+  })
+  local timer = vim.uv.new_timer()
+  local frame = 1
+  timer:start(100, 100, vim.schedule_wrap(function()
+    if not vim.api.nvim_win_is_valid(win) then return end
+    frame = frame % #frames + 1
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines(frame))
+  end))
+  local closed = false
+  local close = function()
+    if closed then return end
+    closed = true
+    timer:stop()
+    timer:close()
+    if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
+  end
+  vim.keymap.set("n", "<Esc>", function()
+    close()
+    cancel()
+  end, { buffer = buf, nowait = true })
+  return close
+end
+
 return M

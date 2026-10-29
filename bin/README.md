@@ -1331,7 +1331,7 @@ again any time, and the `ask_tab_note` setting turns the question off.
 | `dd` | delete (to Recently Deleted) |
 | `r` | restore, in Recently Deleted |
 | `p` | pin or unpin |
-| `s` `S` | mark notes (a ✓), then squash the marked ones into one: after you say yes, a headless Claude (Sonnet, the `squash_model` option) merges them, keeping every item, box and link; the new note goes in the first one's folder, the originals to Recently Deleted, and every tab linked to one of them (`M-e`) links to the new one |
+| `s` `S` | mark notes (a ✓), then squash the marked ones into one: after you say yes, a headless Claude (Sonnet, the `squash_model` option) merges them, keeping every item, box and link, a box over the notes showing it at work with the seconds so far (Esc in it cancels, leaving the notes as they were); the new note goes in the first one's folder, the originals to Recently Deleted, and every tab linked to one of them (`M-e`) links to the new one |
 | `m` | move to a folder |
 | `R` | rename a folder |
 | `/` | search every note, by every word you type |

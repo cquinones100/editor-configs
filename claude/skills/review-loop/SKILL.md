@@ -14,6 +14,8 @@ Have Codex review the current branch, fix the findings you agree with, commit, a
 
 The reviewer is the `codex-review` command. It runs Codex read-only against committed history and prints one JSON object with `summary`, `findings`, the commit it reviewed, and `reviewer`. When Codex isn't installed or signed in, it has a headless Claude review in its place, with the same prompt, the same JSON and less access (no commands, no reads outside the repository), and says so on stderr; the loop runs the same either way. If `codex-review` itself is not on `PATH`, say so and stop; do not substitute your own review for the command's.
 
+Working straight on the default branch, with no branch or PR, "the branch" here is the commits not yet pushed: `codex-review` reviews what `origin/main` doesn't have, and says there is nothing to review once everything is pushed. Their commit messages stand in for a PR description. If the user wants pushed commits reviewed, pass `--base <commit>` to every round.
+
 Arguments: `all` means also act on low-severity findings from the first round on. Anything else is ignored.
 
 ## Before the first round

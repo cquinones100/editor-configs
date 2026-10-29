@@ -16,7 +16,10 @@
 //   --base <ref>      base to diff against; defaults to the PR's base (the
 //                     remote copy, since that defines what the PR contains),
 //                     then origin's default branch. A ref that exists as given,
-//                     such as upstream/main, is used exactly as given.
+//                     such as upstream/main, is used exactly as given. On that
+//                     default branch itself with no PR, working straight on
+//                     main, it is origin's copy, fetched first: the commits
+//                     not yet pushed. Pass --base <commit> to review pushed ones.
 //   --notes <file>    extra context appended to the prompt: findings from a
 //                     previous round the author disputes, and known gaps the
 //                     author has accepted, each with a reason
@@ -429,9 +432,22 @@ const main = () => {
     fail(`the PR comes from a different repository than it targets, so origin/${pr.baseRefName} may not be its real base.\n  Pass --base <remote>/<branch> for the repository the PR targets.`);
   }
   const baseName = opts.base || defaultBase(pr);
-  const { ref: base, mergeBase } = resolveBase(baseName, head, pr, Boolean(opts.base));
+  // On the default branch itself, with no PR (work committed straight to
+  // main): the commits not yet on origin, fetched first so a stale copy
+  // doesn't bring back ones already pushed. Choosing between the local and
+  // remote copies, as a branch does, would compare main with itself.
+  const onBase = !pr && !opts.base && branch === baseName;
+  if (onBase) {
+    if (tryRun("git", ["fetch", "--quiet", "origin", `+refs/heads/${baseName}:refs/remotes/origin/${baseName}`]) === null) {
+      console.error(`codex-review: couldn't fetch origin/${baseName}; comparing with the copy already here.`);
+    }
+    if (!tryRun("git", ["rev-parse", "--verify", "--quiet", `origin/${baseName}`])) fail(`there is no origin/${baseName} to compare ${branch} with; pass --base <commit>`);
+  }
+  const { ref: base, mergeBase } = onBase
+    ? { ref: `origin/${baseName}`, mergeBase: git("merge-base", `origin/${baseName}`, head) }
+    : resolveBase(baseName, head, pr, Boolean(opts.base));
   if (mergeBase === head) {
-    fail(`${branch} has no commits beyond ${base}; nothing to review`);
+    fail(onBase ? `every commit on ${branch} is on ${base} already; nothing to review. Pass --base <commit> to review pushed ones.` : `${branch} has no commits beyond ${base}; nothing to review`);
   }
 
   const commits = git("log", "--reverse", "--format=- %h %s%n%w(0,2,2)%b", `${mergeBase}..${head}`)

@@ -1470,8 +1470,13 @@ Claude skill in `claude/skills/review-loop`, which calls it, fixes what it
 agrees with, commits, and calls it again until the findings list comes back
 empty. It is also fine to run by hand for a second opinion.
 
+Working straight on `main`, with no branch or PR, it reviews the commits not
+yet on `origin/main`, fetched first: what you are about to push. With every
+commit pushed it says there is nothing to review; `--base <commit>` reviews
+pushed ones from there.
+
 ```
-codex-review                       review the branch against its PR's base
+codex-review                       review the branch against its PR's base (on main: the unpushed commits)
 codex-review --base upstream/main  diff against a different base, used as given when the ref exists
 codex-review --notes notes.md      disputed findings and accepted known gaps, each with a reason
 codex-review --include-low         report low-severity findings too

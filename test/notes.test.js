@@ -320,16 +320,23 @@ test("a ticked item moves down with its details and sub-items, and sub-items sor
   assert.deepEqual(result.seen[1], ["# Trip", "- [ ] pack", "", "- [x] book flights", "  compare two airlines", "  - [ ] return", "  - [x] outbound", "", "after"], "an item moves with everything under it");
 });
 
-test("the gap before ticked items keeps the list one list", () => {
+test("the gap before ticked items keeps the list one list, and a ticked item's lines are struck through", () => {
   const { result } = lua(`
     local f = require("notes.format")
+    local render = require("notes.render")
     local buf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "# List", "- [ ] a", "- [ ] b", "", "- [x] c", "  why c", "  - more", "", "after" })
     f.toggle_check(buf, 2)
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-    io.write(vim.json.encode({ lines = lines }))
+    render.draw(buf)
+    local struck = {}
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, render.ns, 0, -1, { details = true })) do
+      if m[4].hl_group == "NotesCheckedStrike" then struck[m[2] + 1] = true end
+    end
+    io.write(vim.json.encode({ lines = lines, struck = vim.tbl_keys(struck) }))
   `);
   assert.deepEqual(result.lines, ["# List", "- [ ] b", "", "- [x] a", "- [x] c", "  why c", "  - more", "", "after"], "ticked across the gap joins the ticked half");
+  assert.deepEqual(result.struck.sort((x, y) => x - y), [4, 5, 6, 7], "each ticked item and the lines under it, not the gap or what follows");
 });
 
 test("Enter carries a list on and ends it on an empty item; Tab indents an item and renumbers", () => {

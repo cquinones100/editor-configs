@@ -18,6 +18,10 @@
 
 local M = {}
 
+-- A ticked item, and everything indented under it, struck through as well as
+-- dimmed; off, only dimmed.
+M.options = { strike_checked = true }
+
 M.ns = vim.api.nvim_create_namespace("notes.render")
 
 local store = require("notes.store")
@@ -52,6 +56,7 @@ function M.highlights()
   set("NotesBox", from("Special", {}))
   set("NotesBoxDone", from("DiagnosticOk", { bold = true }))
   set("NotesChecked", from("Comment", {}))
+  set("NotesCheckedStrike", from("Comment", { strikethrough = true }))
   set("NotesLink", from("Function", { underline = true }))
   set("NotesNoteLink", from("Constant", { underline = true }))
   set("NotesNoteLinkMissing", from("Comment", { underline = true, italic = true }))
@@ -205,9 +210,16 @@ function M.draw(buf)
   vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local kinds = M.kinds(lines)
+  -- A ticked item's indent while the lines under it (its details, sub-items,
+  -- anything indented further) are drawn struck through with it.
+  local ticked
   for i, line in ipairs(lines) do
     local row, k = i - 1, kinds[i]
     local text_from = 0
+    local own = #line:match("^%s*")
+    if ticked and (line:match("%S") == nil or own <= ticked) then ticked = nil end
+    if ticked and M.options.strike_checked then hl(buf, row, own, #line, "NotesCheckedStrike", 120) end
+    if k.kind == "check" and k.done and not ticked then ticked = k.indent end
     if k.kind == "fence" then
       hl(buf, row, 0, #line, "NotesFence")
     elseif k.kind == "code" then
@@ -223,7 +235,7 @@ function M.draw(buf)
       local box = k.indent
       conceal(buf, row, box, box + k.marker, k.done and "☑" or "☐")
       mark(buf, row, box, { end_col = box + k.marker, hl_group = k.done and "NotesBoxDone" or "NotesBox", priority = 210 })
-      if k.done then hl(buf, row, box + k.marker, #line, "NotesChecked", 120) end
+      if k.done then hl(buf, row, box + k.marker, #line, M.options.strike_checked and "NotesCheckedStrike" or "NotesChecked", 120) end
       text_from = box + k.marker
     elseif k.kind == "bullet" or k.kind == "dash" then
       conceal(buf, row, k.indent, k.indent + 1, k.kind == "bullet" and "•" or "–")

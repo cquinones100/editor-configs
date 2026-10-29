@@ -100,6 +100,8 @@ local function copy_link()
   if not at then return vim.notify("No file here", vim.log.levels.WARN) end
   local top = at.view.adapter.ctx.toplevel
   local remote = vim.trim(vim.fn.system({ "git", "-C", top, "remote", "get-url", "origin" }))
+  -- A URL may name a port (SSH over 443); scp form's number after the colon is an owner.
+  if remote:match("^[%w+.-]+://") then remote = remote:gsub("(github%.com):%d+/", "%1/") end
   local repo = remote:match("github%.com[:/](.-)%.git$") or remote:match("github%.com[:/](.-)/?$")
   if not repo then return vim.notify("origin isn't on GitHub", vim.log.levels.WARN) end
   local commit = at.file.rev and at.file.rev.commit

@@ -99,3 +99,29 @@ test("setup.sh claude merges Switchboard's settings into yours once, keeping you
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("setup.sh terminal adds Option as Alt to a Ghostty config of your own once, and leaves one that sets it alone", () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-terminal-")));
+  // Ghostty, outside tmux, so nothing reaches Terminal's or iTerm2's preferences.
+  const env = { ...process.env, HOME: home, TERM_PROGRAM: "ghostty", TMUX: "", LC_TERMINAL: "" };
+  try {
+    fs.symlinkSync(repo, path.join(home, "switchboard"));
+    fs.mkdirSync(path.join(home, ".config/ghostty"), { recursive: true });
+    const config = path.join(home, ".config/ghostty/config");
+    fs.writeFileSync(config, "theme = mine\n");
+    const first = spawnSync("bash", [script, "terminal"], { env, encoding: "utf8" });
+    assert.equal(first.status, 0, first.stderr);
+    assert.match(first.stdout, /add Switchboard's key settings to your Ghostty config/);
+    assert.match(fs.readFileSync(config, "utf8"), /^theme = mine\n[\s\S]*\nconfig-file = \?~\/switchboard\/ghostty\/required\n$/);
+    assert.match(fs.readFileSync(path.join(repo, "ghostty/required"), "utf8"), /^macos-option-as-alt = true$/m);
+    const again = spawnSync("bash", [script, "terminal"], { env, encoding: "utf8" });
+    assert.match(again.stdout, /terminal: up to date/, "a second run changes nothing");
+
+    fs.writeFileSync(config, "macos-option-as-alt = left\n");
+    const own = spawnSync("bash", [script, "terminal"], { env, encoding: "utf8" });
+    assert.match(own.stdout, /terminal: up to date/, "a config that sets it itself is left alone");
+    assert.equal(fs.readFileSync(config, "utf8"), "macos-option-as-alt = left\n");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

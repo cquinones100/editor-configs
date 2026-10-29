@@ -32,7 +32,7 @@ text_of() {
     jump) printf '%s\n' "Lots of tabs?" "" "M-j  find one by typing its name" "M-a  go to whichever needs you" ;;
     in-place) printf '%s\n' "This took your pane's place." "" "Quit it, or press the same key" "again, and your pane comes back." ;;
     done) printf '%s\n' "A tab finished." "" "Its mark clears once you look at it;" "M-a  visits each finished tab" ;;
-    merged) printf '%s\n' "A tab's PR has merged." "" "/queue-and-clean  cleans up after a merge" "x  in mission control's Work map removes" "   a merged worktree" ;;
+    merged) printf '%s\n' "A tab's PR has merged." "" "/queue-and-clean  cleans up after a merge" "Enter in mission control's Work map" "   can remove a merged worktree" ;;
     pinned) printf '%s\n' "Pinned." "" "It stays at the top of Needs you" "until you press M-f in it again." ;;
     worktree) printf '%s\n' "Claude in a worktree." "" "M-v  the PR's description" "M-d  its diff, as GitHub shows it" "M-m  whether it can merge" ;;
     sidebar) printf '%s\n' "The sidebar." "" "Enter  go to a tab     a  answer it" "Space  peek at it      ?  every key" ;;
@@ -40,6 +40,7 @@ text_of() {
     updates) printf '%s\n' "Updates." "" "A git pull links what it adds too," "and the update check is in Settings." ;;
     github_off) printf '%s\n' "GitHub is off in Settings." "" "Its keys do nothing until it is on" "again: M-p, then Settings." ;;
     linear_off) printf '%s\n' "Linear is off in Settings." "" "Its keys do nothing until it is on" "again: M-p, then Settings." ;;
+    option-alt) printf '%s\n' "Option isn't acting as Alt here," "so the M- keys type letters instead." "" "~/switchboard/setup.sh terminal  fixes it" "(then restart the terminal)" ;;
     key-*) printf '%s\n' "Next time, press ${TIP_KEY:-its key}" "" "for what you just picked from M-p." ;;
     *) return 1 ;;
   esac

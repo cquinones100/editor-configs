@@ -11,7 +11,7 @@
 #                            and asks about each optional part
 #   ./setup.sh <part>...     only those parts, without questions: lazygit,
 #                            neovim, git, claude, karabiner, tmux,
-#                            ghostty, pgcli, bin, or the name of one script in
+#                            ghostty, terminal, pgcli, bin, or the name of one script in
 #                            bin/ to link just that one
 #   --check                  with either: say what would change, change nothing
 #
@@ -41,10 +41,10 @@ esac
 if [[ $OS == macos ]]; then
   LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
   # Karabiner only exists on macOS.
-  PARTS=(lazygit neovim git claude karabiner tmux ghostty pgcli bin)
+  PARTS=(lazygit neovim git claude karabiner tmux ghostty terminal pgcli bin)
 else
   LAZYGIT_DIR="$HOME/.config/lazygit"
-  PARTS=(lazygit neovim git claude tmux ghostty pgcli bin)
+  PARTS=(lazygit neovim git claude tmux ghostty terminal pgcli bin)
 fi
 
 # ── Parts ───────────────────────────────────────────────────────────────────
@@ -279,6 +279,103 @@ part_tmux() {
 part_ghostty() {
   dir ~/.config/ghostty
   put_link "$SRC/ghostty/config" ~/.config/ghostty/config
+}
+
+# Option acting as Alt, which every M- key needs, in the terminals you use:
+# Ghostty when it is installed (Switchboard's own config does it already; your
+# own gets a config-file line reading ghostty/required), and the terminal this
+# runs in when it is Terminal or iTerm2, whose default profile is changed
+# through `defaults`, so the change goes through macOS's own preferences.
+# Other terminals can only be told what to add (terminal_hint).
+# The terminal you are in, inside tmux too, where TERM_PROGRAM is tmux's own.
+terminal_name() {
+  local name=${TERM_PROGRAM:-}
+  if [[ $name == tmux || -n ${TMUX:-} ]]; then
+    name=$(tmux display -p '#{client_termtype} #{client_termname}' 2>/dev/null)
+    [[ -n ${LC_TERMINAL:-} ]] && name="$LC_TERMINAL $name"
+  fi
+  [[ -n ${KITTY_WINDOW_ID:-} ]] && name="kitty"
+  [[ -n ${ALACRITTY_WINDOW_ID:-} || -n ${ALACRITTY_SOCKET:-} ]] && name="alacritty"
+  case $(printf '%s' "$name" | tr 'A-Z' 'a-z') in
+    *ghostty*) echo ghostty ;;
+    *apple_terminal*) echo terminal ;;
+    *iterm*) echo iterm ;;
+    *wezterm*) echo wezterm ;;
+    *kitty*) echo kitty ;;
+    *alacritty*) echo alacritty ;;
+    *) echo other ;;
+  esac
+}
+
+# A terminal setup.sh can't change: what to add to its config, or nothing.
+terminal_hint() {
+  case $(terminal_name) in
+    wezterm) echo "WezTerm: add send_composed_key_when_left_alt_is_pressed = false and send_composed_key_when_right_alt_is_pressed = false to your wezterm.lua" ;;
+    kitty) echo "kitty: add macos_option_as_alt yes to kitty.conf" ;;
+    alacritty) echo "Alacritty: add option_as_alt = \"Both\" under [window] in alacritty.toml" ;;
+    other) echo "your terminal: make Option send Alt (Esc+, or \"Option as Meta\")" ;;
+  esac
+}
+
+# PlistBuddy wants a space in a key escaped.
+plist_key() { printf '%s' "${1// /\\ }"; }
+
+# Terminal's default profile: useOptionAsMetaKey.
+terminal_app_option() {
+  local plist profile at
+  plist=$(mktemp) || return 1
+  defaults export com.apple.Terminal "$plist" 2>/dev/null || { rm -f "$plist"; return 0; }
+  profile=$(/usr/libexec/PlistBuddy -c "Print :Default\ Window\ Settings" "$plist" 2>/dev/null)
+  at=":Window\ Settings:$(plist_key "$profile"):useOptionAsMetaKey"
+  if [[ -n $profile && $(/usr/libexec/PlistBuddy -c "Print $at" "$plist" 2>/dev/null) != true ]]; then
+    if ! $CHECK; then
+      /usr/libexec/PlistBuddy -c "Set $at true" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add $at bool true" "$plist" || { rm -f "$plist"; return 1; }
+      defaults import com.apple.Terminal "$plist" || { rm -f "$plist"; return 1; }
+    fi
+    change "make Option act as Meta in Terminal's \"$profile\" profile (open a new window, or quit Terminal and open it again)"
+  fi
+  rm -f "$plist"
+}
+
+# iTerm2's default profile: its Option keys send Esc+ (2).
+iterm_option() {
+  local plist guid i=0 at
+  plist=$(mktemp) || return 1
+  defaults export com.googlecode.iterm2 "$plist" 2>/dev/null || { rm -f "$plist"; return 0; }
+  guid=$(/usr/libexec/PlistBuddy -c "Print :Default\ Bookmark\ Guid" "$plist" 2>/dev/null)
+  while /usr/libexec/PlistBuddy -c "Print :New\ Bookmarks:$i" "$plist" >/dev/null 2>&1; do
+    if [[ $(/usr/libexec/PlistBuddy -c "Print :New\ Bookmarks:$i:Guid" "$plist" 2>/dev/null) == "$guid" ]]; then
+      at=":New\ Bookmarks:$i"
+      if [[ $(/usr/libexec/PlistBuddy -c "Print $at:Option\ Key\ Sends" "$plist" 2>/dev/null) != 2 || $(/usr/libexec/PlistBuddy -c "Print $at:Right\ Option\ Key\ Sends" "$plist" 2>/dev/null) != 2 ]]; then
+        if ! $CHECK; then
+          local key
+          for key in "Option\ Key\ Sends" "Right\ Option\ Key\ Sends"; do
+            /usr/libexec/PlistBuddy -c "Set $at:$key 2" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add $at:$key integer 2" "$plist" || { rm -f "$plist"; return 1; }
+          done
+          defaults import com.googlecode.iterm2 "$plist" || { rm -f "$plist"; return 1; }
+        fi
+        change "make both Option keys send Esc+ in iTerm2's default profile (quit iTerm2 and open it again)"
+      fi
+      break
+    fi
+    i=$((i + 1))
+  done
+  rm -f "$plist"
+}
+
+part_terminal() {
+  local config=~/.config/ghostty/config line
+  # Ghostty: Switchboard's own config sets it; your own gets a line reading
+  # ghostty/required, unless it sets Option as Alt itself.
+  line="config-file = ?~/switchboard/ghostty/required"
+  if [[ -e $config && ! -L $config ]] && ! grep -qE '^\s*macos-option-as-alt\s*=\s*(true|left|right)' "$config" && ! grep -qxF "$line" "$config"; then
+    $CHECK || printf '\n# Switchboard: Option as Alt, which its M- keys need (ghostty/required).\n%s\n' "$line" >>"$config" || return 1
+    change "add Switchboard's key settings to your Ghostty config (restart Ghostty, or reload its config)"
+  fi
+  case $(terminal_name) in
+    terminal) terminal_app_option || return 1 ;;
+    iterm) iterm_option || return 1 ;;
+  esac
 }
 
 part_pgcli() {
@@ -565,6 +662,21 @@ elif ask "Link Ghostty's config (Option as Alt, 24-bit color, the theme and font
   apply ghostty && ok "linked Ghostty's config; restart Ghostty to use it" || todo "./setup.sh ghostty failed"
 else
   optional "Ghostty's config, for Option as Alt and the theme: ./setup.sh ghostty"
+fi
+
+# Option as Alt in the terminals you use (part_terminal): Ghostty with a
+# config of your own, Terminal and iTerm2 are changed after asking; another
+# terminal is told the line to add.
+if (( $(pending terminal) > 0 )); then
+  if ask "Make Option act as Alt in your terminal, which every M- key needs?"; then
+    apply terminal && ok "Option acts as Alt; restart your terminal for it to take" || todo "./setup.sh terminal failed"
+  else
+    optional "Option as Alt, which every M- key needs: ./setup.sh terminal"
+  fi
+elif [[ -n $(terminal_hint) ]]; then
+  optional "Option as Alt, which every M- key needs, in $(terminal_hint)"
+else
+  ok "Option acts as Alt in your terminal"
 fi
 
 # diffview (M-d) and the notes app need the plugins lazy.nvim installs.

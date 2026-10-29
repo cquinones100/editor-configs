@@ -287,6 +287,22 @@ test("a tab is named after its own pane's directory, not its sidebar's, while th
   assert.equal(tmux("display", "-p", "-t", window, "#{@tab_label}"), "named-work");
 });
 
+test("a tab is named after its work, not the notes pane moved beside it, which names only a tab of its own", (t) => {
+  const work = path.join(tmp, "notes-beside-work");
+  const notesHome = path.join(tmp, "notes-home");
+  [work, notesHome].forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
+  const window = tmux("new-window", "-d", "-t", "test", "-c", work, "-P", "-F", "#{window_id}");
+  const alone = tmux("new-window", "-d", "-t", "test", "-c", notesHome, "-P", "-F", "#{window_id}");
+  t.after(() => [window, alone].forEach((w) => tmux("kill-window", "-t", w)));
+  const notes = tmux("split-window", "-h", "-d", "-t", window, "-c", notesHome, "-P", "-F", "#{pane_id}");
+  tmux("set", "-p", "-t", notes, "@notes_pane", "1");
+  tmux("select-pane", "-t", notes);
+  tmux("set", "-p", "-t", tmux("display", "-p", "-t", alone, "#{pane_id}"), "@notes_pane", "1");
+  execFileSync("bash", [path.join(__dirname, "../tmux/window-names.sh"), "test"]);
+  assert.equal(tmux("display", "-p", "-t", window, "#{@tab_label}"), "notes-beside-work", "typing in the notes beside it");
+  assert.equal(tmux("display", "-p", "-t", alone, "#{@tab_label}"), "notes-home");
+});
+
 test("a turn that ends with its pane no longer where the tab's name came from names the tabs again", async (t) => {
   const work = path.join(tmp, "renamed-work");
   fs.mkdirSync(work, { recursive: true });

@@ -30,10 +30,15 @@ MAX_LABEL=30
 # Each window's directory is its active pane's, but never a sidebar's (the
 # @sidebar pane option): with the sidebar's cursor on a tab, the sidebar is
 # that window's active pane, and the tab would take the sidebar's directory.
-# A window with only its sidebar active goes by its first other pane.
-tmux list-panes -s -t "$session" -F $'#{window_index}\t#{?@sidebar,s,p}#{pane_active}\t#{pane_current_path}' |
-  awk -F'\t' '$2 ~ /^p/ && (!($1 in path) || $2 == "p1") { if (!($1 in path)) order[++n] = $1; path[$1] = $3 }
-    END { for (i = 1; i <= n; i++) print order[i] "\t" path[order[i]] }' |
+# A window with only its sidebar active goes by its first other pane. The
+# notes pane (@notes_pane), moved beside your work with M-e, runs in your home
+# directory and isn't the tab's work either, so it counts only in a window
+# with no other pane, the Notes tab itself.
+tmux list-panes -s -t "$session" -F $'#{window_index}\t#{?@sidebar,s,#{?@notes_pane,n,p}}#{pane_active}\t#{pane_current_path}' |
+  awk -F'\t' '
+    $2 ~ /^p/ && (!($1 in path) || $2 == "p1") { if (!($1 in path) && !($1 in notes)) order[++n] = $1; path[$1] = $3 }
+    $2 ~ /^n/ && !($1 in notes) { if (!($1 in path)) order[++n] = $1; notes[$1] = $3 }
+    END { for (i = 1; i <= n; i++) print order[i] "\t" (order[i] in path ? path[order[i]] : notes[order[i]]) }' |
   while IFS=$'\t' read -r idx path; do
     # Color, label and PR in one cached answer (see path-facts.sh).
     IFS=$'\t' read -r whex label pr <<<"$("$script_dir/path-facts.sh" "$path")"

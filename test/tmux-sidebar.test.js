@@ -1848,6 +1848,11 @@ test("the Calendar view's iCal feed gives today's events, repeats and moved occu
   assert.equal(byTitle["Review (moved)"].join, "https://acme.zoom.us/j/123?pwd=x");
   assert.equal(byTitle.Holiday.allDay, true);
   assert.equal(byTitle.Holiday.you, "yours");
+  // Google's own ID for each, which RSVP answers by: a moved occurrence by when it was meant to start.
+  assert.equal(byTitle.Standup.id, "standup_20261028T170000Z");
+  assert.equal(byTitle["Review (moved)"].id, "review_20261028T190000Z");
+  assert.equal(byTitle["Review (moved)"].calendar, "me@example.com");
+  assert.equal(Buffer.from(byTitle["Review (moved)"].link.split("eid=")[1], "base64").toString(), "review_20261028T190000Z me@example.com");
 });
 
 test("an event link leaves out a split series' _R part, as Google's links do", () => {

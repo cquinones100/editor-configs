@@ -1425,6 +1425,13 @@ works each checklist item you add, once you have stopped typing it, and ticks
 it when done. It runs as a Monitor, started again when it expires, until you
 say to stop.
 
+`/project-status [project or ticket]` in Claude says where the Linear
+project this session is part of stands (from the argument, else the branch's
+or tab's ticket): its latest status update and target date, its tickets by
+state and milestone, who has what in flight and which tab is on it, what is
+stuck, what the team said about it on Slack in the last two weeks, and what
+to pick up next. It only reads Linear, Slack and tmux.
+
 A note changed from outside the app, by the skill, a script or another
 editor, shows the change while it is open, without a save or a keypress. If
 you have typed something not yet saved, the two are merged line by line, so

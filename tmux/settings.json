@@ -73,6 +73,13 @@
     "default": true
   },
   {
+    "key": "meeting_notes",
+    "category": "Integrations",
+    "label": "Meeting notes",
+    "description": "Each meeting of yours Fathom recorded as a note in Meetings, with its summary, action items and transcript, through Claude's Fathom connector (a Haiku call every 30 minutes from 7am to 9pm, and two for each new meeting)",
+    "default": true
+  },
+  {
     "key": "search_everything",
     "category": "Integrations",
     "label": "Search everything",

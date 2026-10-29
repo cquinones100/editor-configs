@@ -1269,6 +1269,18 @@ ticket scripts' key, while their settings are on, and tries again every 15
 minutes while one can't be read. A note already there is never written over,
 so edit it as you like. The `standup_note` setting (Integrations) turns it off.
 
+Each meeting of yours that Fathom recorded becomes a note in the Meetings
+folder, `<title> <date>.md` (`lib/sidebar/meetings.js`): its action items,
+yours first, each linking to its moment in the recording, Fathom's summary,
+and the whole transcript, each line's timestamp a link back. A meeting is
+yours when you recorded it or were invited, by your Fathom email or your git
+name. The sidebar daemon asks Fathom through Claude's connector (a headless
+Haiku allowed that one call) every 30 minutes from 7am to 9pm, then twice for
+each new meeting, the first look going back two days; a meeting whose summary
+isn't ready is asked about again next time. Each is written once, and a note
+already there is never written over. It needs the Fathom connector in Claude;
+the `meeting_notes` setting (Integrations) turns it off.
+
 ### Setup
 
 ```

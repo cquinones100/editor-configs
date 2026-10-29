@@ -1874,3 +1874,79 @@ test("the standup note lists the last working day's PRs, reviews, ticket moves a
   delete process.env.NOTES_DIR;
   fs.rmSync(notes, { recursive: true, force: true });
 });
+
+test("meeting notes write each of your Fathom meetings once, its action items yours first, and wait for a summary not ready yet", async () => {
+  const notes = fs.mkdtempSync("/tmp/meetings-");
+  process.env.NOTES_DIR = notes;
+  // Fathom as its connector answers, one meeting someone else's alone.
+  const listed = [
+    "Found 3 meeting(s). Each entry has recording_id and url.",
+    "",
+    "- Plan / review | 2026-10-27 | id: 11 | url: https://fathom.video/calls/111 | recorded by Ann Lee | Me Myself, Bo Park",
+    "  Summary:",
+    "  ## Meeting Purpose cut short...",
+    "  Action items:",
+    "    • [ ] Send the deck — assigned to Bo Park (https://fathom.video/calls/111?timestamp=65.9)",
+    "    • [ ] Fix the bug — assigned to Me Myself (he/him) (https://fathom.video/calls/111?timestamp=600.2)",
+    "- Not mine | 2026-10-27 | id: 12 | url: https://fathom.video/calls/112 | recorded by Ann Lee | Bo Park",
+    "- Just ended | 2026-10-28 | id: 13 | url: https://fathom.video/calls/113 | recorded by me@example.com",
+  ].join("\n");
+  const asked = [];
+  const call = async (tool, input) => {
+    asked.push([tool.replace("mcp__claude_ai_Fathom__", ""), input.recording_id]);
+    if (tool.endsWith("get_identity")) return JSON.stringify({ name: "me@example.com", email: "me@example.com" });
+    if (tool.endsWith("list_meetings")) return listed;
+    if (tool.endsWith("get_meeting_summary")) {
+      return input.recording_id === 13
+        ? ""
+        : "## Meeting Purpose\n\n[Agree the plan.](https://fathom.video/calls/111?tab=summary&timestamp=0.0)\n\n## Key Takeaways\n\n  - [**Ship it:** on Friday.](https://fathom.video/calls/111?tab=summary&timestamp=9.0)\n\n### A topic\n\n  - [Said once.](https://fathom.video/calls/111?tab=summary&timestamp=3.0)\n";
+    }
+    return "[00:00](https://fathom.video/calls/111?timestamp=0) Ann Lee: Hello.\n[00:04](https://fathom.video/calls/111?timestamp=4) Bo Park: Hi.";
+  };
+  const state = path.join(sidebar.STATE_DIR, "meetings.json");
+  fs.rmSync(state, { force: true });
+  fs.mkdirSync(path.dirname(state), { recursive: true });
+  fs.writeFileSync(state, JSON.stringify({ written: [], me: ["me@example.com", "Me Myself"] }));
+  const now = new Date(2026, 9, 28, 10);
+
+  await sidebar.writeMeetings(now, () => {}, call);
+  assert.deepEqual(fs.readdirSync(path.join(notes, "Meetings")), ["Plan - review 2026-10-27.md"], "mine alone, the one with no summary yet waiting");
+  assert.equal(fs.readFileSync(path.join(notes, "Meetings", "Plan - review 2026-10-27.md"), "utf8"), `# Plan / review 2026-10-27
+
+[Recording](https://fathom.video/calls/111) · recorded by Ann Lee · Me Myself, Bo Park
+
+## Action items
+
+- [ ] Fix the bug (Me Myself) [10:00](https://fathom.video/calls/111?timestamp=600.2)
+- [ ] Send the deck (Bo Park) [1:05](https://fathom.video/calls/111?timestamp=65.9)
+
+## Summary
+
+Agree the plan.
+
+### Key Takeaways
+
+- **Ship it:** on Friday.
+
+#### A topic
+
+- Said once.
+
+## Transcript
+
+[00:00](https://fathom.video/calls/111?timestamp=0) Ann Lee: Hello.
+
+[00:04](https://fathom.video/calls/111?timestamp=4) Bo Park: Hi.
+`);
+  assert.deepEqual(JSON.parse(fs.readFileSync(state, "utf8")).written, [11]);
+
+  // The next look writes nothing twice, and asks again only for the waiting one.
+  asked.length = 0;
+  await sidebar.writeMeetings(now, () => {}, call);
+  assert.deepEqual(asked, [["list_meetings", undefined], ["get_meeting_summary", 13]]);
+  assert.equal(sidebar.meetingsDue(new Date(2026, 9, 28, 6, 30)), false, "not before seven");
+  assert.equal(sidebar.meetingsDue(now, now - 60_000), false, "nor a minute after looking");
+  assert.equal(sidebar.meetingsDue(now), true);
+  delete process.env.NOTES_DIR;
+  fs.rmSync(notes, { recursive: true, force: true });
+});

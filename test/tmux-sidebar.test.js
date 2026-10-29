@@ -1975,6 +1975,27 @@ test("the Calendar view's iCal feed gives today's events, repeats and moved occu
   assert.equal(Buffer.from(byTitle["Review (moved)"].link.split("eid=")[1], "base64").toString(), "review_20261028T190000Z me@example.com");
 });
 
+test("h and l move between calendar events that share a time, in the order they sit side by side", () => {
+  const at = (h, m = 0) => new Date(2026, 9, 29, h, m).toISOString();
+  const events = [
+    { title: "Holiday", allDay: true },
+    { title: "Offsite", allDay: true },
+    { title: "Standup", start: at(13), end: at(13, 15) },
+    { title: "Demos", start: at(13), end: at(14) },
+    { title: "Lunch", start: at(13, 30), end: at(14) },
+    { title: "Review", start: at(15), end: at(16) },
+  ];
+  const section = { calendar: true, items: events.map((e) => ({ title: e.title, event: e })) };
+  const index = (title) => section.items.findIndex((i) => i.title === title);
+  const step = (title, by) => section.items[sidebar.besideStep(section, index(title), by)].title;
+  assert.equal(step("Demos", 1), "Standup", "the longer one sits first, the shorter beside it");
+  assert.equal(step("Standup", -1), "Demos");
+  assert.equal(step("Demos", 1), "Standup");
+  assert.equal(step("Lunch", -1), "Demos", "Lunch overlaps Demos but not Standup");
+  assert.equal(step("Review", 1), "Review", "nothing beside it, it stays");
+  assert.equal(step("Holiday", 1), "Offsite", "all-day ones along their own row");
+});
+
 test("an event link leaves out a split series' _R part, as Google's links do", () => {
   const link = sidebar.linkOf("abc_R20261020T170000@google.com", "me@example.com", new Date("2026-10-28T17:00:00Z"), false, true);
   assert.equal(Buffer.from(link.split("eid=")[1], "base64").toString(), "abc_20261028T170000Z me@example.com");

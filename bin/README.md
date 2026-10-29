@@ -1097,7 +1097,9 @@ which shows most of that as raw symbols.
 It posts an alert when a tab's Claude is waiting on you or has finished, from
 the state `tmux/agent-state.sh` keeps. A turn that ends in the tab you're
 looking at isn't marked finished in tmux, since you saw it; its thread gets it
-all the same, from the hook's event and the final message it carries. You
+all the same, from the hook's event and the final message it carries. A
+Calendar or Slack tab (`tmux/loop-tab.sh`, marked `@loop_tab`) finishes a turn
+on every tick, so it alerts only when it waits on you. You
 count as away once nothing has been typed or clicked for 30 seconds (macOS's
 own idle time, which a locked screen counts too).
 

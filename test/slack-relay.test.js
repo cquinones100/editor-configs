@@ -405,6 +405,29 @@ test("alertTabs alerts once per state change, with the screen for a wait", async
   tmux("kill-window", "-t", window);
 });
 
+test("alertTabs tells you when a loop tab waits, not each time it finishes a tick", async () => {
+  const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", fakeClaude);
+  // tmux takes a moment to see the pane's command as the fake Claude.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  tmux("set", "-w", "-t", window, "@loop_tab", "1");
+  tmux("set", "-p", "-t", window, "@agent_state", "done");
+  tmux("set", "-p", "-t", window, "@agent_since", "100");
+  const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
+  const panePid = tmux("display", "-p", "-t", window, "#{pane_pid}");
+  fs.writeFileSync(path.join(home, ".claude/sessions", `${panePid}.json`), JSON.stringify({ pid: Number(panePid), sessionId: "looping" }));
+  fs.writeFileSync(path.join(home, ".claude/projects/-work/looping.jsonl"), JSON.stringify({ type: "user", message: { content: "/slack-updates" } }));
+
+  await relay.alertTabs(state);
+  assert.equal(posts.length, 0);
+  tmux("set", "-p", "-t", window, "@agent_state", "waiting");
+  tmux("set", "-p", "-t", window, "@agent_since", "200");
+  await relay.alertTabs(state);
+
+  assert.ok(posts.some((p) => /is \*\*waiting on you\*\*/.test(p.body)));
+  fs.rmSync(path.join(home, ".claude/sessions", `${panePid}.json`));
+  tmux("kill-window", "-t", window);
+});
+
 test("a long post goes out in parts, all in the same thread", async () => {
   const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {} };
   const text = Array.from({ length: 300 }, (_, i) => `line ${i} of a long answer`).join("\n");

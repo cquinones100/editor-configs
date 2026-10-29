@@ -27,4 +27,6 @@ detached=
 [ "${4:-}" = --background ] && detached=-d
 window=$(tmux new-window $detached -P -F '#{window_id}' -c "$HOME" "zsh -i -c 'claude \"/loop $every $skill\"; exec zsh -i'") || exit 0
 tmux set-option -w -t "$window" @tab_name "$name"
+# The Slack relay alerts on its waits only, not on each tick it finishes.
+tmux set-option -w -t "$window" @loop_tab 1
 "${0%/*}/window-names.sh" "$(tmux display -p -t "$window" '#{session_name}')"

@@ -178,7 +178,7 @@ sidebars as shells titled `tmux-sidebar`, and the daemon gives them their
 client back; its restore hooks set `@sidebar_hold` so nothing is added while
 it lays windows out.
 
-Its lookups of GitHub, Linear and the calendar feed pause while you're away (no tmux client, or the Mac idle `AWAY_MS`, checked with `ioreg` once a minute) and all run on return (`pause_when_away` setting); the standup and meeting notes don't. Anything that has just asked GitHub about a PR appends to `github` in the state directory, as `M-m`'s `pr-ready.sh` does, and the daemon asks again for the PRs, CI and Work map views, at most every 15 seconds. The PR board asks for merged PRs only every `MERGED_EVERY_MS`.
+Its lookups of GitHub, Linear and the calendar feed pause while you're away (no tmux client, or the Mac idle `AWAY_MS` or locked, checked once a minute) and all run on return (`pause_when_away` setting); the standup and meeting notes don't. Anything that has just asked GitHub about a PR appends to `github` in the state directory, as `M-m`'s `pr-ready.sh` does, and the daemon asks again for the PRs, CI and Work map views, at most every 15 seconds. The PR board asks for merged PRs only every `MERGED_EVERY_MS`.
 
 Plugins load only when named in `~/.config/tmux-sidebar/config.json`, from
 `~/.config/tmux-sidebar/plugins/` (yours) or `lib/sidebar/plugins/`. Its tests,
@@ -232,6 +232,10 @@ Mission control's Calendar view (`lib/sidebar/calendar.js`) reads your Google Ca
 `lib/sidebar/standup.js` writes `Standups/Standup <date>.md` into the notes directory each weekday morning, from the daemon (`standup`, checked every minute, `standup_note` setting): the last working day's PRs and reviews (one `gh api graphql` search), Linear tickets assigned to or made by you that changed state (a ticket closed by a merge often has no assignee), and your commits in the tabs' repositories, then today's work. It writes a new file only (`wx`), never one that is there, since the note is yours to edit once written; it and the meeting notes are the only things outside the notes app that create a note, and the app's directory watch takes them in. `standupFrom` builds the Markdown from the fetched data alone, so its test needs no network.
 
 `lib/sidebar/meetings.js` writes `Meetings/<title> <date>.md` for each of your Fathom meetings, from the daemon (`meetings`, every 30 minutes from 7am to 9pm, one look at a time, `meeting_notes` setting), through `lib/connector.js`: `list_meetings` with action items, then `get_meeting_summary` and `get_meeting_transcript` for each new one. The connector answers in text, which `meetingsFrom` parses, so a change to Fathom's layout belongs there. What was written is kept in `meetings.json` in the state directory, with your Fathom email and git name, and `meetingNote` builds the note from what Fathom gave alone, so its test needs no network. `callConnector` adds `~/.local/bin` to the PATH, since the daemon starts without Claude Code's.
+
+## Whether you're at the Mac
+
+`lib/presence.js` is the one way anything here tells whether you're at the Mac: macOS's idle time (`HIDIdleTime`) and whether the lock screen is up (`CGSSessionScreenIsLocked`), both from `ioreg`, a locked screen away at once. The Slack relay (`lib/slack-relay/presence.js`, 30 seconds) and the sidebar daemon (10 minutes, or no tmux client) each pick how long idle counts as away; anything else that needs to know uses it too.
 
 ## Context use, for the sidebar
 

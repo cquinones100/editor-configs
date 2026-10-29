@@ -1102,7 +1102,8 @@ all the same, from the hook's event and the final message it carries. A
 Calendar or Slack tab (`tmux/loop-tab.sh`, marked `@loop_tab`) finishes a turn
 on every tick, so it alerts only when it waits on you. You
 count as away once nothing has been typed or clicked for 30 seconds (macOS's
-own idle time, which a locked screen counts too).
+own idle time), or at once when the screen is locked, read as the sidebar
+reads it (`lib/presence.js`).
 
 Each tab's thread always gets everything at once: finished turns, waits,
 dialogs, stall notes and milestone pings, so it is a complete record whether

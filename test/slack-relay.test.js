@@ -120,6 +120,8 @@ beforeEach(() => {
   relay.presence.held = [];
   relay.presence.slackUntil = 0;
   relay.presence.readIdle = async () => relay.presence.idleMs;
+  relay.presence.locked = false;
+  relay.presence.readLocked = async () => relay.presence.locked;
   relay.ownerOnly();
 });
 
@@ -1955,6 +1957,15 @@ test("while you're at the computer, threads get everything at once and only the 
   assert.equal(posts.at(-1).broadcast, true);
   tmux("kill-window", "-t", window);
 });
+test("a locked screen counts as away at once, however recently a key was pressed", async () => {
+  relay.presence.idleMs = 1_000;
+  assert.equal(relay.presence.away(), false);
+  relay.presence.locked = true;
+  assert.equal(relay.presence.away(), true);
+  assert.equal(require("../lib/presence").awayBy({ idleMs: 1_000, locked: true }, 600_000), true, "the sidebar's reading agrees");
+  assert.equal(require("../lib/presence").awayBy({ idleMs: undefined, locked: undefined }, 600_000), false, "unknown is here");
+});
+
 test("writing from Slack counts as away for a while, unless you wrote it on the Mac", async () => {
   const state = { dm: { channel: "D1", user: "U1" }, threads: {}, alerts: {}, reported: {}, following: {} };
   relay.presence.idleMs = 0;

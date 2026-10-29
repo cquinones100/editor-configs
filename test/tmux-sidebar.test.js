@@ -387,6 +387,35 @@ test("tabs whose PR is in the merge queue or merged get sections of their own, a
   assert.match(text, / ◆ +4 landed/);
 });
 
+test("the PR board searches for merged PRs only every ten minutes, keeping the last answer between", async (t) => {
+  const repo = path.join(tmp, "board-repo");
+  fs.mkdirSync(repo, { recursive: true });
+  execFileSync("git", ["init", "-q", repo]);
+  execFileSync("git", ["-C", repo, "remote", "add", "origin", "git@github.com:acme/board.git"]);
+  const bin = path.join(tmp, "board-bin");
+  fs.mkdirSync(bin, { recursive: true });
+  const asked = path.join(tmp, "board-asked");
+  const pr = (number, state, mergedAt) => ({ number, title: `PR ${number}`, url: `https://github.com/acme/board/pull/${number}`, isDraft: false, state, mergedAt, reviewDecision: null, repository: { nameWithOwner: "acme/board" }, commits: { nodes: [] } });
+  const answer = { data: { open: { nodes: [pr(1, "OPEN")] }, merged: { nodes: [pr(2, "MERGED", "2026-10-28T00:00:00Z")] } } };
+  fs.writeFileSync(path.join(bin, "gh"), `#!/bin/sh\nprintf '%s\\n' "$@" >> '${asked}'\necho '${JSON.stringify(answer)}'\n`, { mode: 0o755 });
+  const path0 = process.env.PATH;
+  process.env.PATH = `${bin}:${path0}`;
+  t.after(() => (process.env.PATH = path0));
+  const tabs = [{ path: repo }];
+  const titles = () => sidebar.board.columns.flatMap((c) => c.items.map((i) => i.title));
+  const now = Date.parse("2026-10-29T12:00:00Z");
+
+  await sidebar.fetchBoard(tabs, () => {}, () => {}, now);
+  assert.match(fs.readFileSync(asked, "utf8"), /merged=is:pr is:merged/);
+  fs.rmSync(asked);
+  await sidebar.fetchBoard(tabs, () => {}, () => {}, now + 60_000);
+  assert.doesNotMatch(fs.readFileSync(asked, "utf8"), /is:merged/, "a minute later, only the open PRs");
+  assert.ok(titles().some((title) => title.includes("PR 2")), "the merged PR stays on the board");
+  fs.rmSync(asked);
+  await sidebar.fetchBoard(tabs, () => {}, () => {}, now + sidebar.MERGED_EVERY_MS);
+  assert.match(fs.readFileSync(asked, "utf8"), /is:merged/, "ten minutes on, merged again");
+});
+
 test("the tabs' PRs are asked about in one query, a gone worktree's by its branch, and only real names reach it", async (t) => {
   const repo = path.join(tmp, "prs-repo");
   fs.mkdirSync(repo, { recursive: true });

@@ -66,6 +66,11 @@ fi
 
 field() { jq -r "$1" <<<"$pr"; }
 
+# Mission control's PR, CI and Work map views ask GitHub again too, so what
+# they show agrees with this answer (the sidebar daemon watches this file).
+sidebar_state=${TMUX_SIDEBAR_STATE_DIR:-$HOME/.local/state/tmux-sidebar}
+[ -d "$sidebar_state" ] && echo >>"$sidebar_state/github"
+
 header() {
   done_waiting
   printf '%s#%s %s%s\n%s%s%s\n\n' "$bold" "$(field .number)" "$(field .title)" "$reset" "$dim" "$(field .url)" "$reset"

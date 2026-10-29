@@ -143,6 +143,13 @@
     "default": true
   },
   {
+    "key": "pause_when_away",
+    "category": "Mission control",
+    "label": "Pause lookups while away",
+    "description": "Stop asking GitHub, Linear and the calendar for mission control's views while no tmux client is attached or the Mac has been idle 10 minutes, and catch up on return",
+    "default": true
+  },
+  {
     "key": "pr_board",
     "category": "Mission control",
     "label": "PR board",

@@ -178,6 +178,8 @@ sidebars as shells titled `tmux-sidebar`, and the daemon gives them their
 client back; its restore hooks set `@sidebar_hold` so nothing is added while
 it lays windows out.
 
+Its lookups of GitHub, Linear and the calendar feed pause while you're away (no tmux client, or the Mac idle `AWAY_MS`, checked with `ioreg` once a minute) and all run on return (`pause_when_away` setting); the standup and meeting notes don't. Anything that has just asked GitHub about a PR appends to `github` in the state directory, as `M-m`'s `pr-ready.sh` does, and the daemon asks again for the PRs, CI and Work map views, at most every 15 seconds. The PR board asks for merged PRs only every `MERGED_EVERY_MS`.
+
 Plugins load only when named in `~/.config/tmux-sidebar/config.json`, from
 `~/.config/tmux-sidebar/plugins/` (yours) or `lib/sidebar/plugins/`. Its tests,
 `test/tmux-sidebar.test.js`, run against a throwaway tmux server and a
@@ -194,7 +196,7 @@ so it ran whatever each default branch held on every start. Updating a plugin
 means reading what changed and putting the new commit in `plugins.txt`.
 
 `M-v` (`tmux/pr-view.sh`) shows the branch's PR description in a pane to the
-right: `glow` draws the Markdown and `mermaid-ascii` each Mermaid diagram as
+right, the copy last read (`~/.cache/switchboard/pr-view`) at once and then the one read again in the background, which the pager is told of as a resize, so it draws it again where it was (`M-i`'s `ticket-view` and the image view, `pr-image`, the same): `glow` draws the Markdown and `mermaid-ascii` each Mermaid diagram as
 text, a diagram it can't draw (only flowcharts and sequence diagrams) kept as
 its source. `M-i` (`tmux/ticket-view.sh`) does the same for the Linear ticket the
 branch or tab name gives, read from Linear's API with worktree-from-ticket's

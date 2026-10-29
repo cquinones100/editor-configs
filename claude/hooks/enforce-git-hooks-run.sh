@@ -1,6 +1,7 @@
 #!/bin/bash
 # Keeps Claude from getting around git hooks: no `git commit --no-verify` (or
-# its short form -n), and no changing core.hooksPath, which would switch a
+# its short form -n), no `git push --no-verify` (push's -n is a dry run, which
+# is fine), and no changing core.hooksPath, which would switch a
 # repository's hooks off. Switchboard relies on its pre-commit hook to keep
 # machine-specific Claude settings out of commits. Reading the setting is fine.
 INPUT=$(cat)
@@ -17,8 +18,21 @@ GIT="(^|;|&&|\|\||\|)\s*git\s+(${OPTION}\s+)*"
 # leaves out the body of a heredoc message.
 LINE=$(echo "$CMD" | head -1 | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g")
 if echo "$LINE" | grep -qE "${GIT}commit\b" &&
-  echo "$LINE" | grep -qE '\s(--no-verify|-[a-zA-Z]*n[a-zA-Z]*)(\s|$)'; then
+  echo "$LINE" | grep -qE '\s(--no-veri(fy?)?|-[a-zA-Z]*n[a-zA-Z]*)(\s|$)'; then
   echo "Do not skip git hooks with --no-verify or -n. If a hook refuses the commit, fix what it reports." >&2
+  exit 2
+fi
+# A push: its first line with every quote and backslash taken out, since the
+# shell takes them out before git sees the flag ("--no-verify", --no\-verify),
+# then git, push and --no-verify, or an abbreviation git takes for it
+# (--no-veri, --no-verif; --no-ver is ambiguous with --no-verbose), anywhere
+# in it, whatever comes
+# between (git -C "a path with spaces" push), git by its path too
+# (/usr/bin/git). A line that only mentions them
+# is refused too, which costs nothing.
+BARE=$(echo "$CMD" | head -1 | tr -d "\\\\'\"")
+if echo "$BARE" | grep -qE '(^|[^A-Za-z0-9_.-])git([^A-Za-z0-9_.-].*)?[^A-Za-z0-9_.-]push([^A-Za-z0-9_.-]|$)' && echo "$BARE" | grep -qE -- '--no-veri(fy?)?([^a-z-]|$)'; then
+  echo "Do not skip git hooks with --no-verify. If a hook refuses the push, do what it says (in this repository: run /review-loop)." >&2
   exit 2
 fi
 if echo "$CMD" | grep -qiE '(^|;|&&|\|\||\|)\s*git\s+(\S+\s+)*-c\s*core\.hooksPath' ||

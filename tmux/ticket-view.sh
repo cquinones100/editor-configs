@@ -8,7 +8,8 @@
 #
 # Usage:
 #   ticket-view.sh toggle <pane>   M-i: open the view beside <pane>, or close it
-#   ticket-view.sh show <ID>       in the view's pane: render ticket <ID>
+#   ticket-view.sh show <ID>       in the view's pane: render ticket <ID>, the copy
+#                                  last read at once, then read again
 #
 # The ticket is the one the pane's branch names, as linear-ticket.sh finds it,
 # else the one the tab's name gives (a "Shaping ABC-123: ..." tab, before
@@ -54,7 +55,6 @@ case "${1:-}" in
     # The macOS Keychain (service linear-api-key), else the config file's linearApiKey.
     key="${LINEAR_API_KEY:-$(security find-generic-password -s linear-api-key -w 2>/dev/null || jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
     [ -n "$key" ] || wait_key "${red}No Linear API key${reset} (LINEAR_API_KEY, or the Keychain's linear-api-key)."
-    printf '\n  %sReading %s...%s' "$dim" "$id" "$reset"
     query='query($id: String!) { issue(id: $id) {
       identifier title url description createdAt updatedAt priorityLabel estimate
       state { name } assignee { name } creator { name } project { name } cycle { number name }
@@ -66,16 +66,38 @@ case "${1:-}" in
     } }'
     body=$(jq -nc --arg id "$id" --arg query "$query" '{query: $query, variables: {id: $id}}')
     work=$(mktemp -d)
-    trap 'rm -rf "$work"' EXIT
+    refresh=""
+    trap '[ -z "$refresh" ] || kill "$refresh" 2>/dev/null; rm -rf "$work"' EXIT
     # The key goes to curl on stdin, as in ticket-title.sh, never on a command line.
-    printf 'Authorization: %s\n' "$key" |
-      curl -s --max-time 15 https://api.linear.app/graphql \
-        -H 'Content-Type: application/json' -H @- -d "$body" > "$work/ticket.json" ||
-      wait_key "${red}Could not reach Linear.${reset}"
-    jq -e '.data.issue' "$work/ticket.json" >/dev/null 2>&1 ||
-      wait_key "${red}Linear has no ticket $id${reset} ($(jq -r '.errors[0].message // "no answer"' "$work/ticket.json" 2>/dev/null))."
+    fetch() {
+      printf 'Authorization: %s\n' "$key" |
+        curl -s --max-time 15 https://api.linear.app/graphql \
+          -H 'Content-Type: application/json' -H @- -d "$body" > "$1" && jq -e '.data.issue' "$1" >/dev/null 2>&1
+    }
+    # The ticket as last read is drawn at once and read again in the
+    # background, drawn again if it changed, as pr-view.sh does a PR.
+    cache="${XDG_CACHE_HOME:-$HOME/.cache}/switchboard/ticket-view/$id.json"
+    if [ -s "$cache" ]; then
+      cp "$cache" "$work/ticket.json"
+    else
+      printf '\n  %sReading %s...%s' "$dim" "$id" "$reset"
+      fetch "$work/ticket.json" ||
+        wait_key "${red}Could not read $id from Linear${reset} ($(jq -r '.errors[0].message // "no answer"' "$work/ticket.json" 2>/dev/null))."
+      mkdir -p "${cache%/*}" && cp "$work/ticket.json" "$cache"
+      fetched=1
+    fi
     # Laid out and paged as the PR view is, drawn again when the pane is resized.
-    "${0%/*}/pr-view.sh" page ticket "$work/ticket.json" "$work"
+    trap '' INT
+    "${0%/*}/pr-view.sh" page ticket "$work/ticket.json" "$work" </dev/tty &
+    pager=$!
+    if [ -z "${fetched:-}" ]; then
+      {
+        fetch "$work/fresh.json" && ! cmp -s "$work/fresh.json" "$cache" || exit 0
+        cp "$work/fresh.json" "$cache" && mv "$work/fresh.json" "$work/ticket.json" && kill -WINCH "$pager" 2>/dev/null
+      } &
+      refresh=$!
+    fi
+    while kill -0 "$pager" 2>/dev/null; do wait "$pager"; done
     ;;
 esac
 exit 0

@@ -8,7 +8,8 @@
 #
 # Usage:
 #   pr-view.sh toggle <pane>   M-v: open the view beside <pane>, or close it
-#   pr-view.sh show            in the view's pane: render the PR of $PWD's branch
+#   pr-view.sh show            in the view's pane: render the PR of $PWD's branch,
+#                              the copy last read at once, then read again
 #   pr-view.sh page <prepare|ticket|page> <file> <dir>
 #                              render <file.json> (pr-view.js's mode for it) into
 #                              <dir> and page it, drawn again at the pane's new
@@ -49,13 +50,36 @@ case "${1:-}" in
       exit 0
     }
     command -v glow >/dev/null || wait_key "${red}glow isn't installed.${reset} Install it with: brew install glow"
-    printf '\n  %sReading the PR...%s' "$dim" "$reset"
-    pr=$(gh pr view --json number,title,url,state,isDraft,author,baseRefName,headRefName,body 2>/dev/null) ||
-      wait_key "${red}No PR for this branch${reset} ($(git branch --show-current 2>/dev/null || echo "not a repository"))."
+    # The PR as it was last read for this branch is drawn at once, and read
+    # again in the background: when it has changed, the pager is told as a
+    # resize tells it, and draws it again where it was.
+    fetch() { gh pr view --json number,title,url,state,isDraft,author,baseRefName,headRefName,body 2>/dev/null; }
+    cache="${XDG_CACHE_HOME:-$HOME/.cache}/switchboard/pr-view/$(printf '%s:%s' "$(git rev-parse --absolute-git-dir 2>/dev/null)" "$(git branch --show-current 2>/dev/null)" | tr / %).json"
     work=$(mktemp -d)
-    trap 'rm -rf "$work"' EXIT
-    printf '%s' "$pr" > "$work/pr.json"
-    "$0" page prepare "$work/pr.json" "$work"
+    refresh=""
+    trap '[ -z "$refresh" ] || kill "$refresh" 2>/dev/null; rm -rf "$work"' EXIT
+    if [ -s "$cache" ]; then
+      cp "$cache" "$work/pr.json"
+    else
+      printf '\n  %sReading the PR...%s' "$dim" "$reset"
+      pr=$(fetch) ||
+        wait_key "${red}No PR for this branch${reset} ($(git branch --show-current 2>/dev/null || echo "not a repository"))."
+      printf '%s' "$pr" > "$work/pr.json"
+      mkdir -p "${cache%/*}" && printf '%s' "$pr" > "$cache"
+    fi
+    # Ctrl-C is less's: this shell, waiting on the pager, would end on one.
+    trap '' INT
+    "$0" page prepare "$work/pr.json" "$work" </dev/tty &
+    pager=$!
+    if [ -z "${pr:-}" ]; then
+      {
+        pr=$(fetch) && [ "$pr" != "$(cat "$cache")" ] || exit 0
+        printf '%s' "$pr" > "$cache"
+        printf '%s' "$pr" > "$work/pr.json.new" && mv "$work/pr.json.new" "$work/pr.json" && kill -WINCH "$pager" 2>/dev/null
+      } &
+      refresh=$!
+    fi
+    while kill -0 "$pager" 2>/dev/null; do wait "$pager"; done
     ;;
 
   page)

@@ -245,34 +245,66 @@ const ticketPage = async (id) => {
   return { title: issue.title, number: issue.identifier, meta: facts.map(escapeHtml).join(" · "), html: `<div data-md="0"></div>${children}${thread}`, markdown };
 };
 
+// A PR as the page's parts, or a reason it can't be.
+const gh = (args, options = {}) =>
+  new Promise((resolve, reject) =>
+    execFile("gh", args, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, ...options }, (err, stdout) => (err ? reject(err) : resolve(stdout))),
+  );
+const prPage = async (dir) => {
+  let pr;
+  try {
+    pr = JSON.parse(await gh(["pr", "view", "--json", "number,title,url,state,isDraft,author,baseRefName,headRefName,body"], { cwd: dir }));
+  } catch {
+    return { error: "No PR for this branch." };
+  }
+  const repo = /github\.com\/([^/]+\/[^/]+)\/pull/.exec(pr.url)?.[1];
+  let html;
+  try {
+    html = await gh(["api", "-H", "Accept: application/vnd.github.full+json", `repos/${repo}/pulls/${pr.number}`, "--jq", ".body_html // \"\""]);
+  } catch {
+    return { error: "Couldn't read the description as GitHub renders it." };
+  }
+  const meta = `${pr.isDraft ? "Draft" : pr.state} · ${escapeHtml(pr.author?.login ?? "")} wants to merge <code>${escapeHtml(pr.headRefName)}</code> into <code>${escapeHtml(pr.baseRefName)}</code>`;
+  return { title: pr.title, number: `#${pr.number}`, meta, html };
+};
+
 const main = async () => {
   const ticket = process.argv[2] === "--ticket" ? process.argv[3] : undefined;
   const dir = path.resolve(ticket ? process.cwd() : process.argv[2] ?? process.cwd());
   // Taken first, before anything else reads the keyboard. A guess at a
   // 13-point font when the terminal doesn't say.
   let cell = (await cellSize()) ?? { w: 16, h: 34 };
-  process.stdout.write(`\n  \x1b[38;5;244mReading the ${ticket ? "ticket" : "PR"}…\x1b[0m`);
+  if (ticket && !/^[A-Za-z][A-Za-z0-9]*-\d+$/.test(ticket)) return fail("That isn't a Linear ticket ID.");
+  // The PR or ticket as last read is drawn at once, and read again while it
+  // shows: when that has changed, the page is drawn again where it was.
+  const gitDir = () => {
+    try {
+      return execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch {
+      return dir;
+    }
+  };
+  const branch = () => {
+    try {
+      return execFileSync("git", ["branch", "--show-current"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch {
+      return "";
+    }
+  };
+  const cache = path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "switchboard", "pr-image", `${(ticket ? ticket.toUpperCase() : `${gitDir()}:${branch()}`).replace(/\//g, "%")}.json`);
+  const fresh = ticket ? ticketPage(ticket.toUpperCase()) : prPage(dir);
+  const remember = (parts) => {
+    fs.mkdirSync(path.dirname(cache), { recursive: true });
+    fs.writeFileSync(cache, JSON.stringify(parts));
+  };
   let parts;
-  if (ticket) {
-    if (!/^[A-Za-z][A-Za-z0-9]*-\d+$/.test(ticket)) return fail("That isn't a Linear ticket ID.");
-    parts = await ticketPage(ticket.toUpperCase());
+  try {
+    parts = JSON.parse(fs.readFileSync(cache, "utf8"));
+  } catch {
+    process.stdout.write(`\n  \x1b[38;5;244mReading the ${ticket ? "ticket" : "PR"}…\x1b[0m`);
+    parts = await fresh;
     if (parts.error) return fail(parts.error);
-  } else {
-    let pr;
-    try {
-      pr = JSON.parse(execFileSync("gh", ["pr", "view", "--json", "number,title,url,state,isDraft,author,baseRefName,headRefName,body"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }));
-    } catch {
-      return fail("No PR for this branch.");
-    }
-    const repo = /github\.com\/([^/]+\/[^/]+)\/pull/.exec(pr.url)?.[1];
-    let html;
-    try {
-      html = execFileSync("gh", ["api", "-H", "Accept: application/vnd.github.full+json", `repos/${repo}/pulls/${pr.number}`, "--jq", ".body_html // \"\""], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 16 * 1024 * 1024 });
-    } catch {
-      return fail("Couldn't read the description as GitHub renders it.");
-    }
-    const meta = `${pr.isDraft ? "Draft" : pr.state} · ${escapeHtml(pr.author?.login ?? "")} wants to merge <code>${escapeHtml(pr.headRefName)}</code> into <code>${escapeHtml(pr.baseRefName)}</code>`;
-    parts = { title: pr.title, number: `#${pr.number}`, meta, html };
+    remember(parts);
   }
   const lib = puppeteer();
   if (!lib) return fail("This needs mermaid-cli's puppeteer: pnpm add -g @mermaid-js/mermaid-cli");
@@ -293,14 +325,18 @@ const main = async () => {
     return { cols, rows, width: Math.max(480, Math.floor((cols * cell.w) / DPR)), pageHeight: Math.max(100, Math.floor((rows * cell.h) / DPR)) };
   };
   let view = size();
-  fs.writeFileSync(file, pageFor(parts, view.width));
   const browser = await lib.launch({ headless: true });
   const page = await browser.newPage();
-  await page.setViewport({ width: view.width, height: 800, deviceScaleFactor: DPR });
-  await page.goto(`file://${file}`, { waitUntil: "networkidle0" });
-  await page.waitForSelector("body[data-done]", { timeout: 15_000 }).catch(() => {});
-  // Filled in by layOut for each size; puppeteer refuses an empty one.
-  const fitStyle = await page.addStyleTag({ content: "/* fit */" });
+  const load = async () => {
+    fs.writeFileSync(file, pageFor(parts, view.width));
+    await page.setViewport({ width: view.width, height: 800, deviceScaleFactor: DPR });
+    await page.goto(`file://${file}`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("body[data-done]", { timeout: 15_000 }).catch(() => {});
+    // Filled in by layOut for each size; puppeteer refuses an empty one.
+    const fitStyle = await page.addStyleTag({ content: "/* fit */" });
+    await page.evaluate((el) => { el.dataset.fit = "1"; }, fitStyle);
+  };
+  await load();
 
   // The pages for the pane as it is now: each ends where a block does, and a
   // diagram taller than a page is drawn smaller, to fit one, so it is never
@@ -349,7 +385,6 @@ const main = async () => {
     fs.readdirSync(work).filter((f) => f.startsWith("page-") && !f.startsWith(`page-${n}-`)).forEach((f) => fs.rmSync(path.join(work, f), { force: true }));
     return shots;
   };
-  await page.evaluate((el) => { el.dataset.fit = "1"; }, fitStyle);
   let shots = await layOut();
   // For checking the drawing without a terminal: the pages as PNGs, and out.
   if (process.env.PR_IMAGE_DUMP) {
@@ -384,12 +419,17 @@ const main = async () => {
   // laying out is laid out again after.
   let resizeTimer;
   let again = false;
+  let reload = false;
   const relayout = async () => {
     if (busy) {
       again = true;
       return;
     }
     busy = true;
+    if (reload) {
+      reload = false;
+      await load().catch(() => {});
+    }
     const from = shots[at].from;
     // A new font size changes the cell; tmux knows it. Not cellSize(), whose
     // fallback asks the terminal on the keyboard's input and pauses it.
@@ -448,6 +488,12 @@ const main = async () => {
   // doesn't undo a pause, so nothing would keep this running.
   process.stdin.resume();
   draw();
+  const now = await fresh;
+  if (now.error || JSON.stringify(now) === JSON.stringify(parts)) return;
+  parts = now;
+  remember(parts);
+  reload = true;
+  relayout();
 };
 
 main().catch((err) => fail(err.message.split("\n")[0]));

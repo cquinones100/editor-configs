@@ -12,7 +12,8 @@ done by `codex-review`, a single Node script, so both have to be in place.
 
 1. **Have the tools it runs.** Node 18 or newer. The OpenAI Codex CLI,
    logged in with `codex login`; `codex exec` uses the same login as the
-   interactive tool. The GitHub CLI, logged in; the script uses it to fetch the
+   interactive tool. Without Codex, Claude Code reviews in its place, headless,
+   with only Read, Grep and Glob and no settings, MCP servers or CLAUDE.md. The GitHub CLI, logged in; the script uses it to fetch the
    PR title, body, and base branch so Codex never needs GitHub access of its
    own.
 

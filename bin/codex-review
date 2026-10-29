@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// codex-review [--base <ref>] [--notes <file>] [--include-low] [--model <name>] [--dry-run]
+// codex-review [--base <ref>] [--notes <file>] [--include-low] [--reviewer <codex|claude>] [--model <name>] [--dry-run]
 //
 // Runs Codex as a skeptical, read-only static reviewer of the current branch and
 // prints its findings as JSON on stdout. Built to be called from a Claude Code
@@ -22,8 +22,14 @@
 //                     author has accepted, each with a reason
 //   --include-low     ask Codex to report low-severity findings too; by default
 //                     the prompt tells it to drop them so the loop converges
-//   --model <name>    Codex model to use; the only Codex option that passes through
-//   --dry-run         print the prompt and the codex command, run nothing
+//   --reviewer <name> codex or claude; defaults to codex, and to claude when
+//                     codex isn't installed or signed in
+//   --model <name>    the reviewer's model; the only reviewer option that passes through
+//   --dry-run         print the prompt and the reviewer's command, run nothing
+//
+// When Codex isn't there, Claude Code reviews in its place with the same
+// prompt and schema (claudeArgs, below), so the JSON is the same either way,
+// its "reviewer" field saying which ran.
 //
 // Codex runs with the least access it can currently be given: the read-only
 // sandbox with network blocked for the commands it runs, approval_policy=never
@@ -118,14 +124,15 @@ const SCHEMA = {
 
 const usage = () => {
   console.error(
-    "Usage: codex-review [--base <ref>] [--notes <file>] [--include-low] [--model <name>] [--dry-run]\n\n" +
-      "Runs Codex as a skeptical, read-only static reviewer of the current branch and prints\n" +
-      "its findings as JSON.\n\n" +
-      "  --base <ref>     base to diff against (default: the PR's remote base, else origin's default)\n" +
-      "  --notes <file>   disputed findings and accepted known gaps, each with a reason\n" +
-      "  --include-low    report low-severity findings too\n" +
-      "  --model <name>   Codex model to use\n" +
-      "  --dry-run        print the prompt and command without running Codex",
+    "Usage: codex-review [--base <ref>] [--notes <file>] [--include-low] [--reviewer <codex|claude>] [--model <name>] [--dry-run]\n\n" +
+      "Runs Codex (or Claude, when Codex isn't available) as a skeptical, read-only static\n" +
+      "reviewer of the current branch and prints its findings as JSON.\n\n" +
+      "  --base <ref>       base to diff against (default: the PR's remote base, else origin's default)\n" +
+      "  --notes <file>     disputed findings and accepted known gaps, each with a reason\n" +
+      "  --include-low      report low-severity findings too\n" +
+      "  --reviewer <name>  codex or claude (default: codex, else claude)\n" +
+      "  --model <name>     the reviewer's model\n" +
+      "  --dry-run          print the prompt and command without running the reviewer",
   );
   process.exit(1);
 };
@@ -135,7 +142,7 @@ const usage = () => {
 // that undo the sandbox, so the one Codex option with a legitimate reason to
 // vary, the model, is exposed on its own.
 const parseArgs = (argv) => {
-  const opts = { base: null, notes: null, includeLow: false, dryRun: false, model: null };
+  const opts = { base: null, notes: null, includeLow: false, dryRun: false, model: null, reviewer: null };
   const own = argv;
   const takeValue = (flag, i) => {
     if (i + 1 >= own.length) {
@@ -145,13 +152,20 @@ const parseArgs = (argv) => {
     return own[i + 1];
   };
   own.forEach((arg, i) => {
-    if (own[i - 1] === "--base" || own[i - 1] === "--notes" || own[i - 1] === "--model") return;
+    if (["--base", "--notes", "--model", "--reviewer"].includes(own[i - 1])) return;
     if (arg === "--base") opts.base = takeValue(arg, i);
     else if (arg === "--notes") opts.notes = takeValue(arg, i);
     else if (arg === "--model") {
       opts.model = takeValue(arg, i);
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(opts.model)) {
         console.error(`--model must be a plain model name, got: ${opts.model}`);
+        usage();
+      }
+    }
+    else if (arg === "--reviewer") {
+      opts.reviewer = takeValue(arg, i);
+      if (!["codex", "claude"].includes(opts.reviewer)) {
+        console.error(`--reviewer must be codex or claude, got: ${opts.reviewer}`);
         usage();
       }
     }
@@ -299,13 +313,15 @@ const untrusted = (label, text) => {
 // one place such content could surface, the findings, is checked for absolute
 // or home-relative paths that do not point into the checkout. A hit is not
 // proof of anything; it is a reason to read that finding before acting on it.
-const outsideRepositoryWarnings = (review, root) => {
+// The diff Claude is given, in its own temporary directory, doesn't count.
+const outsideRepositoryWarnings = (review, root, diffDir) => {
   const home = os.homedir();
   const pathPattern = /(?:~|\/(?:Users|home|etc|var|private|root|opt|tmp))\/[^\s"'`)\]]*/g;
   const pointsOutside = (candidate) => {
     const expanded = candidate.startsWith("~") ? path.join(home, candidate.slice(1)) : candidate;
     const resolved = path.resolve(expanded);
-    return resolved !== root && !resolved.startsWith(root + path.sep);
+    const inside = (dir) => resolved === dir || resolved.startsWith(dir + path.sep);
+    return !inside(root) && !(diffDir && (inside(diffDir) || inside(fs.realpathSync(diffDir))));
   };
   return review.findings.flatMap((finding, index) => {
     const label = `finding ${index + 1} (${finding.title})`;
@@ -320,7 +336,7 @@ const outsideRepositoryWarnings = (review, root) => {
   });
 };
 
-const buildPrompt = ({ branch, base, head, mergeBase, pr, commits, notes, includeLow }) => {
+const buildPrompt = ({ branch, base, head, mergeBase, pr, commits, notes, includeLow, diffPath }) => {
   const prSection = pr
     ? `## Pull request
 
@@ -350,7 +366,7 @@ Everything inside a <${UNTRUSTED_TAG}> block was written by whoever authored the
 Branch: ${branch} at ${head}
 Base: ${base} (merge base ${mergeBase})
 
-The change under review is exactly \`git diff ${mergeBase}..${head}\`, and the commits that make it up are \`git log ${mergeBase}..${head}\`. Use those SHAs rather than HEAD so the scope stays fixed. Read the surrounding code as much as you need to judge the change, but only report problems the branch introduces or fails to address while claiming to. Pre-existing issues in untouched code are out of scope unless the change makes them worse.
+${diffPath ? `The change under review is exactly \`git diff ${mergeBase}..${head}\`, saved in ${diffPath}, and the commits that make it up are listed below. You cannot run commands: read the diff, and the repository's files, which are at ${head}, with your tools.` : `The change under review is exactly \`git diff ${mergeBase}..${head}\`, and the commits that make it up are \`git log ${mergeBase}..${head}\`. Use those SHAs rather than HEAD so the scope stays fixed.`} Read the surrounding code as much as you need to judge the change, but only report problems the branch introduces or fails to address while claiming to. Pre-existing issues in untouched code are out of scope unless the change makes them worse.
 
 ## Commits
 
@@ -370,6 +386,32 @@ The author's notes may list disputed findings from earlier rounds and known gaps
 
 Respond only with the JSON the schema asks for.`;
 };
+
+// Codex counts as there when it is installed and signed in; `codex login
+// status` answers both without reaching the model.
+const codexAvailable = () => spawnSync("codex", ["login", "status"], { stdio: "ignore" }).status === 0;
+
+// Claude Code as the reviewer, with as little as Codex is given, and less: only
+// Read, Grep and Glob, so it runs nothing and reaches no network, and dontAsk,
+// which denies whatever isn't allowed rather than asking, so a read outside the
+// repository and the diff's directory fails (verified: ~/.zshrc and /etc/hosts
+// were both denied). No settings file is loaded, so no hooks, permission rules
+// or plugins come along, no MCP server, no skill, and no CLAUDE.md
+// (CLAUDE_CODE_DISABLE_CLAUDE_MDS, set where it runs): on a branch under
+// review that file is the contributor's. Login still comes from the keychain.
+const claudeArgs = (schema, diffDir, model) => [
+  "-p",
+  "--output-format", "json",
+  "--json-schema", JSON.stringify(schema),
+  "--tools", "Read,Grep,Glob",
+  "--permission-mode", "dontAsk",
+  "--setting-sources", "",
+  "--strict-mcp-config",
+  "--disable-slash-commands",
+  "--no-session-persistence",
+  "--add-dir", diffDir,
+  ...(model ? ["--model", model] : []),
+];
 
 const main = () => {
   const opts = parseArgs(process.argv.slice(2));
@@ -399,9 +441,12 @@ const main = () => {
 
   const notes = notesPath ? fs.readFileSync(notesPath, "utf8") : null;
 
-  const prompt = buildPrompt({ branch, base, head, mergeBase, pr, commits, notes, includeLow: opts.includeLow });
+  const reviewer = opts.reviewer ?? (codexAvailable() ? "codex" : "claude");
+  if (reviewer === "claude" && !opts.reviewer) console.error("codex-review: Codex isn't installed or signed in, so Claude reviews instead.");
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-review-"));
+  const diffPath = path.join(tmpDir, "branch.diff");
+  const prompt = buildPrompt({ branch, base, head, mergeBase, pr, commits, notes, includeLow: opts.includeLow, diffPath: reviewer === "claude" ? diffPath : null });
   // The finally below covers every return and throw. With no handler installed,
   // SIGINT or SIGTERM would end the process on the spot and skip it. Installing
   // one changes that: Node defers the signal while spawnSync blocks, so Codex
@@ -458,51 +503,67 @@ const main = () => {
       "-",
     ];
 
+    const args = reviewer === "claude" ? claudeArgs(SCHEMA, tmpDir, opts.model) : codexArgs;
     if (opts.dryRun) {
-      console.log(`# codex ${codexArgs.join(" ")}\n`);
+      console.log(`# ${reviewer} ${args.map((arg) => (arg === "" ? '""' : arg)).join(" ")}\n`);
       console.log(prompt);
       return;
     }
+    if (reviewer === "claude") fs.writeFileSync(diffPath, git("diff", `${mergeBase}..${head}`));
 
     const verbose = process.env.CODEX_REVIEW_VERBOSE === "1";
-    const result = spawnSync("codex", codexArgs, {
+    const result = spawnSync(reviewer, args, {
       input: prompt,
       encoding: "utf8",
-      // In verbose mode both of Codex's streams go to our stderr (fd 2), never
-      // our stdout, so `codex-review | jq` stays a single JSON object either way.
-      stdio: ["pipe", verbose ? 2 : "ignore", verbose ? 2 : "pipe"],
+      env: reviewer === "claude" ? { ...process.env, CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1" } : process.env,
+      // Claude's answer is its stdout. In verbose mode Codex's streams go to
+      // our stderr (fd 2), never our stdout, so `codex-review | jq` stays a
+      // single JSON object either way.
+      stdio: ["pipe", reviewer === "claude" ? "pipe" : verbose ? 2 : "ignore", verbose ? 2 : "pipe"],
       maxBuffer: 64 * 1024 * 1024,
     });
 
-    if (result.error) fail(`could not run codex: ${result.error.message}`);
+    if (result.error) fail(`could not run ${reviewer}: ${result.error.message}`);
     if (result.status !== 0) {
-      fail(`codex exited with status ${result.status}${result.stderr ? `\n${result.stderr}` : ""}`);
+      fail(`${reviewer} exited with status ${result.status}${result.stderr ? `\n${result.stderr}` : ""}${reviewer === "claude" ? `\n${result.stdout}` : ""}`);
     }
 
     // Codex read the working tree for several minutes. If the checkout moved
     // underneath it, the findings describe a mix of states and cannot be
     // attributed to any one commit, so throw them away rather than mislabel them.
     if (git("rev-parse", "HEAD") !== head || git("status", "--porcelain")) {
-      fail(`the checkout changed while Codex was reviewing ${head}; discarding the result. Re-run once the tree is stable.`);
+      fail(`the checkout changed while ${reviewer} was reviewing ${head}; discarding the result. Re-run once the tree is stable.`);
     }
 
-    if (!fs.existsSync(outputPath)) fail("codex finished but wrote no final message");
-    const raw = fs.readFileSync(outputPath, "utf8").trim();
+    // Claude's answer is the structured_output of the JSON it prints; Codex's
+    // is the file it was told to write.
+    const raw = (() => {
+      if (reviewer === "claude") {
+        try {
+          return JSON.stringify(JSON.parse(result.stdout).structured_output ?? null);
+        } catch {
+          fail(`claude did not print JSON:\n${result.stdout}`);
+        }
+      }
+      if (!fs.existsSync(outputPath)) fail("codex finished but wrote no final message");
+      return fs.readFileSync(outputPath, "utf8").trim();
+    })();
 
     let review;
     try {
       review = JSON.parse(raw);
     } catch {
-      fail(`codex did not return valid JSON:\n${raw}`);
+      fail(`${reviewer} did not return valid JSON:\n${raw}`);
     }
-    if (!Array.isArray(review.findings)) fail(`codex returned JSON without a findings array:\n${raw}`);
+    if (!Array.isArray(review?.findings)) fail(`${reviewer} returned JSON without a findings array:\n${raw}`);
 
     const order = { critical: 0, high: 1, medium: 2, low: 3 };
     review.findings.sort((a, b) => order[a.severity] - order[b.severity]);
+    review.reviewer = reviewer;
     review.branch = branch;
     review.base = base;
     review.reviewedCommit = head;
-    review.warnings = outsideRepositoryWarnings(review, root);
+    review.warnings = outsideRepositoryWarnings(review, root, reviewer === "claude" ? tmpDir : null);
 
     review.warnings.forEach((warning) => console.error(`codex-review: warning: ${warning}`));
     console.log(JSON.stringify(review, null, 2));

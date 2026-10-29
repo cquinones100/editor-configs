@@ -1463,7 +1463,8 @@ under its old name.
 ## codex-review
 
 Runs Codex as a skeptical, read-only static reviewer of the current branch and
-prints its findings as JSON. It is the reviewer half of the `review-loop`
+prints its findings as JSON, or Claude Code when Codex isn't installed or
+signed in. It is the reviewer half of the `review-loop`
 Claude skill in `claude/skills/review-loop`, which calls it, fixes what it
 agrees with, commits, and calls it again until the findings list comes back
 empty. It is also fine to run by hand for a second opinion.
@@ -1473,9 +1474,19 @@ codex-review                       review the branch against its PR's base
 codex-review --base upstream/main  diff against a different base, used as given when the ref exists
 codex-review --notes notes.md      disputed findings and accepted known gaps, each with a reason
 codex-review --include-low         report low-severity findings too
-codex-review --dry-run             print the prompt and the codex command, run nothing
-codex-review --model gpt-5.5       pick the Codex model; no other Codex option passes through
+codex-review --reviewer claude     have Claude review even with Codex there
+codex-review --dry-run             print the prompt and the reviewer's command, run nothing
+codex-review --model gpt-5.5       pick the reviewer's model; no other option passes through
 ```
+
+Without Codex, `claude -p` reviews with the same prompt and JSON schema, and the
+JSON's `reviewer` says which ran. It gets less than Codex does: only the Read,
+Grep and Glob tools, so it runs nothing and reaches no network; the diff in a
+file of its own rather than `git`; `dontAsk`, so a read outside the repository
+and that file is denied rather than asked about (verified with `~/.zshrc` and
+`/etc/hosts`); and no settings file, MCP server, skill or `CLAUDE.md`
+(`CLAUDE_CODE_DISABLE_CLAUDE_MDS`), since on a branch under review those are
+the contributor's. The rest of this section is about Codex.
 
 The prompt is the one that used to be typed into a Codex pane by hand: assess
 the code against what the commits assert, look for regressions and security
@@ -1541,7 +1552,7 @@ checkout and the Codex login.
    ```
 
 2. **Log in to Codex** (`codex login`) if `codex` does not already work
-   interactively. `codex exec` uses the same login. Nothing else in your Codex
+   interactively, or skip it and Claude reviews. `codex exec` uses the same login. Nothing else in your Codex
    configuration is read, so no per-repository trust step is needed.
 
 ### Notes

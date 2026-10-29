@@ -908,7 +908,7 @@ fi
 if in_zsh 'command -v codex' >/dev/null; then
   ok "Codex (/review-loop's reviewer)"
 else
-  optional "Codex, /review-loop's reviewer: npm install -g @openai/codex, then codex login"
+  optional "Codex, /review-loop's reviewer (Claude reviews without it): npm install -g @openai/codex, then codex login"
 fi
 
 # A sidebar daemon started before its code last changed keeps running the old

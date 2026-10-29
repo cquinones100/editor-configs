@@ -1,6 +1,6 @@
 ---
 name: review-loop
-description: Run the branch through repeated skeptical, read-only Codex reviews, fixing what each round finds, until two consecutive rounds come back clean. Use when the user says a branch or PR is ready for review, asks to "run the review loop", or asks for a Codex review of the branch.
+description: Run the branch through repeated skeptical, read-only Codex reviews (Claude reviews when Codex isn't available), fixing what each round finds, until two consecutive rounds come back clean. Use when the user says a branch or PR is ready for review, asks to "run the review loop", or asks for a Codex review of the branch.
 argument-hint: "[all]"
 ---
 
@@ -12,7 +12,7 @@ This is Switchboard's personal copy, installed for repositories that have none. 
 
 Have Codex review the current branch, fix the findings you agree with, commit, and review again. Stop after two consecutive clean rounds, or when the round cap is hit. Push once at the end, after asking.
 
-The reviewer is the `codex-review` command. It runs Codex read-only against committed history and prints one JSON object with `summary`, `findings`, and the commit it reviewed. If it is not on `PATH`, say so and stop; do not substitute your own review for Codex's.
+The reviewer is the `codex-review` command. It runs Codex read-only against committed history and prints one JSON object with `summary`, `findings`, the commit it reviewed, and `reviewer`. When Codex isn't installed or signed in, it has a headless Claude review in its place, with the same prompt, the same JSON and less access (no commands, no reads outside the repository), and says so on stderr; the loop runs the same either way. If `codex-review` itself is not on `PATH`, say so and stop; do not substitute your own review for the command's.
 
 Arguments: `all` means also act on low-severity findings from the first round on. Anything else is ignored.
 
@@ -62,7 +62,7 @@ Arguments: `all` means also act on low-severity findings from the first round on
 
 ## Final report
 
-Say which of these ended the loop: two consecutive clean rounds, the round cap, or a blocker. Then give:
+Say which of these ended the loop: two consecutive clean rounds, the round cap, or a blocker, and which reviewer ran (the JSON's `reviewer`). Then give:
 
 - **Rounds run** and the commits added, from `git log <start>..HEAD --oneline`.
 - **Fixed**: each finding acted on, one line each.

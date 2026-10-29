@@ -5,6 +5,7 @@
 #
 # Usage: sidebar-pane.zsh sidebar <socket>
 #        sidebar-pane.zsh mission <socket> <tmux client> [peek:<window>|answer:<window>]
+#        sidebar-pane.zsh notices <socket>   the Notifications view, in its window's pane
 #
 # Built from zsh's own modules (sockets, select, raw reads and writes) so each
 # sidebar is one small process that starts no others, however long it runs:
@@ -24,7 +25,8 @@ if [[ $mode == mission ]]; then
   size=($(stty size 2>/dev/null))
   hello="mission $client ${size[2]:-120} ${size[1]:-40} $only"
 else
-  hello="sidebar $TMUX_PANE"
+  # A sidebar, or the Notifications view, by its pane; both reconnect.
+  hello="$mode $TMUX_PANE"
 fi
 
 started=0 backoff=3

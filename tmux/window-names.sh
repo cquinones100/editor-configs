@@ -33,8 +33,9 @@ MAX_LABEL=30
 # A window with only its sidebar active goes by its first other pane. The
 # notes pane (@notes_pane), moved beside your work with M-e, runs in your home
 # directory and isn't the tab's work either, so it counts only in a window
-# with no other pane, the Notes tab itself.
-tmux list-panes -s -t "$session" -F $'#{window_index}\t#{?@sidebar,s,#{?@notes_pane,n,p}}#{pane_active}\t#{pane_current_path}' |
+# with no other pane, the Notes tab itself. The Notifications window
+# (@notices_window, the sidebar daemon's) is no tab and keeps its own name.
+tmux list-panes -s -t "$session" -F $'#{window_index}\t#{?@sidebar,s,#{?@notes_pane,n,#{?@notices_window,x,p}}}#{pane_active}\t#{pane_current_path}' |
   awk -F'\t' '
     $2 ~ /^p/ && (!($1 in path) || $2 == "p1") { if (!($1 in path) && !($1 in notes)) order[++n] = $1; path[$1] = $3 }
     $2 ~ /^n/ && !($1 in notes) { if (!($1 in path)) order[++n] = $1; notes[$1] = $3 }

@@ -1568,7 +1568,7 @@ test("mission control's Settings view lists the options by category, / narrows t
     // / then "notif": the Notifications header and its two options, and no other category.
     for (const key of ["/", "n", "o", "t", "i", "f", "Enter"]) await sidebar.missionKey(client, { key });
     const items = sidebar.viewsFor(client)[client.view.view - 1].items;
-    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications", "Notifications as a list", "Next meeting"], "the Notifications category, and the Sidebar's options that mention notifications");
+    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications", "Notifications view", "Next meeting"], "the Notifications category, and the Sidebar's options that mention notifications");
     assert.doesNotMatch(plain(sent.at(-1)), /Theme/);
 
     // Enter on an on/off option turns it off, and only what differs from the default is written.
@@ -2015,7 +2015,7 @@ test("the sidebar's notifications sit at its bottom under their own heading, and
   assert.ok(!none.lines.some((l) => l.includes("NOTIFICATIONS")), "nothing new, no block");
 });
 
-test("moved onto, the notifications take the sidebar as a list of whole messages, the chosen one marked, its top line going back", () => {
+test("the Notifications view lists whole messages, the chosen one marked, its top line going back", () => {
   const items = [
     { title: "Standup in 3m · ↵ joins", body: "1:00–1:15 PM\nAB-12" },
     { title: "DM Dee · Dee", body: "can you look at the deploy before lunch? it failed twice this morning and I'm not sure why" },
@@ -2031,6 +2031,48 @@ test("moved onto, the notifications take the sidebar as a list of whole messages
   const dee = plain.findIndex((l) => l === "▌ DM Dee · Dee");
   assert.equal(out.owners[dee], 1, "each line says which item it is, for the pointer");
   assert.match(plain.at(-1), /jk move +↵ actions +esc back/);
+});
+
+test("moving onto the notifications brings a Notifications window to the front, no tab, whose view lists them and opens each one's actions", async (t) => {
+  const stateDir = sidebar.STATE_DIR;
+  fs.mkdirSync(stateDir, { recursive: true });
+  const now = Date.now() / 1000;
+  fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ checked: Date.now(), items: [
+    { kind: "dm", channel: "D1", where: "Dee", user: "U1", from: "Dee", text: "can you look at the deploy?", ts: String(now - 20), link: "https://x.slack.com/archives/D1/p1" },
+    { kind: "mention", channel: "C1", where: "#general", user: "U2", from: "Ada", text: "@you the review", ts: String(now - 10), link: "https://x.slack.com/archives/C1/p2" },
+  ] }));
+  fs.rmSync(path.join(stateDir, "slack-seen"), { force: true });
+  await new Promise((resolve) => setTimeout(resolve, 2_100));
+  await sidebar.refresh();
+  const session = tmux("display", "-p", "-t", "test", "#{session_id}");
+  const window = await sidebar.noticesWindow(session, "cat");
+  t.after(() => {
+    try { tmux("kill-window", "-t", window); } catch {}
+    fs.rmSync(path.join(stateDir, "slack.json"), { force: true });
+  });
+  assert.equal(tmux("show", "-wqv", "-t", window, "@notices_window"), "1");
+  assert.equal(tmux("show", "-wqv", "-t", window, "window-status-format"), "", "out of the tab bar");
+  assert.equal(await sidebar.noticesWindow(session, "cat"), window, "one a session");
+  await sidebar.refresh();
+  assert.ok(!sidebar.state.tabs.some((x) => x.id === window), "no tab");
+
+  const items = sidebar.noticeItems();
+  assert.deepEqual(items.map((i) => i.body), ["@you the review", "can you look at the deploy?"]);
+  const sent = [];
+  const pane = tmux("display", "-p", "-t", window, "#{pane_id}");
+  const client = { kind: "notices", pane, socket: { write: (text) => sent.push(text), end() {} } };
+  sidebar.draw(client);
+  const shown = sent.at(-1).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+  assert.match(shown, /NOTIFICATIONS 2/);
+  assert.match(shown, /can you look at the deploy\?/);
+  await sidebar.noticesKey(client, { key: "j" });
+  assert.equal(sidebar.state.noticeCursor.get(session), 1);
+  assert.equal(sidebar.state.cursors.get(session), "notice:slack", "the sidebar's cursor follows");
+  await sidebar.noticesKey(client, { key: "Enter" });
+  assert.ok(client.choose.choices.some((c) => c.label === "Open it in Slack"));
+  assert.equal(client.choose.body, "can you look at the deploy?");
+  await sidebar.noticesKey(client, { key: "Escape" });
+  assert.equal(client.choose, undefined);
 });
 
 test("Enter on an item in a built-in view offers its actions as a menu, its usual one first", async (t) => {

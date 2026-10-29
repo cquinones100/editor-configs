@@ -54,8 +54,8 @@
   {
     "key": "notice_list",
     "category": "Sidebar",
-    "label": "Notifications as a list",
-    "description": "Moving onto, pointing at or clicking a notification turns the sidebar into a list of every one with its whole message, Enter opening its actions in a popup; off, Enter or a click opens its view in mission control",
+    "label": "Notifications view",
+    "description": "Moving the sidebar's cursor onto a notification, or clicking one, brings a Notifications view to the front as moving onto a tab does: every one with its whole message, Enter opening its actions; off, Enter or a click opens its view in mission control",
     "default": true
   },
   {

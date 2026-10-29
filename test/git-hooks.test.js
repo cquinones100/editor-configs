@@ -62,4 +62,6 @@ test("this repository's push guard blocks git push --no-verify, however it is sp
   assert.equal(commitGuard("git push --no-verify origin main").status, 0, "the guard every repository gets leaves pushes alone");
   assert.equal(commitGuard("git config core.hookspath /dev/null").status, 2, "git's keys are case-insensitive");
   assert.equal(commitGuard("git config --get core.hooksPath").status, 0, "reading it is fine");
+  assert.equal(commitGuard("/usr/bin/git config core.hooksPath /dev/null").status, 2, "git by its path");
+  assert.equal(commitGuard("/usr/bin/git commit -n -m x").status, 2);
 });

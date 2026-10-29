@@ -1314,7 +1314,12 @@ sidebar and on its mission control card. Its own Notes tab stays, in the sidebar
 has Notes (Enter goes there, `M-e` brings it back), and Notes goes back into
 it when put away. Beside a tab, Notes shows that tab's own note: the one its Claude works
 from (`/note-watch` and `/queue-and-clean` record it), else the one Notes last
-showed beside that tab.
+showed beside that tab. A tab with no note of its own is asked once which it is
+(`tmux/note-pick.sh`), the likely ones first: notes that mention its ticket or
+PR, then its repository's name, then the note last shown beside it, then the
+rest by when they changed, searched on the Mac and sent nowhere. "Keep whatever
+is open" stops it asking for that tab; `M-p`'s "Choose this tab's note" asks
+again any time, and the `ask_tab_note` setting turns the question off.
 
 ### In the list
 

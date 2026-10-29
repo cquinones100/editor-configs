@@ -7,6 +7,7 @@
 # Usage: notes-open.sh <client_name>            M-N: its own tab, or go to it
 #        notes-open.sh side <client_name> <pane> M-e: to the right of <pane>
 #        notes-open.sh away <client_name> <pane> M-w on Notes: back to its own tab
+#        notes-open.sh show <window>           Notes beside <window> shows its note
 #
 # The notes pane is found by its @notes_pane option, which this sets, so it is
 # found wherever it has been moved, and renaming its tab doesn't lose it; a
@@ -113,6 +114,24 @@ put_away() {
   window=$(tmux break-pane -d -s "$pane" -P -F '#{window_id}') && own_tab "$window"
 }
 
+# A tab's note just chosen (note-pick.sh): shown, if Notes is beside it.
+if [ "${1:-}" = show ]; then
+  window=${2:-}
+  existing=$(notes_pane)
+  [ -n "$window" ] && [ -n "$existing" ] && [ "$(tmux display -p -t "$existing" '#{window_id}')" = "$window" ] && show_for "$window"
+  exit 0
+fi
+
+# A tab with no note of its own yet is asked which it is (note-pick.sh), once,
+# with the ask_tab_note setting on.
+ask_note() {
+  local window=$1 client=$2
+  [ "$(tmux show -gqv @setting_ask_tab_note)" = off ] && return
+  [ -n "$(tmux show -wqv -t "$window" @tab_note)" ] || [ -n "$(tmux show -wqv -t "$window" @tab_note_asked)" ] && return
+  [ "$(tmux show -wqv -t "$window" @notes)" = 1 ] && return
+  "${0%/*}/note-pick.sh" ask "$window" "$client"
+}
+
 # M-w on the notes pane: back to its own tab; alone in it already, asked
 # about and closed as any pane is (confirm.sh, with @confirm_pane M-w set).
 if [ "${1:-}" = away ]; then
@@ -130,6 +149,7 @@ if [ "${1:-}" = side ]; then
   existing=$(notes_pane)
   here_window=$(tmux display -p -t "$here" '#{window_id}')
   if [ -z "$existing" ]; then
+    ask_note "$here_window" "$client"
     open_with "$here_window"
     pane=$(tmux split-window -h -l 40% -t "$here" -c "$HOME" -P -F '#{pane_id}' "$notes_command") || exit 0
     tmux set-option -p -t "$pane" @notes_pane 1
@@ -153,6 +173,7 @@ if [ "${1:-}" = side ]; then
     stand_in=$(tmux split-window -d -t "$existing" -c "$HOME" -P -F '#{pane_id}' "${0%/*}/notes-away.sh")
     [ -n "$stand_in" ] && tmux set-option -p -t "$stand_in" @notes_placeholder 1 && own_tab "$old"
   fi
+  ask_note "$here_window" "$client"
   tmux join-pane -h -l 40% -s "$existing" -t "$here"
   # Brought into the Notes tab itself, it takes the stand-in's place there.
   stand_in=$(placeholder)

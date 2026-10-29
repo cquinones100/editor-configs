@@ -55,6 +55,8 @@ test("this repository's push guard blocks git push --no-verify, however it is sp
   assert.equal(guard("git push --no-verbose origin main").status, 0);
   assert.equal(commitGuard('git commit -m "skip with --no-verify, never"').status, 0, "a commit message that mentions it");
   assert.equal(commitGuard("git commit -nm 'x'").status, 2);
+  assert.equal(guard("git -c 'core.hooksPath=/dev/null' push origin main").status, 2, "nor switch the hook off for the push");
+  assert.equal(guard("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.HooksPath GIT_CONFIG_VALUE_0=/x git push origin main").status, 2);
   assert.equal(guard("git push -n origin main").status, 0);
   assert.equal(guard("git push -q origin main").status, 0);
   assert.equal(commitGuard("git push --no-verify origin main").status, 0, "the guard every repository gets leaves pushes alone");

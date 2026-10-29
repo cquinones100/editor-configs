@@ -1092,7 +1092,8 @@ several.
 Everything it posts is standard Markdown, the way Claude writes, sent as
 Slack markdown blocks, so headings, **bold**, [links](…), lists, tables and
 code render as they do in the terminal, rather than as Slack's older mrkdwn,
-which shows most of that as raw symbols.
+which shows most of that as raw symbols. A tab's screen is a modal, which renders only mrkdwn,
+so its "Claude said" is converted: a table there becomes a bullet a row.
 
 It posts an alert when a tab's Claude is waiting on you or has finished, from
 the state `tmux/agent-state.sh` keeps. A turn that ends in the tab you're

@@ -2750,6 +2750,13 @@ test("a tab's screen shows Claude's Markdown as the mrkdwn a modal renders", () 
   );
 });
 
+test("a tab's screen shows a Markdown table as a bullet a row, mrkdwn having no tables", () => {
+  assert.equal(
+    relay.asMrkdwn("Today:\n\n| Time | Event | Length |\n|:---|---|--:|\n| 12:00 PM | [Huddle](https://example.com/a) | 30m |\n| 1:00 PM | Standup | `15m` |\n\nDone."),
+    "Today:\n\n• *12:00 PM* · <https://example.com/a|Huddle> · 30m\n• *1:00 PM* · Standup · `15m`\n\nDone.",
+  );
+});
+
 test("Message on a tab's screen types it into the tab, as a reply in its thread", async () => {
   const [window] = tmux("new-window", "-d", "-P", "-F", "#{window_id}\t#{window_index}", fakeClaude).split("\t");
   await new Promise((resolve) => setTimeout(resolve, 300));

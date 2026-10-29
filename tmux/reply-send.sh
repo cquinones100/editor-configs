@@ -17,7 +17,10 @@ set -u
 export LC_ALL=en_US.UTF-8
 
 if ! command -v node >/dev/null 2>&1; then
-  NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  # nvm installs into ~/.nvm, or under XDG_CONFIG_HOME when that was set.
+  for NVM_DIR in ${NVM_DIR:+"$NVM_DIR"} "$HOME/.nvm" "${XDG_CONFIG_HOME:-$HOME/.config}/nvm"; do
+    [ -s "$NVM_DIR/nvm.sh" ] && break
+  done
   default=$(cat "$NVM_DIR/alias/default" 2>/dev/null)
   candidate="$NVM_DIR/versions/node/v${default#v}/bin"
   if [ -n "$default" ] && [ -x "$candidate/node" ]; then

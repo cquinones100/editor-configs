@@ -66,6 +66,17 @@ change() {
   changes=$((changes + 1))
 }
 dir() { $CHECK || mkdir -p "$1"; }
+# What a slow step is doing, said before it starts, dimmed, so a long silence
+# (a download, npm ci, a plugin fetch) doesn't read as setup stuck. Never with
+# --check, which does none of them.
+working() {
+  $CHECK && return 0
+  if [[ -n $header ]]; then
+    echo "$indent$header"
+    header=""
+  fi
+  printf '%s  \033[2m%s…\033[0m\n' "$indent" "$1"
+}
 
 # Links $1 at $2, unless it is already linked there. A real file or directory
 # already at $2 is moved aside to $2.bak.<time> first, rather than being
@@ -186,6 +197,7 @@ tmux_plugins() {
       change "install the $name plugin at ${commit:0:7}"
       continue
     fi
+    working "fetching the $name tmux plugin"
     if [ ! -d "$plugins/$name/.git" ]; then
       git clone --quiet --no-checkout "$url" "$plugins/$name" || { echo "  could not clone $name" >&2; continue; }
     fi
@@ -225,6 +237,7 @@ mermaid_ascii() {
     return 0
   fi
   tmp=$(mktemp -d)
+  working "downloading mermaid-ascii $MERMAID_ASCII_VERSION"
   if curl -fsSL -o "$tmp/m.tar.gz" "https://github.com/AlexanderGrooff/mermaid-ascii/releases/download/$MERMAID_ASCII_VERSION/mermaid-ascii_$platform.tar.gz" &&
     echo "$sum  $tmp/m.tar.gz" | shasum -a 256 -c --quiet - &&
     tar -xzf "$tmp/m.tar.gz" -C "$tmp" mermaid-ascii &&
@@ -254,6 +267,7 @@ lib_packages() {
     change "install lib's Node packages ($stale)"
     return 0
   fi
+  working "installing lib's Node packages ($stale), which can take a minute"
   if (cd "$SRC/lib" && npm ci --silent --no-audit --no-fund >/dev/null 2>&1); then
     change "install lib's Node packages ($stale)"
   else
@@ -565,6 +579,7 @@ NVM_VERSION=v0.40.3
 if in_zsh 'command -v node' >/dev/null; then
   ok "Node $(in_zsh 'node --version')"
 elif ask "Install nvm $NVM_VERSION (it adds itself to ~/.zshrc) and Node's LTS release?"; then
+  working "installing nvm and Node, which takes a minute"
   if curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh" | PROFILE=~/.zshrc bash >/dev/null &&
     in_zsh 'nvm install --lts' >/dev/null && in_zsh 'command -v node' >/dev/null; then
     ok "installed Node $(in_zsh 'node --version') through nvm"
@@ -601,6 +616,7 @@ install_font() {
 if [[ -f ~/Library/Fonts/"MesloLGS NF Regular.ttf" || -f /Library/Fonts/"MesloLGS NF Regular.ttf" ]]; then
   ok "the MesloLGS NF font"
 elif ask "Install the MesloLGS NF font, for Ghostty and Neovim's icons?"; then
+  working "downloading the font"
   install_font && ok "installed the MesloLGS NF font" || todo "the MesloLGS NF font, from https://github.com/romkatv/powerlevel10k-media"
 else
   todo "the MesloLGS NF font, from https://github.com/romkatv/powerlevel10k-media"
@@ -683,6 +699,7 @@ fi
 if [[ -d ~/.local/share/nvim/lazy/diffview.nvim ]]; then
   ok "Neovim's plugins"
 elif command -v nvim >/dev/null && [[ -L ~/.config/nvim ]] && ask "Install Neovim's plugins at their pinned commits?"; then
+  working "installing Neovim's plugins, which takes a minute"
   nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1 && ok "installed Neovim's plugins" || todo "nvim, then :Lazy restore"
 else
   todo "Neovim's plugins: open nvim once, then :Lazy restore"

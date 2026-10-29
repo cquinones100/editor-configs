@@ -112,6 +112,7 @@ case "${1:-}" in
     read -rsn 1 -p "  Update now? [y/N] " answer
     printf '\n\n'
     [[ $answer == [yY] ]] || exit 0
+    printf '  \033[2mUpdating…\033[0m\n'
     old=$(git_ rev-parse HEAD)
     if ! out=$(git_ merge --ff-only --quiet origin/main 2>&1); then
       printf '  It could not update:\n\n%s\n' "$(sed 's/^/  /' <<<"$out")"
@@ -122,7 +123,7 @@ case "${1:-}" in
     # plugins and anything else the update needs, and asks about the rest. It
     # changes only what isn't in place. Not piped, so its questions show.
     if [ -x "$REPO/setup.sh" ]; then
-      printf '\n'
+      printf '\n  \033[2mRunning the setup, to link and install what the update brought…\033[0m\n\n'
       "$REPO/setup.sh"
       printf '\n'
     fi

@@ -1770,6 +1770,19 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   assert.match(old.error, /^Out of date, last looked 1h ago: mission control looks every minute while you're here\.$/);
 });
 
+test("an empty Slack view says when Slack was last checked", () => {
+  const stateDir = fs.mkdtempSync(path.join(tmp, "slack-empty-"));
+  const env = { ...process.env, TMUX_SIDEBAR_STATE_DIR: stateDir };
+  const view = (checked) => {
+    fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ checked, items: [] }));
+    return JSON.parse(execFileSync("node", ["-e", `console.log(JSON.stringify(require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/slack"))}).slackView([])))`], { env, encoding: "utf8" }));
+  };
+  assert.equal(view(Date.now() - 10_000).empty, "Nothing new on Slack. Last checked just now.");
+  assert.equal(view(Date.now() - 4 * 60_000).empty, "Nothing new on Slack. Last checked 4m ago.");
+  const lines = sidebar.missionLines({ tabs: [], sections: [{ title: "Slack", items: [], loaded: true, empty: "Nothing new on Slack. Last checked 4m ago." }], cols: 100, rows: 20, view: { view: 1, cursor: 0, frame: 0 }, config }).map((line) => line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""));
+  assert.ok(lines.some((line) => line.includes("Last checked 4m ago.")), "drawn in place of Nothing here");
+});
+
 test("mission control looks at Slack itself with one search, sorting what it finds as /slack-updates does", async () => {
   const stateDir = process.env.TMUX_SIDEBAR_STATE_DIR;
   fs.mkdirSync(path.join(home, ".config/slack-updates"), { recursive: true });

@@ -167,6 +167,17 @@ test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or
     assert.match(fs.readFileSync(file, "utf8"), /\n@~\/\.local\/share\/switchboard\/claude-md\/CLAUDE\.md\n@~\/switchboard\/claude\/switchboard\.md\n$/);
     assert.equal(fs.readFileSync(path.join(home, ".local/share/switchboard/claude-md/CLAUDE.md"), "utf8"), "# From my repo\n");
     assert.ok(!fs.readdirSync(path.join(home, ".claude")).filter((n) => n.startsWith("CLAUDE.md.bak.")).slice(1).length, "its own written file isn't moved aside again");
+
+    // Another repository, through the claude_md part alone, as mission
+    // control's Settings runs it: the old clone is moved aside, the new one cloned.
+    fs.writeFileSync(path.join(work, "CLAUDE.md"), "# From my other repo\n");
+    execFileSync("git", ["-C", work, "commit", "-q", "-am", "other"], { env });
+    const other = path.join(home, "other.git");
+    execFileSync("git", ["clone", "-q", "--bare", work, other], { env });
+    fs.writeFileSync(config, JSON.stringify({ repo: other }));
+    assert.equal(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).status, 0);
+    assert.equal(fs.readFileSync(path.join(home, ".local/share/switchboard/claude-md/CLAUDE.md"), "utf8"), "# From my other repo\n");
+    assert.ok(fs.readdirSync(path.join(home, ".local/share/switchboard")).some((n) => n.startsWith("claude-md.bak.")));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

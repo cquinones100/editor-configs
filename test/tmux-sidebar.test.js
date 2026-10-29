@@ -1643,6 +1643,42 @@ test("mission control's Settings view lists the options by category, / narrows t
   }
 });
 
+test("Settings' Your CLAUDE.md says where your rules come from, and picking a file writes claude.json and your CLAUDE.md", async () => {
+  const claudeJson = path.join(home, ".config/switchboard/claude.json");
+  const rules = path.join(home, "my-rules.md");
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 160, rows: 60, tmuxClient: "none" };
+  try {
+    fs.symlinkSync(path.join(__dirname, ".."), path.join(home, "switchboard"));
+    fs.writeFileSync(rules, "# Mine\n");
+    await sidebar.refresh();
+    client.view.view = sidebar.viewsFor(client).findIndex((s) => s.title === "Settings") + 1;
+    const items = sidebar.viewsFor(client)[client.view.view - 1].items;
+    client.view.cursor = items.findIndex((i) => i.title === "Your CLAUDE.md");
+    await sidebar.missionKey(client, { key: "k" });
+    await sidebar.missionKey(client, { key: "j" });
+    assert.match(plain(sent.at(-1)), /CLAUDE CODE 1[\s\S]*Your CLAUDE\.md +local file/);
+
+    // Enter, f, a path and Enter: claude.json names it, and setup's claude_md writes the import.
+    await sidebar.missionKey(client, { key: "Enter" });
+    assert.match(plain(sent.at(-1)), /Local file[\s\S]*Another file…[\s\S]*A git repository…/);
+    await sidebar.missionKey(client, { key: "f" });
+    for (const key of [..."~/my-rules.md"]) await sidebar.missionKey(client, { key });
+    assert.match(plain(sent.at(-1)), /› ~\/my-rules\.md/);
+    await sidebar.missionKey(client, { key: "Enter" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(claudeJson, "utf8")), { path: "~/my-rules.md" });
+    assert.match(fs.readFileSync(path.join(home, ".claude/CLAUDE.md"), "utf8"), /\n@~\/my-rules\.md\n@~\/switchboard\/claude\/switchboard\.md\n$/);
+    assert.match(plain(sent.at(-1)), /Your CLAUDE\.md: ~\/my-rules\.md/);
+
+    // Back to the local file: claude.json goes.
+    await sidebar.missionKey(client, { key: "Enter" });
+    await sidebar.missionKey(client, { key: "l" });
+    assert.ok(!fs.existsSync(claudeJson));
+  } finally {
+    for (const f of [claudeJson, rules, path.join(home, "switchboard"), path.join(home, ".claude/CLAUDE.md")]) fs.rmSync(f, { force: true });
+  }
+});
+
 test("with the github and linear settings off, mission control has no PRs or Tickets view and the Work map no PR or ticket", () => {
   const settingsFile = path.join(home, ".config/switchboard/settings.json");
   const tab = { id: "@90", index: 9, name: "Some work", path: path.join(tmp, "nowhere"), pr: "12", state: "idle" };

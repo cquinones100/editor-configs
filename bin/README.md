@@ -32,7 +32,11 @@ control's Settings view lists every option by category, Enter or Space
 changes one, and `/` searches them. Turning GitHub or Linear off under
 Integrations takes its commands out of `M-p`, makes their keys (`M-v`, `M-m`, `M-r` for
 GitHub; `M-i`, `M-l`, `M-W` for Linear) do nothing, and takes its parts out of
-mission control and the tab names, so nothing asks that service. They are kept in
+mission control and the tab names, so nothing asks that service. Your
+CLAUDE.md, under Claude Code, says where your own Claude rules come from, and
+Enter changes it: the local file, another file, or a git repository, typed in;
+it writes `~/.config/switchboard/claude.json` and runs setup's `claude_md`
+step at once. The options are kept in
 `~/.config/switchboard/settings.json`, only what differs from the
 defaults in `tmux/settings.json`, and a change made by hand there takes
 effect at once too.

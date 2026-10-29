@@ -41,10 +41,10 @@ esac
 if [[ $OS == macos ]]; then
   LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
   # Karabiner only exists on macOS.
-  PARTS=(lazygit neovim git claude karabiner tmux ghostty terminal pgcli bin)
+  PARTS=(lazygit neovim git claude claude_md karabiner tmux ghostty terminal pgcli bin)
 else
   LAZYGIT_DIR="$HOME/.config/lazygit"
-  PARTS=(lazygit neovim git claude tmux ghostty terminal pgcli bin)
+  PARTS=(lazygit neovim git claude claude_md tmux ghostty terminal pgcli bin)
 fi
 
 # ── Parts ───────────────────────────────────────────────────────────────────
@@ -175,7 +175,14 @@ claude_md() {
   local repo mine="" want backup
   repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
   if [[ -n $repo ]]; then
-    if [[ ! -d $clone/.git ]]; then
+    # A clone of another repository, from before the setting changed, is
+    # moved aside rather than pulled.
+    if [[ -d $clone/.git && $(git -C "$clone" remote get-url origin 2>/dev/null) != "$repo" ]]; then
+      backup="$clone.bak.$(date +%Y%m%d%H%M%S)"
+      $CHECK || mv "$clone" "$backup" || return 1
+      change "move the clone of your CLAUDE.md's old repository aside to $backup"
+    fi
+    if [[ ! -d $clone/.git ]] || { $CHECK && [[ -n $backup ]]; }; then
       if ! $CHECK; then
         mkdir -p "${clone%/*}" && git clone --quiet "$repo" "$clone" || { echo "  could not clone $repo for your CLAUDE.md" >&2; return 1; }
       fi
@@ -212,6 +219,10 @@ claude_md() {
     change "make ~/.claude/CLAUDE.md, importing Switchboard's part"
   fi
 }
+
+# The CLAUDE.md step alone, as mission control's Settings runs it when you
+# change where your rules come from.
+part_claude_md() { claude_md; }
 
 part_claude() {
   dir ~/.claude

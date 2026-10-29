@@ -1384,6 +1384,17 @@ test("the Closed view lists closed tabs newest first, one per conversation (a sh
   assert.deepEqual(sidebar.closedItems([]).map((i) => i.title), ["scratch", "ABC-1 older"]);
   fs.rmSync(path.join(sidebar.STATE_DIR, "closed-removed.json"), { force: true });
   assert.ok(sidebar.builtInViews(sidebar.state).some((v) => v.title === "Closed"));
+
+  // Its Claude quit, then its pane closed, leaving only the sidebar a moment
+  // before the window went: it is still the conversation in its directory.
+  const thread = { id: "@84", index: 7, name: "Slack: a thread", state: "idle", path: "/work/thread", panes: [{}], claude: { sessionId: "5555" } };
+  Date.now = () => realNow() - 60_000;
+  sidebar.record([thread]);
+  Date.now = realNow;
+  sidebar.record([{ ...thread, claude: undefined }]);
+  sidebar.record([{ ...thread, path: "/home", panes: [], claude: undefined }]);
+  sidebar.record([]);
+  assert.deepEqual(sidebar.closedItems([]).map((i) => [i.title, i.dir, i.command])[0], ["Slack: a thread", "/work/thread", "zsh -i -c 'claude --resume 5555; exec zsh -i'"]);
 });
 
 test("the PR board puts each PR in the column for where it stands, and h and l move between columns", async () => {

@@ -125,3 +125,63 @@ test("setup.sh terminal adds Option as Alt to a Ghostty config of your own once,
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or a repository, and Switchboard's part, once", () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-claude-md-")));
+  const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
+  const file = path.join(home, ".claude/CLAUDE.md");
+  const config = path.join(home, ".config/switchboard/claude.json");
+  const run = () => spawnSync("bash", [script, "claude"], { env, encoding: "utf8" });
+  try {
+    fs.symlinkSync(repo, path.join(home, "switchboard"));
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    fs.mkdirSync(path.dirname(config), { recursive: true });
+
+    // A CLAUDE.md of your own, no rules named: only the import is added, once.
+    fs.writeFileSync(file, "# Mine\n\n- be brief\n");
+    assert.equal(run().status, 0);
+    assert.equal(fs.readFileSync(file, "utf8"), "# Mine\n\n- be brief\n\n@~/switchboard/claude/switchboard.md\n");
+    run();
+    assert.equal(fs.readFileSync(file, "utf8").match(/switchboard\.md/g).length, 1, "a second run adds nothing");
+
+    // Rules in a file named in claude.json: your old CLAUDE.md is moved aside, and the new one imports both.
+    const rules = path.join(home, "my-rules.md");
+    fs.writeFileSync(rules, "# My rules\n");
+    fs.writeFileSync(config, JSON.stringify({ path: "~/my-rules.md" }));
+    const named = run();
+    assert.match(named.stdout, /move your ~\/\.claude\/CLAUDE\.md aside/);
+    assert.match(fs.readFileSync(file, "utf8"), /^<!-- Written by Switchboard's setup\.sh[^\n]*-->\n\n@~\/my-rules\.md\n@~\/switchboard\/claude\/switchboard\.md\n$/);
+    assert.ok(fs.readdirSync(path.join(home, ".claude")).some((n) => n.startsWith("CLAUDE.md.bak.")));
+    assert.match(run().stdout, /claude: up to date/, "a second run changes nothing");
+
+    // Rules in a repository: cloned, and its file imported.
+    const origin = path.join(home, "rules.git");
+    const work = path.join(home, "rules-work");
+    execFileSync("git", ["init", "-q", "-b", "main", work], { env });
+    fs.writeFileSync(path.join(work, "CLAUDE.md"), "# From my repo\n");
+    execFileSync("git", ["-C", work, "add", "."], { env });
+    execFileSync("git", ["-C", work, "commit", "-q", "-m", "rules"], { env });
+    execFileSync("git", ["clone", "-q", "--bare", work, origin], { env });
+    fs.writeFileSync(config, JSON.stringify({ repo: origin }));
+    assert.equal(run().status, 0);
+    assert.match(fs.readFileSync(file, "utf8"), /\n@~\/\.local\/share\/switchboard\/claude-md\/CLAUDE\.md\n@~\/switchboard\/claude\/switchboard\.md\n$/);
+    assert.equal(fs.readFileSync(path.join(home, ".local/share/switchboard/claude-md/CLAUDE.md"), "utf8"), "# From my repo\n");
+    assert.ok(!fs.readdirSync(path.join(home, ".claude")).filter((n) => n.startsWith("CLAUDE.md.bak.")).slice(1).length, "its own written file isn't moved aside again");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("setup.sh claude leaves a CLAUDE.md linked into the repo alone until your rules are named", () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-claude-link-")));
+  const env = { ...process.env, HOME: home };
+  try {
+    fs.symlinkSync(repo, path.join(home, "switchboard"));
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    fs.symlinkSync(path.join(repo, "claude/CLAUDE.md"), path.join(home, ".claude/CLAUDE.md"));
+    spawnSync("bash", [script, "claude"], { env, encoding: "utf8" });
+    assert.equal(fs.readlinkSync(path.join(home, ".claude/CLAUDE.md")), path.join(repo, "claude/CLAUDE.md"));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

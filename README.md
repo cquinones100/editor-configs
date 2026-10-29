@@ -62,8 +62,9 @@ Your own settings go in `~/.config/switchboard/`, which is never in this reposit
 | `nvim.lua` | Neovim, at the end of its config |
 | `ghostty` | Ghostty, after its config |
 | `lazygit.yml` | lazygit, over its config, in panes tmux starts |
+| `CLAUDE.md` | Claude Code, your own rules, imported with Switchboard's part into `~/.claude/CLAUDE.md` |
 
-Claude Code reads no file after its own, so `setup.sh` adds what Switchboard needs (its hooks, statusline and the permissions its loops run with) to your `~/.claude/settings.json` and leaves the rest of it yours.
+Claude Code reads no file after its own, so `setup.sh` adds what Switchboard needs (its hooks, statusline and the permissions its loops run with) to your `~/.claude/settings.json` and leaves the rest of it yours. Your `~/.claude/CLAUDE.md` imports Switchboard's part (`claude/switchboard.md`: the tabs, the notes app) and your own rules, from `~/.config/switchboard/CLAUDE.md`, or from where `~/.config/switchboard/claude.json` says: a file (`{"path": "~/somewhere/CLAUDE.md"}`) or a git repository of yours (`{"repo": "<url>", "file": "CLAUDE.md"}`, cloned and kept up to date on every setup run), so you can keep your rules in a repository of your own and share them across machines.
 
 Settings (`M-p`) keeps what you change there in the same folder, as `settings.json`.
 

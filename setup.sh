@@ -155,9 +155,67 @@ claude_settings() {
   change "add Switchboard's hooks, statusline and permissions to $file"
 }
 
+# Your ~/.claude/CLAUDE.md: your own rules and Switchboard's part
+# (claude/switchboard.md: the tabs, the notes app, repository skills). Your
+# rules come from where ~/.config/switchboard/claude.json says, a git
+# repository ({"repo": "<url>", "file": "CLAUDE.md"}, cloned into
+# ~/.local/share/switchboard/claude-md and pulled on every run, fast-forward
+# only) or a file ({"path": "~/somewhere/CLAUDE.md"}), else
+# ~/.config/switchboard/CLAUDE.md when there is one. Then ~/.claude/CLAUDE.md
+# is a short file importing both, which Claude Code follows (@path), so an edit
+# to either shows at once; a real file in its way that isn't one of these is
+# moved aside first. With no rules named, a CLAUDE.md of your own gets only the
+# line importing Switchboard's part, and a missing one is made with it. A link
+# into this repo's claude/CLAUDE.md (the whole setup, from before) is left
+# alone until rules are named.
+SWITCHBOARD_MD="@~/switchboard/claude/switchboard.md"
+WRITTEN_MARK="<!-- Written by Switchboard's setup.sh: your rules, then Switchboard's. Edit them where they live, not here. -->"
+claude_md() {
+  local file=~/.claude/CLAUDE.md config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md
+  local repo mine="" want backup
+  repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
+  if [[ -n $repo ]]; then
+    if [[ ! -d $clone/.git ]]; then
+      if ! $CHECK; then
+        mkdir -p "${clone%/*}" && git clone --quiet "$repo" "$clone" || { echo "  could not clone $repo for your CLAUDE.md" >&2; return 1; }
+      fi
+      change "clone your CLAUDE.md's repository"
+    elif ! $CHECK; then
+      git -C "$clone" pull --quiet --ff-only 2>/dev/null || echo "  could not update your CLAUDE.md's repository: git -C $clone pull --ff-only" >&2
+    fi
+    mine="$clone/$(jq -r '.file // "CLAUDE.md"' "$config")"
+  else
+    mine=$(jq -r '.path // empty' "$config" 2>/dev/null)
+    mine=${mine/#\~/$HOME}
+    [[ -z $mine && -f ~/.config/switchboard/CLAUDE.md ]] && mine=~/.config/switchboard/CLAUDE.md
+  fi
+  if [[ -n $mine ]]; then
+    want=$(printf '%s\n\n@%s\n%s' "$WRITTEN_MARK" "${mine/#$HOME/~}" "$SWITCHBOARD_MD")
+    [[ ! -L $file && $(cat "$file" 2>/dev/null) == "$want" ]] && return 0
+    if [[ -e $file && ! -L $file ]] && ! grep -qF "$WRITTEN_MARK" "$file"; then
+      backup="$file.bak.$(date +%Y%m%d%H%M%S)"
+      $CHECK || mv "$file" "$backup" || return 1
+      change "move your ~/.claude/CLAUDE.md aside to $backup"
+    fi
+    if ! $CHECK; then
+      mkdir -p ~/.claude && rm -f "$file" && printf '%s\n' "$want" >"$file" || return 1
+    fi
+    change "write ~/.claude/CLAUDE.md to import your rules (${mine/#$HOME/~}) and Switchboard's"
+  elif [[ -L $file ]]; then
+    return 0
+  elif [[ -f $file ]]; then
+    grep -qxF "$SWITCHBOARD_MD" "$file" && return 0
+    $CHECK || printf '\n%s\n' "$SWITCHBOARD_MD" >>"$file" || return 1
+    change "add the line importing Switchboard's part to your ~/.claude/CLAUDE.md"
+  else
+    $CHECK || { mkdir -p ~/.claude && printf '%s\n' "$SWITCHBOARD_MD" >"$file"; } || return 1
+    change "make ~/.claude/CLAUDE.md, importing Switchboard's part"
+  fi
+}
+
 part_claude() {
   dir ~/.claude
-  put_link "$SRC/claude/CLAUDE.md" ~/.claude/CLAUDE.md
+  claude_md || return 1
   claude_settings || return 1
   put_link "$SRC/claude/statusline-command.sh" ~/.claude/statusline-command.sh
   put_link "$SRC/claude/otel-headers.sh" ~/.claude/otel-headers.sh
@@ -730,7 +788,14 @@ fi
 # Switchboard's part of the settings is merged into your own (see
 # claude_settings): the hooks, the statusline (which gives the sidebar each
 # session's context use) and the permissions its loops need.
-whole_claude() { [[ $(readlink ~/.claude/CLAUDE.md 2>/dev/null) == */claude/CLAUDE.md ]]; }
+# The whole setup is on when its commands are linked (CLAUDE.md no longer is).
+whole_claude() { [[ $(readlink ~/.claude/commands 2>/dev/null) == */claude/commands ]]; }
+claude_md_pending() (
+  CHECK=true
+  changes=0
+  claude_md >/dev/null 2>&1
+  echo "$changes"
+)
 claude_settings_pending() (
   CHECK=true
   changes=0
@@ -760,12 +825,24 @@ else
   optional "Claude Code's hooks, for tab states and M-a: ./setup.sh adds them when you say yes"
 fi
 
-# Everything in claude/: its owner's CLAUDE.md, skills, commands and hooks,
+# Your CLAUDE.md: your rules, wherever claude.json says, and Switchboard's
+# part, imported (claude_md). Part of the whole setup's run above.
+if ! whole_claude && command -v claude >/dev/null; then
+  if (( $(claude_md_pending) == 0 )); then
+    ok "your CLAUDE.md imports Switchboard's part (the tabs, the notes app)"
+  elif ask "Add Switchboard's part (how to read the tabs, the notes app) to your ~/.claude/CLAUDE.md, with your own rules from ~/.config/switchboard/claude.json when it names them?"; then
+    claude_md >/dev/null && ok "your CLAUDE.md imports Switchboard's part" || todo "./setup.sh claude failed"
+  else
+    optional "Switchboard's part of CLAUDE.md, for the tabs and the notes app: ./setup.sh claude"
+  fi
+fi
+
+# Everything in claude/: its owner's skills, commands and hooks,
 # linked in place of yours, which is moved aside; settings are merged, not linked.
 # Asked only once Claude Code is there, and never assumed.
 if whole_claude || ! command -v claude >/dev/null; then
   :
-elif ask "Also link this repo's whole Claude Code setup (its owner's CLAUDE.md, skills, commands, hooks)? What it replaces is moved aside, not deleted; your settings are kept."; then
+elif ask "Also link this repo's whole Claude Code setup (its owner's skills, commands, hooks)? What it replaces is moved aside, not deleted; your settings and CLAUDE.md are kept."; then
   apply claude && ok "linked this repo's Claude Code setup" || todo "./setup.sh claude failed"
 else
   optional "this repo's whole Claude Code setup, skills included: ./setup.sh claude, which replaces yours"

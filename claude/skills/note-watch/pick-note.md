@@ -8,3 +8,10 @@ Notes are in `$NOTES_DIR` or `~/Notes`, each note's file named after its title (
 2. **Confirm it.** Ask the user with `AskUserQuestion` whether that is the note ("Watch Editor Configs Notes?", "Tick this PR's item in Editor Configs Notes?"), even when it seems obvious, with the note as the first option and **Another note** as the second.
 3. **Or pick one.** When nothing names a note, or the user wants another, list the notes by title, most recently changed first, leaving out `.trash/`, up to ten, titles only and never their contents, and ask which. A skill for which a note is optional, as `/queue-and-clean`'s is, adds **No note** as an option.
 4. Read only the note the user confirms or picks. Until then, read no note's contents.
+5. **Mark the tab.** Once a note is settled, and when `$TMUX_PANE` is set, record it on the tab, as its path within the notes directory, so `M-e` shows that note beside this tab (`tmux/notes-open.sh`):
+
+   ```
+   tmux set-option -w -t "$TMUX_PANE" @tab_note 'Editor Configs Notes.md'
+   ```
+
+   With **No note**, record nothing. If it fails, carry on.

@@ -1310,7 +1310,9 @@ is, or starting it there; pressed again in that tab, or `M-w` on it, it goes bac
 tab of its own. While it is beside a tab's pane, that tab says "✎ Notes here" in the
 sidebar and on its mission control card. Its own Notes tab stays, in the sidebar's Other, showing which tab
 has Notes (Enter goes there, `M-e` brings it back), and Notes goes back into
-it when put away.
+it when put away. Beside a tab, Notes shows that tab's own note: the one its Claude works
+from (`/note-watch` and `/queue-and-clean` record it), else the one Notes last
+showed beside that tab.
 
 ### In the list
 

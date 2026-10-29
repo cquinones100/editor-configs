@@ -48,6 +48,41 @@ notes_pane() {
 # What runs notes; the tests put a stand-in here.
 notes_command=${NOTES_OPEN_COMMAND:-zsh -i -c notes}
 
+# Each tab's note: the one its Claude works from (@tab_note, which /note-watch
+# and /queue-and-clean set once a note is settled), else the one Notes last
+# showed beside it (@tab_note_last, kept here as Notes leaves it). Both are
+# paths in the notes directory. M-e opens it in the running app, through the
+# socket bin/notes listens on, or, for an app not yet running, by making it
+# the note the app opens with (.notes.json's last).
+notes_socket=${NOTES_SOCKET:-$HOME/.local/state/switchboard/notes.sock}
+shown() { jq -r '.last // empty' "$notes_dir/.notes.json" 2>/dev/null; }
+remember() {
+  local window=$1 note
+  [ "$(tmux show -wqv -t "$window" @notes)" = 1 ] && return
+  note=$(shown)
+  [ -n "$note" ] && tmux set-option -w -t "$window" @tab_note_last "$note"
+}
+note_for() {
+  local window=$1 want
+  want=$(tmux show -wqv -t "$window" @tab_note)
+  [ -n "$want" ] && [ -f "$notes_dir/$want" ] || want=$(tmux show -wqv -t "$window" @tab_note_last)
+  [ -n "$want" ] && [ -f "$notes_dir/$want" ] && printf '%s' "$want"
+}
+show_for() {
+  local window=$1 want
+  want=$(note_for "$window") || return 0
+  [ "$want" = "$(shown)" ] && return
+  # A ' in the note's name is doubled, as a Vim string in ' wants it.
+  local quoted=${want//\'/\'\'}
+  nvim --server "$notes_socket" --remote-expr "luaeval('require(\"notes\").open(require(\"notes.store\").absolute(_A))', '$quoted')" >/dev/null 2>&1
+}
+open_with() {
+  local window=$1 want meta
+  want=$(note_for "$window") || return 0
+  meta="$notes_dir/.notes.json"
+  { [ -f "$meta" ] && jq --arg last "$want" '.last = $last' "$meta" || jq -n --arg last "$want" '{last: $last}'; } >"$meta.tmp" 2>/dev/null && mv "$meta.tmp" "$meta"
+}
+
 # A tab of its own for the notes pane, named Notes.
 own_tab() {
   local window=$1 session
@@ -83,6 +118,7 @@ put_away() {
 if [ "${1:-}" = away ]; then
   client=${2:-} pane=${3:-}
   [ -n "$pane" ] || exit 0
+  remember "$(tmux display -p -t "$pane" '#{window_id}')"
   put_away "$pane" && exit 0
   tmux display-popup -c "$client" -E -w 60 -h 6 "~/.config/tmux/confirm.sh 'Close pane?'"
   exit 0
@@ -92,7 +128,9 @@ if [ "${1:-}" = side ]; then
   client=${2:-} here=${3:-}
   [ -n "$here" ] || exit 0
   existing=$(notes_pane)
+  here_window=$(tmux display -p -t "$here" '#{window_id}')
   if [ -z "$existing" ]; then
+    open_with "$here_window"
     pane=$(tmux split-window -h -l 40% -t "$here" -c "$HOME" -P -F '#{pane_id}' "$notes_command") || exit 0
     tmux set-option -p -t "$pane" @notes_pane 1
     exit 0
@@ -100,12 +138,14 @@ if [ "${1:-}" = side ]; then
   tmux set-option -p -t "$existing" @notes_pane 1
   if [ "$(tmux display -p -t "$existing" '#{window_id}')" = "$(tmux display -p -t "$here" '#{window_id}')" ]; then
     # Alone in its own tab (beside the sidebar) it is already put away.
+    remember "$here_window"
     put_away "$existing"
     exit 0
   fi
   # Leaving its own Notes tab, it leaves notes-away.sh in its place, so the
   # tab stays and says where Notes went. Leaving another tab, nothing.
   old=$(tmux display -p -t "$existing" '#{window_id}')
+  remember "$old"
   # Its own tab: marked @notes, or holding nothing else but the sidebar, as a
   # Notes tab that lost its marks (tmux-resurrect) does.
   alone=$(tmux list-panes -t "$existing" -F '#{?@sidebar,,x}' | grep -c x)
@@ -119,6 +159,7 @@ if [ "${1:-}" = side ]; then
   if [ -n "$stand_in" ] && [ "$(tmux display -p -t "$stand_in" '#{window_id}')" = "$(tmux display -p -t "$here" '#{window_id}')" ]; then
     tmux kill-pane -t "$stand_in"
   fi
+  show_for "$here_window"
   exit 0
 fi
 

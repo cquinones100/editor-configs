@@ -776,6 +776,40 @@ test("M-e opens Notes to the right of the pane, moves the one Notes there from e
   }
 });
 
+test("M-e shows each tab its own note: the one its Claude works from, else the last one shown beside it", async (t) => {
+  const script = path.join(__dirname, "../tmux/notes-open.sh");
+  const notesDir = fs.mkdtempSync(path.join(tmp, "tab-notes-"));
+  ["A.md", "B.md", "C.md"].forEach((name) => fs.writeFileSync(path.join(notesDir, name), `# ${name}\n`));
+  const meta = path.join(notesDir, ".notes.json");
+  const showing = (name) => fs.writeFileSync(meta, JSON.stringify({ last: name }));
+  // A headless Neovim on the socket stands in for the notes app, noting what it is asked to open.
+  const socket = path.join(tmp, "notes.sock");
+  const app = require("node:child_process").spawn("nvim", ["--headless", "-u", "NONE", "--listen", socket, "--cmd", "lua package.loaded.notes = { open = function(p) vim.g.opened = p end }; package.loaded['notes.store'] = { absolute = function(r) return r end }"], { stdio: "ignore" });
+  t.after(() => app.kill());
+  assert.ok(await until(() => fs.existsSync(socket)), "the stand-in listens");
+  const opened = () => execFileSync("nvim", ["--server", socket, "--remote-expr", "get(g:, 'opened', '')"], { encoding: "utf8" }).trim();
+  const env = { ...process.env, NOTES_OPEN_COMMAND: "cat", NOTES_DIR: notesDir, NOTES_SOCKET: socket };
+  const first = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const second = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const paneIn = (w) => tmux("display", "-p", "-t", w, "#{pane_id}");
+  const [a, b] = [paneIn(first), paneIn(second)];
+  t.after(() => [first, second].forEach((w) => { try { tmux("kill-window", "-t", w); } catch {} }));
+
+  showing("A.md");
+  execFileSync("bash", [script, "side", "none", a], { env });
+  execFileSync("bash", [script, "side", "none", b], { env });
+  assert.equal(tmux("show", "-wqv", "-t", first, "@tab_note_last"), "A.md", "the note it showed is kept on the tab it left");
+  assert.equal(opened(), "", "a tab with no note of its own leaves the note as it is");
+
+  showing("B.md");
+  execFileSync("bash", [script, "side", "none", a], { env });
+  assert.equal(opened(), "A.md", "back beside the first tab, its note again");
+
+  tmux("set", "-w", "-t", second, "@tab_note", "C.md");
+  execFileSync("bash", [script, "side", "none", b], { env });
+  assert.equal(opened(), "C.md", "the note its Claude works from comes first");
+});
+
 test("a tab with Notes beside its pane says so in the sidebar, and the Notes tab itself doesn't", async (t) => {
   const script = path.join(__dirname, "../tmux/notes-open.sh");
   const env = { ...process.env, NOTES_OPEN_COMMAND: "cat" };

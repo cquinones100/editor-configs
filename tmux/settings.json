@@ -143,6 +143,13 @@
     "default": true
   },
   {
+    "key": "slack_background",
+    "category": "Mission control",
+    "label": "Slack without a tab",
+    "description": "Mission control looks at Slack itself every 2 minutes, through cheap headless Haiku calls, instead of a Slack tab looping /slack-updates",
+    "default": true
+  },
+  {
     "key": "pause_when_away",
     "category": "Mission control",
     "label": "Pause lookups while away",

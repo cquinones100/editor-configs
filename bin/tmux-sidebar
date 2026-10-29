@@ -44,6 +44,7 @@ const parts = Object.assign({},
   require("../lib/sidebar/calendar"),
   require("../lib/sidebar/calendar-feed"),
   require("../lib/sidebar/slack"),
+  require("../lib/sidebar/slack-look"),
   require("../lib/sidebar/sessions"),
   require("../lib/sidebar/daemon"),
 );

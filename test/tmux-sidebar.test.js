@@ -1707,7 +1707,7 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   const now = Date.now() / 1000;
   const empty = JSON.parse(execFileSync("node", ["-e", `const { slackView } = require(${JSON.stringify(path.join(__dirname, "../lib/sidebar/slack"))}); console.log(JSON.stringify(slackView([])))`], { env, encoding: "utf8" }));
   assert.equal(empty.title, "Slack", "there before anything is saved");
-  assert.match(empty.error, /^Nothing saved yet: going to this view opens a Slack tab/);
+  assert.match(empty.error, /^Nothing saved yet: mission control is looking\./);
   const first = execFileSync("node", [save, "--since"], { env, encoding: "utf8" });
   assert.ok(Math.abs(Number(first.trim().split(" ")[1]) - (now - 3600)) < 60, "an hour back the first time");
   const items = [
@@ -1751,7 +1751,49 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
   fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ ...saved, checked: Date.now() - 3_600_000 }));
   const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
-  assert.match(old.error, /^Out of date, last looked 1h ago: opening a Slack tab to catch up\.$/);
+  assert.match(old.error, /^Out of date, last looked 1h ago: mission control looks every 2 minutes while you're here\.$/);
+});
+
+test("mission control looks at Slack itself with one search, sorting what it finds as /slack-updates does", async () => {
+  const stateDir = process.env.TMUX_SIDEBAR_STATE_DIR;
+  fs.mkdirSync(path.join(home, ".config/slack-updates"), { recursive: true });
+  fs.writeFileSync(path.join(home, ".config/slack-updates/config.json"), JSON.stringify({ channels: ["COPS"] }));
+  const now = Math.floor(Date.now() / 1000);
+  const result = (n, { channel, where, from, user, ts, thread, text, participants = "" }) =>
+    `### Result ${n} of 6\nChannel: ${where} (ID: ${channel})\n${participants ? `Participants: ${participants}\n` : ""}From: ${from} (ID: ${user})\nTime: 2026-10-29 09:55:36 EDT\nMessage_ts: ${ts}\nPermalink: [link](https://x.slack.com/archives/${channel}/p${ts.replace(".", "")}${thread ? `?thread_ts=${thread}&cid=${channel}` : ""})\nText: \n${text}\n\n---\n\n`;
+  const mine = `${now - 50}.000100`;
+  const page = [
+    result(1, { channel: "DED", where: "DM", participants: "Me (ID: U0MEMEME1), Ed (ID: UED)", from: "Ed <ed@example.com>", user: "UED", ts: `${now - 40}.000100`, text: "did you see this?\nsecond line" }),
+    result(2, { channel: "CGEN", where: "#general", from: "Ada", user: "UADA", ts: `${now - 30}.000100`, text: "<@U0MEMEME1|Me> can you look" }),
+    result(3, { channel: "CDEV", where: "#dev", from: "Me", user: "U0MEMEME1", ts: mine, text: "my question" }),
+    result(4, { channel: "CDEV", where: "#dev", from: "Lin", user: "ULIN", ts: `${now - 20}.000100`, thread: mine, text: "an answer" }),
+    result(5, { channel: "COPS", where: "#ops", from: "Bot", user: "UBOT2", ts: `${now - 10}.000100`, text: "deploy done" }),
+    result(6, { channel: "CRANDOM", where: "#random", from: "Cy", user: "UCY", ts: `${now - 5}.000100`, text: "lunch?" }),
+  ].join("");
+  const asked = [];
+  const call = async (tool, input) => {
+    asked.push({ tool, input });
+    if (tool.endsWith("slack_read_user_profile")) return "User ID: U0MEMEME1\nUsername: me";
+    return JSON.stringify({ results: `# Search Results for: \n\n## Messages (6 results)\n${page}` });
+  };
+
+  await sidebar.lookSlack(() => {}, call);
+
+  assert.deepEqual(asked.map((a) => a.tool.replace(/^.*__/, "")), ["slack_read_user_profile", "slack_search_public_and_private"], "one profile, then one search for everything");
+  const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
+  const kinds = Object.fromEntries(saved.items.map((i) => [i.text, i.kind]));
+  assert.equal(kinds["did you see this? second line"], "dm");
+  assert.equal(kinds["@Me can you look"], "mention");
+  assert.equal(kinds["an answer"], "thread", "a reply in a thread you started");
+  assert.equal(kinds["deploy done"], "channel");
+  assert.equal(kinds["lunch?"], undefined, "a channel not chosen is left out");
+  assert.equal(kinds["my question"], undefined, "what you wrote isn't shown");
+  assert.equal(saved.items.find((i) => i.kind === "dm").where, "Ed");
+  assert.equal(saved.items.find((i) => i.kind === "dm").from, "Ed", "names without their email");
+  assert.equal(saved.replied[`CDEV:${mine}`], mine, "but counts as having read that thread");
+
+  await sidebar.lookSlack(() => {}, call);
+  assert.equal(asked.filter((a) => a.tool.endsWith("slack_read_user_profile")).length, 1, "your member ID is kept");
 });
 
 test("the Calendar view's iCal feed gives today's events, repeats and moved occurrences included, in /today's shape", () => {

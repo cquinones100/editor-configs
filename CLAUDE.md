@@ -26,7 +26,8 @@ isn't the commit the skill last found clean (recorded in the clone's
 fix made after the review needs a review of its own. Claude can't skip
 it: this repository's own `.claude/settings.json` runs
 `claude/hooks/enforce-push-review.sh` before every command in it, which
-refuses `git push --no-verify`, so it applies to any Claude working here and
+refuses `git push --no-verify`, and `enforce-git-hooks-run.sh`, which refuses
+changing `core.hooksPath`, so it applies to any Claude working here and
 nowhere else. The repo is public, so before asking,
 check the unpushed commits for anything that identifies the user or their
 employer: organization or company names, ticket IDs, PR numbers, internal

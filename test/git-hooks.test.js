@@ -31,10 +31,11 @@ test("pre-push refuses a push to main whose tip /review-loop hasn't found clean,
   }
 });
 
-test("this repository's Claude settings run the git hook guard before every command", () => {
+test("this repository's Claude settings run the push guard and the hook guard before every command", () => {
   const settings = JSON.parse(fs.readFileSync(path.join(repo, ".claude/settings.json"), "utf8"));
   const commands = settings.hooks.PreToolUse.filter((h) => h.matcher === "Bash").flatMap((h) => h.hooks.map((x) => x.command));
   assert.ok(commands.some((c) => c.includes("$CLAUDE_PROJECT_DIR/claude/hooks/enforce-push-review.sh")));
+  assert.ok(commands.some((c) => c.includes("$CLAUDE_PROJECT_DIR/claude/hooks/enforce-git-hooks-run.sh")), "which keeps core.hooksPath from switching the hook off");
 });
 
 test("this repository's push guard blocks git push --no-verify, however it is spelled, but not a dry run or a commit", () => {

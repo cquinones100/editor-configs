@@ -57,6 +57,8 @@ Your own settings go in `~/.config/switchboard/`, which is never in this reposit
 | `ghostty` | Ghostty, after its config |
 | `lazygit.yml` | lazygit, over its config, in panes tmux starts |
 
+Claude Code reads no file after its own, so `setup.sh` adds what Switchboard needs (its hooks, statusline and the permissions its loops run with) to your `~/.claude/settings.json` and leaves the rest of it yours.
+
 Settings (`M-p`) keeps what you change there in the same folder, as `settings.json`.
 
 ## Where things are

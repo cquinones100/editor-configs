@@ -105,10 +105,49 @@ part_git() {
   change "set this clone's core.hooksPath to .githooks"
 }
 
+# Switchboard's part of Claude Code's settings, claude/switchboard-settings.json
+# (the hooks that run agent-state.sh, the statusline, and what its skills and
+# loops run and read without asking), merged into your own
+# ~/.claude/settings.json, which stays yours: Claude Code writes /model and
+# "always allow" there, and nothing else in it is touched. Its hooks replace
+# any hook running the same command, the statusline takes the place of none
+# or of an older one of Switchboard's, and its permissions are added to yours,
+# so running it again changes nothing. A settings file that is a link into
+# this repo, as the whole setup made one before, becomes your own file with
+# what it held first. Claude Code has no file it reads after yours, so this is
+# the user layer for Claude: your own settings are the file itself.
+claude_settings() {
+  local file=~/.claude/settings.json current merged
+  if [[ -L $file && $(readlink "$file") == */claude/settings.json ]]; then
+    $CHECK || { cp -L "$file" "$file.tmp" && mv "$file.tmp" "$file"; } || return 1
+    change "make $file your own, from the one it linked to"
+  fi
+  if [[ -e $file ]]; then
+    current=$(jq . "$file") || { echo "$indent  $file isn't JSON; left alone" >&2; return 1; }
+  else
+    current={}
+  fi
+  merged=$(jq --slurpfile p "$SRC/claude/switchboard-settings.json" '
+    $p[0] as $p
+    | [$p.hooks[][].hooks[].command] as $ours
+    | .hooks = (((.hooks // {}) | map_values(map(.hooks |= map(select(.command as $c | $ours | index($c) | not))) | map(select(.hooks | length > 0))))
+        as $mine | reduce ($p.hooks | keys[]) as $k ($mine; .[$k] = ((.[$k] // []) + $p.hooks[$k])) | with_entries(select(.value | length > 0)))
+    | if ((.statusLine.command // "statusline-command.sh") | contains("statusline-command.sh")) then .statusLine = $p.statusLine else . end
+    | .permissions.allow = ((.permissions.allow // []) + ($p.permissions.allow - (.permissions.allow // [])))
+    | .permissions.deny = ((.permissions.deny // []) + ($p.permissions.deny - (.permissions.deny // [])))
+  ' <<<"$current") || return 1
+  [[ $merged == "$current" ]] && return 0
+  if ! $CHECK; then
+    [[ -e $file ]] && { cp "$file" "$file.bak.$(date +%Y%m%d%H%M%S)" || return 1; }
+    printf '%s\n' "$merged" >"$file.tmp" && mv "$file.tmp" "$file" || return 1
+  fi
+  change "add Switchboard's hooks, statusline and permissions to $file"
+}
+
 part_claude() {
   dir ~/.claude
   put_link "$SRC/claude/CLAUDE.md" ~/.claude/CLAUDE.md
-  put_link "$SRC/claude/settings.json" ~/.claude/settings.json
+  claude_settings || return 1
   put_link "$SRC/claude/statusline-command.sh" ~/.claude/statusline-command.sh
   put_link "$SRC/claude/otel-headers.sh" ~/.claude/otel-headers.sh
   put_link "$SRC/claude/commands" ~/.claude/commands
@@ -559,11 +598,16 @@ else
 fi
 
 # Without these hooks every tab shows idle, and M-a has nothing to walk. Only
-# the hooks that run agent-state.sh are added to your own settings, beside
-# what is there, and the statusline (which gives the sidebar each session's
-# context use) only when you have none: the rest of claude/settings.json is
-# its owner's.
-whole_claude() { [[ -L ~/.claude/settings.json && $(readlink ~/.claude/settings.json) == */switchboard/claude/settings.json || $(readlink ~/.claude/settings.json 2>/dev/null) == */editor-configs/claude/settings.json ]]; }
+# Switchboard's part of the settings is merged into your own (see
+# claude_settings): the hooks, the statusline (which gives the sidebar each
+# session's context use) and the permissions its loops need.
+whole_claude() { [[ $(readlink ~/.claude/CLAUDE.md 2>/dev/null) == */claude/CLAUDE.md ]]; }
+claude_settings_pending() (
+  CHECK=true
+  changes=0
+  claude_settings >/dev/null 2>&1
+  echo "$changes"
+)
 if whole_claude; then
   if (( $(pending claude) == 0 )); then
     ok "Claude Code, with this repo's whole setup"
@@ -572,34 +616,27 @@ if whole_claude; then
   else
     apply claude && ok "Claude Code, with this repo's whole setup, newly added skills and hooks linked" || todo "./setup.sh claude failed"
   fi
-elif grep -qs 'agent-state.sh' ~/.claude/settings.json; then
-  ok "Claude Code's hooks (tab states, the sidebar's Needs you, M-a)"
+elif [[ -e ~/.claude/settings.json ]] && (( $(claude_settings_pending) == 0 )); then
+  ok "Claude Code's hooks, statusline and permissions (tab states, the sidebar's Needs you, M-a, the loops)"
+elif grep -qs 'agent-state.sh' ~/.claude/settings.json && $CHECK; then
+  todo "Switchboard's Claude Code settings have changed: ./setup.sh adds them to yours"
 elif ! command -v claude >/dev/null; then
   optional "Claude Code, which every tab here runs, for tab states, the sidebar's sessions and M-a: curl -fsSL https://claude.ai/install.sh | bash"
-elif ask "Add Claude Code's hooks for tab states and M-a to your ~/.claude/settings.json?"; then
+elif grep -qs 'agent-state.sh' ~/.claude/settings.json || ask "Add Switchboard's hooks, statusline and permissions to your ~/.claude/settings.json? Yours are kept, and a copy is left beside it."; then
   mkdir -p ~/.claude
-  [[ -f ~/.claude/settings.json ]] || echo '{}' > ~/.claude/settings.json
-  cp ~/.claude/settings.json ~/.claude/settings.json.bak."$(date +%Y%m%d%H%M%S)"
   [[ -e ~/.claude/statusline-command.sh ]] || ln -s "$SRC/claude/statusline-command.sh" ~/.claude/statusline-command.sh
-  merged=$(jq --slurpfile repo "$REPO_DIR/claude/settings.json" '
-    ($repo[0].hooks | map_values(
-      map(.hooks |= map(select(.command | contains("agent-state.sh")))) | map(select(.hooks | length > 0))
-    ) | with_entries(select(.value | length > 0))) as $ours
-    | .hooks = reduce ($ours | keys[]) as $k (.hooks // {}; .[$k] = ((.[$k] // []) + $ours[$k]))
-    | .statusLine //= $repo[0].statusLine
-  ' ~/.claude/settings.json) && printf '%s\n' "$merged" > ~/.claude/settings.json &&
-    ok "added Claude Code's hooks; your old settings are beside them as settings.json.bak.*" ||
-    todo "adding Claude Code's hooks to ~/.claude/settings.json failed"
+  claude_settings >/dev/null && ok "added Switchboard's Claude Code settings to yours; your old ones are beside them as settings.json.bak.*" ||
+    todo "adding Switchboard's settings to ~/.claude/settings.json failed"
 else
   optional "Claude Code's hooks, for tab states and M-a: ./setup.sh adds them when you say yes"
 fi
 
-# Everything in claude/: its owner's CLAUDE.md, settings (telemetry included),
-# skills, commands and hooks, linked in place of yours, which is moved aside.
+# Everything in claude/: its owner's CLAUDE.md, skills, commands and hooks,
+# linked in place of yours, which is moved aside; settings are merged, not linked.
 # Asked only once Claude Code is there, and never assumed.
 if whole_claude || ! command -v claude >/dev/null; then
   :
-elif ask "Also replace your Claude Code setup with this repo's whole one (CLAUDE.md, settings with its owner's telemetry, skills, commands, hooks)? Yours is moved aside, not deleted."; then
+elif ask "Also link this repo's whole Claude Code setup (its owner's CLAUDE.md, skills, commands, hooks)? What it replaces is moved aside, not deleted; your settings are kept."; then
   apply claude && ok "linked this repo's Claude Code setup" || todo "./setup.sh claude failed"
 else
   optional "this repo's whole Claude Code setup, skills included: ./setup.sh claude, which replaces yours"

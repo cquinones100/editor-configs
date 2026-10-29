@@ -25,9 +25,9 @@ isn't the commit the skill last found clean (recorded in the clone's
 `review-loop-clean`, `git rev-parse --git-path review-loop-clean`), so a
 fix made after the review needs a review of its own. Claude can't skip
 it: this repository's own `.claude/settings.json` runs
-`claude/hooks/enforce-git-hooks-run.sh` before every command in it, which
+`claude/hooks/enforce-push-review.sh` before every command in it, which
 refuses `git push --no-verify`, so it applies to any Claude working here and
-to no other Switchboard user. The repo is public, so before asking,
+nowhere else. The repo is public, so before asking,
 check the unpushed commits for anything that identifies the user or their
 employer: organization or company names, ticket IDs, PR numbers, internal
 hosts, usernames, personal paths, tokens.

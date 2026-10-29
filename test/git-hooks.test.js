@@ -34,11 +34,12 @@ test("pre-push refuses a push to main whose tip /review-loop hasn't found clean,
 test("this repository's Claude settings run the git hook guard before every command", () => {
   const settings = JSON.parse(fs.readFileSync(path.join(repo, ".claude/settings.json"), "utf8"));
   const commands = settings.hooks.PreToolUse.filter((h) => h.matcher === "Bash").flatMap((h) => h.hooks.map((x) => x.command));
-  assert.ok(commands.some((c) => c.includes("$CLAUDE_PROJECT_DIR/claude/hooks/enforce-git-hooks-run.sh")));
+  assert.ok(commands.some((c) => c.includes("$CLAUDE_PROJECT_DIR/claude/hooks/enforce-push-review.sh")));
 });
 
-test("Claude's git hook guard blocks git push --no-verify but not a dry run", () => {
-  const guard = (command) => spawnSync("bash", [path.join(repo, "claude/hooks/enforce-git-hooks-run.sh")], { input: JSON.stringify({ tool_input: { command } }), encoding: "utf8" });
+test("this repository's push guard blocks git push --no-verify, however it is spelled, but not a dry run or a commit", () => {
+  const guard = (command) => spawnSync("bash", [path.join(repo, "claude/hooks/enforce-push-review.sh")], { input: JSON.stringify({ tool_input: { command } }), encoding: "utf8" });
+  const commitGuard = (command) => spawnSync("bash", [path.join(repo, "claude/hooks/enforce-git-hooks-run.sh")], { input: JSON.stringify({ tool_input: { command } }), encoding: "utf8" });
   assert.equal(guard("git push --no-verify origin main").status, 2);
   assert.equal(guard("git -C ~/switchboard push -q --no-verify").status, 2);
   assert.equal(guard('git push origin main "--no-verify"').status, 2, "quoted, the shell still passes the flag");
@@ -48,11 +49,12 @@ test("Claude's git hook guard blocks git push --no-verify but not a dry run", ()
   assert.equal(guard('git -C "/a/review repo" push origin main --no-verify').status, 2, "in a repository whose path has a space");
   assert.equal(guard("/usr/bin/git push --no-verify origin main").status, 2, "git by its path");
   assert.equal(guard("git push --no-veri origin main").status, 2, "an abbreviation git takes");
-  assert.equal(guard("git commit --no-veri -m x").status, 2, "for a commit too");
-  assert.equal(guard("git commit --no-verbose -m x").status, 0, "--no-verbose skips nothing");
+  assert.equal(commitGuard("git commit --no-veri -m x").status, 2, "for a commit too");
+  assert.equal(commitGuard("git commit --no-verbose -m x").status, 0, "--no-verbose skips nothing");
   assert.equal(guard("git push --no-verbose origin main").status, 0);
-  assert.equal(guard('git commit -m "skip with --no-verify, never"').status, 0, "a commit message that mentions it");
-  assert.equal(guard("git commit -nm 'x'").status, 2);
+  assert.equal(commitGuard('git commit -m "skip with --no-verify, never"').status, 0, "a commit message that mentions it");
+  assert.equal(commitGuard("git commit -nm 'x'").status, 2);
   assert.equal(guard("git push -n origin main").status, 0);
   assert.equal(guard("git push -q origin main").status, 0);
+  assert.equal(commitGuard("git push --no-verify origin main").status, 0, "the guard every repository gets leaves pushes alone");
 });

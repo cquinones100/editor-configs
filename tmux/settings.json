@@ -146,7 +146,7 @@
     "key": "usage",
     "category": "Mission control",
     "label": "Usage",
-    "description": "Today's Claude spend and how much of the rate limits is used, atop the Sessions view",
+    "description": "Mission control's Usage view: today's Claude spend and how much of the rate limits is used",
     "default": true
   },
   {

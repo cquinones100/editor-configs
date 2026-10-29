@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 
 # Refuses a push to main that /review-loop hasn't found clean: the skill, after
-# two clean rounds in a row, records the commit it reviewed in the clone's
-# review-loop-clean file (git rev-parse --git-path review-loop-clean), and the
-# tip pushed to main must be that commit. A commit made after the review, a
-# fix or anything else, needs a review of its own. Pushes to other branches
-# are left alone.
+# two clean rounds in a row, records the commit it reviewed and where the
+# reviewed range started (codex-review's reviewedCommit and mergeBase) in the
+# clone's review-loop-clean file (git rev-parse --git-path review-loop-clean).
+# The tip pushed to main must be that commit, and the range's start must be
+# in main as it is on the remote, so every commit the push adds was reviewed,
+# not only the last few. A commit made after the review, a fix or anything
+# else, needs a review of its own. Pushes to other branches are left alone.
 #
 # Claude can't get around it (claude/hooks/enforce-git-hooks-run.sh blocks
 # `git push --no-verify`); you can, by hand, with `git push --no-verify`.
@@ -13,15 +15,19 @@
 # Enabled per clone by `./setup.sh git`, which points core.hooksPath at
 # .githooks.
 
-reviewed=$(cat "$(git rev-parse --git-path review-loop-clean)" 2>/dev/null)
+read -r reviewed reviewed_base 2>/dev/null <"$(git rev-parse --git-path review-loop-clean)"
 zero=0000000000000000000000000000000000000000
 status=0
-while read -r _ local_sha remote_ref _; do
+while read -r _ local_sha remote_ref remote_sha; do
   [ "$remote_ref" = refs/heads/main ] || continue
   [ "$local_sha" = "$zero" ] && continue
   if [ "$local_sha" != "$reviewed" ]; then
     echo "pre-push: ${local_sha:0:7} hasn't been through /review-loop, which this repository runs before every push to main." >&2
     echo "  Run /review-loop; it records the commit it finds clean. (By hand, git push --no-verify skips this.)" >&2
+    status=1
+  elif [ -z "$reviewed_base" ] || [ "$remote_sha" = "$zero" ] || ! git merge-base --is-ancestor "$reviewed_base" "$remote_sha" 2>/dev/null; then
+    echo "pre-push: the review of ${local_sha:0:7} didn't cover every commit this push adds to main." >&2
+    echo "  Fetch, then run /review-loop again, so it reviews everything main doesn't have yet." >&2
     status=1
   fi
 done

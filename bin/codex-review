@@ -579,6 +579,10 @@ const main = () => {
     review.branch = branch;
     review.base = base;
     review.reviewedCommit = head;
+    // Where the reviewed range starts: everything after it up to
+    // reviewedCommit was reviewed, which a pre-push hook can check covers
+    // what is pushed (Switchboard's .githooks/pre-push).
+    review.mergeBase = mergeBase;
     review.warnings = outsideRepositoryWarnings(review, root, reviewer === "claude" ? tmpDir : null);
 
     review.warnings.forEach((warning) => console.error(`codex-review: warning: ${warning}`));

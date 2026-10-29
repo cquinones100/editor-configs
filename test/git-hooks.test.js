@@ -15,17 +15,27 @@ test("pre-push refuses a push to main whose tip /review-loop hasn't found clean,
     fs.writeFileSync(path.join(tmp, "a.txt"), "a\n");
     execFileSync("git", ["-C", tmp, "add", "."], { env });
     execFileSync("git", ["-C", tmp, "commit", "-q", "-m", "first"], { env });
+    const base = execFileSync("git", ["-C", tmp, "rev-parse", "HEAD"], { env, encoding: "utf8" }).trim();
+    execFileSync("git", ["-C", tmp, "commit", "-q", "--allow-empty", "-m", "second"], { env });
+    const middle = execFileSync("git", ["-C", tmp, "rev-parse", "HEAD"], { env, encoding: "utf8" }).trim();
+    execFileSync("git", ["-C", tmp, "commit", "-q", "--allow-empty", "-m", "third"], { env });
     const sha = execFileSync("git", ["-C", tmp, "rev-parse", "HEAD"], { env, encoding: "utf8" }).trim();
-    const zero = "0".repeat(40);
-    const push = (ref) => spawnSync(path.join(repo, ".githooks/pre-push"), ["origin", "url"], { cwd: tmp, env, encoding: "utf8", input: `refs/heads/main ${sha} ${ref} ${zero}\n` });
+    // Main on the remote is at the first commit; the push adds the other two.
+    const push = (ref) => spawnSync(path.join(repo, ".githooks/pre-push"), ["origin", "url"], { cwd: tmp, env, encoding: "utf8", input: `refs/heads/main ${sha} ${ref} ${base}\n` });
 
     const unreviewed = push("refs/heads/main");
     assert.equal(unreviewed.status, 1);
     assert.match(unreviewed.stderr, /hasn't been through \/review-loop/);
     assert.equal(push("refs/heads/feature").status, 0, "another branch isn't asked about");
 
-    fs.writeFileSync(path.join(tmp, ".git/review-loop-clean"), `${sha}\n`);
+    // Reviewed from the commit main is at on the remote: every commit it adds.
+    fs.writeFileSync(path.join(tmp, ".git/review-loop-clean"), `${sha} ${base}\n`);
     assert.equal(push("refs/heads/main").status, 0, "the commit the review found clean");
+    // Reviewed from a later commit than main is at: the ones between weren't.
+    fs.writeFileSync(path.join(tmp, ".git/review-loop-clean"), `${sha} ${middle}\n`);
+    const partly = push("refs/heads/main");
+    assert.equal(partly.status, 1);
+    assert.match(partly.stderr, /didn't cover every commit/);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

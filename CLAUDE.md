@@ -21,9 +21,11 @@ Someone's own settings live in `~/.config/switchboard/`, never in this repositor
 Always ask before pushing this repo, every time, whatever the branch and
 whatever an earlier push was allowed. Before asking, run `/review-loop` on
 the unpushed commits: `.githooks/pre-push` refuses a push to main whose tip
-isn't the commit the skill last found clean (recorded in the clone's
-`review-loop-clean`, `git rev-parse --git-path review-loop-clean`), so a
-fix made after the review needs a review of its own. Claude can't skip
+isn't the commit the skill last found clean, or whose review started past
+where main is on the remote (both recorded in the clone's
+`review-loop-clean`, `git rev-parse --git-path review-loop-clean`, from
+`codex-review`'s `reviewedCommit` and `mergeBase`), so a fix made after the
+review needs a review of its own, and so does a commit the review left out. Claude can't skip
 it: this repository's own `.claude/settings.json` runs
 `claude/hooks/enforce-push-review.sh` before every command in it, which
 refuses `git push --no-verify`, and `enforce-git-hooks-run.sh`, which refuses

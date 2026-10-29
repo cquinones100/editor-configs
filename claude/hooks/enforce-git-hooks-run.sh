@@ -23,7 +23,7 @@ if echo "$LINE" | grep -qE "${GIT}commit\b" &&
   exit 2
 fi
 if echo "$CMD" | grep -qiE '(^|;|&&|\|\||\|)\s*git\s+(\S+\s+)*-c\s*core\.hooksPath' ||
-  { echo "$CMD" | grep -qE "${GIT}config\b.*core\.hooksPath" &&
+  { echo "$CMD" | grep -qiE "${GIT}config\b.*core\.hooksPath" &&
     ! echo "$CMD" | grep -qE "${GIT}config\s+(--(get|get-all|list)|-l)\b"; }; then
   echo "Do not change core.hooksPath; it decides whether a repository's git hooks run." >&2
   exit 2

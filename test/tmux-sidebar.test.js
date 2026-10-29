@@ -2015,6 +2015,39 @@ test("the sidebar's notifications sit at its bottom under their own heading, and
   assert.ok(!none.lines.some((l) => l.includes("NOTIFICATIONS")), "nothing new, no block");
 });
 
+test("n in the sidebar goes to the notifications when there are any, and t opens a new tab as n used to", async (t) => {
+  const settingsFile = path.join(home, ".config/switchboard/settings.json");
+  fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+  // The view off, so going to them only moves the cursor.
+  fs.writeFileSync(settingsFile, JSON.stringify({ notice_list: false }));
+  sidebar.reloadSettings();
+  const stateDir = sidebar.STATE_DIR;
+  fs.mkdirSync(stateDir, { recursive: true });
+  const window = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const side = tmux("split-window", "-hb", "-d", "-t", window, "-P", "-F", "#{pane_id}");
+  tmux("set", "-p", "-t", side, "@sidebar", "1");
+  t.after(() => {
+    tmux("kill-window", "-t", window);
+    fs.rmSync(settingsFile, { force: true });
+    fs.rmSync(path.join(stateDir, "slack.json"), { force: true });
+    sidebar.reloadSettings();
+  });
+  const client = { kind: "sidebar", pane: side, socket: { write() {}, end() {} } };
+  const session = tmux("display", "-p", "-t", window, "#{session_id}");
+  fs.rmSync(path.join(stateDir, "slack.json"), { force: true });
+  await new Promise((resolve) => setTimeout(resolve, 2_100));
+  await sidebar.refresh();
+  const before = sidebar.state.cursors.get(session);
+  await sidebar.sidebarKey(client, { key: "n" });
+  assert.equal(sidebar.state.cursors.get(session), before, "none, nothing happens");
+
+  fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ checked: Date.now(), items: [{ kind: "dm", channel: "D1", where: "Dee", user: "U1", from: "Dee", text: "hi", ts: String(Date.now() / 1000) }] }));
+  await new Promise((resolve) => setTimeout(resolve, 2_100));
+  await sidebar.refresh();
+  await sidebar.sidebarKey(client, { key: "n" });
+  assert.equal(sidebar.state.cursors.get(session), "notice:slack");
+});
+
 test("a Slack message is drawn as Slack draws it: its lines, bullets hanging, quotes, code blocks, styles, links and mentions as their text", () => {
   const message = "Hey *team*, two things:\n• first _thing_ is ~old~ `x = 1`\n• a long bullet that wraps onto the next line and hangs under its text\n2. numbered\n> a quote\n```\nconst y = 2;\n```\nsee <https://x.example|the doc> &amp; <@U1|ada>";
   const lines = sidebar.slackLines(message, 40);

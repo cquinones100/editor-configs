@@ -658,7 +658,8 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | `h` `l` | back out / go to the tab | move left or right |
 | `Enter` | go into the chosen tab's pane | what can be done with the chosen card or row, in a menu: on a tab, go there (first, so Enter twice goes), answer it, peek at it, its diff or lazygit, the `M-p` palette there, and on a merged tab close every Merged tab; elsewhere the view's own actions |
 | `1`–`9` | put the cursor on that tab, in its sidebar (Enter goes in) | choose that tab |
-| `n` | a new tab running Claude in the chosen tab's directory, as `M-t` opens one | |
+| `n` | to the notifications at the bottom, when there are any (the Notifications view, as moving onto them does) | |
+| `t` | a new tab running Claude in the chosen tab's directory, as `M-t` opens one | |
 | `d` `L` | the chosen tab's diff (diffview, as `M-d` there) or lazygit, in its place there, as `M-p` opens them | in Enter's menu |
 | any bound Alt or Ctrl key | runs in the chosen tab | |
 | `Tab` `S-Tab` | open mission control | the next or previous view |

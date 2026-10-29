@@ -1825,6 +1825,44 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   assert.match(old.error, /^Out of date, last looked 1h ago: mission control looks every minute while you're here\.$/);
 });
 
+test("a connector that isn't connected says what to do, is noted for the views and the health light, and clears once it answers", async (t) => {
+  const stateDir = fs.mkdtempSync(path.join(tmp, "connectors-"));
+  const bin = fs.mkdtempSync(path.join(tmp, "claude-bin-"));
+  const mode = path.join(bin, "mode");
+  // A stand-in claude -p: never calls the tool, calls it and is told to sign in, or answers.
+  fs.writeFileSync(
+    path.join(bin, "claude"),
+    `#!/bin/sh
+case "$(cat '${mode}')" in
+  absent) echo '{"type":"assistant","message":{"content":[{"type":"text","text":"no such tool"}]}}' ;;
+  expired) echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"mcp__claude_ai_Slack__slack_read_user_profile"}]}}'
+           echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"Authentication required: please re-authenticate"}]}}' ;;
+  *) echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"mcp__claude_ai_Slack__slack_read_user_profile"}]}}'
+     echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"User ID: U0ABC"}]}}' ;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  const saved = { PATH: process.env.PATH, TMUX_SIDEBAR_STATE_DIR: process.env.TMUX_SIDEBAR_STATE_DIR };
+  Object.assign(process.env, { PATH: `${bin}:${saved.PATH}`, TMUX_SIDEBAR_STATE_DIR: stateDir });
+  t.after(() => Object.assign(process.env, saved));
+  const { callConnector, connectorDown } = require("../lib/connector");
+  const tool = "mcp__claude_ai_Slack__slack_read_user_profile";
+
+  fs.writeFileSync(mode, "absent");
+  await assert.rejects(callConnector(tool, {}), (err) => err.notConnected && err.message === "Slack isn't connected in Claude: run /mcp in Claude and sign in to Slack.");
+  assert.match(connectorDown("Slack"), /^Slack isn't connected in Claude/);
+  assert.match(fs.readFileSync(path.join(stateDir, "connectors-down"), "utf8"), /^Slack\t\d+\n$/);
+
+  fs.writeFileSync(mode, "expired");
+  await assert.rejects(callConnector(tool, {}), (err) => err.notConnected, "a lapsed sign-in is not connected too");
+
+  fs.writeFileSync(mode, "ok");
+  assert.equal(await callConnector(tool, {}), "User ID: U0ABC");
+  assert.equal(connectorDown("Slack"), undefined);
+  assert.equal(fs.readFileSync(path.join(stateDir, "connectors-down"), "utf8"), "", "the health light goes dark");
+});
+
 test("an empty Slack view says when Slack was last checked", () => {
   const stateDir = fs.mkdtempSync(path.join(tmp, "slack-empty-"));
   const env = { ...process.env, TMUX_SIDEBAR_STATE_DIR: stateDir };

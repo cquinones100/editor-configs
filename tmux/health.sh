@@ -13,6 +13,10 @@
 #   sidebar  the sidebar is on but its daemon (bin/tmux-sidebar) isn't running.
 #   relay    bin/slack-relay crashed: its events file is still there, which it
 #            removes only when stopped on purpose, but its process has gone.
+#   connectors  a Claude connector a feature that is on needs (Slack, Google
+#            Calendar, Notion, Fathom…) wasn't connected when it last tried, in
+#            the last CONNECTOR_LIMIT seconds (lib/connector.js writes
+#            connectors-down, a "<service>\t<when>" line each).
 #
 # It also starts tmux/repo-update.sh periodic in the background, which checks
 # GitHub for new commits to ~/switchboard at most once an hour, since this
@@ -21,6 +25,7 @@
 set -u
 
 SAVE_LIMIT=300
+CONNECTOR_LIMIT=7200
 
 alive() {
   local pid
@@ -50,6 +55,12 @@ if [ "${sidebar:-}" != off ] && ! alive ~/.local/state/tmux-sidebar/daemon.pid; 
 fi
 if [ -f ~/.local/state/slack-relay/events.jsonl ] && ! alive ~/.local/state/slack-relay/relay.lock; then
   problems+=("relay down")
+fi
+
+if [ -s ~/.local/state/tmux-sidebar/connectors-down ]; then
+  while IFS=$'\t' read -r service at; do
+    [ -n "$service" ] && [ $((now - ${at:-0})) -lt $CONNECTOR_LIMIT ] && problems+=("$service not connected")
+  done < ~/.local/state/tmux-sidebar/connectors-down
 fi
 
 [ ${#problems[@]} -eq 0 ] && exit 0

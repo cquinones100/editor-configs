@@ -56,3 +56,20 @@ test("the light is dark while all is well, and names each thing that quietly sto
   fs.writeFileSync(relayLock, `${process.pid} slack-relay`);
   assert.equal(light(), "");
 });
+
+test("a Claude connector that wasn't connected when a feature last tried lights it, for two hours", () => {
+  const light = () =>
+    execFileSync("bash", [path.join(__dirname, "../tmux/health.sh")], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, TMUX: `${socket},${serverPid},0` },
+    });
+  const now = Math.floor(Date.now() / 1000);
+  tmux("set", "-g", "@continuum-save-last-timestamp", String(now - 60));
+  tmux("set", "-g", "@sidebar_on", "off");
+  const down = path.join(home, ".local/state/tmux-sidebar/connectors-down");
+  fs.writeFileSync(down, `Slack\t${now - 60}\nFathom\t${now - 3 * 3600}\n`);
+  assert.match(light(), /Slack not connected/);
+  assert.doesNotMatch(light(), /Fathom/, "an old failure has had its chance to be seen");
+  fs.writeFileSync(down, "");
+  assert.equal(light(), "");
+});

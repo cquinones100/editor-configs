@@ -303,6 +303,43 @@ test("a tab is named after its work, not the notes pane moved beside it, which n
   assert.equal(tmux("display", "-p", "-t", alone, "#{@tab_label}"), "notes-home");
 });
 
+test("a note's tab is the one linked to it: note-tab.sh goes there rather than opening another", (t) => {
+  const notesDir = fs.mkdtempSync(path.join(tmp, "note-tab-"));
+  fs.writeFileSync(path.join(notesDir, "Plan.md"), "# Plan\n");
+  const linked = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  t.after(() => tmux("kill-window", "-t", linked));
+  tmux("setw", "-t", linked, "@tab_note", "Plan.md");
+  const before = tmux("display", "-p", "-t", "test", "#{window_id}");
+  assert.notEqual(before, linked);
+  execFileSync("bash", [path.join(__dirname, "../tmux/note-tab.sh"), "Plan.md"], { env: { ...process.env, NOTES_DIR: notesDir } });
+  assert.equal(tmux("display", "-p", "-t", "test", "#{window_id}"), linked, "brought to the front");
+  // A note that isn't there opens nothing.
+  const windows = tmux("list-windows", "-t", "test").split("\n").length;
+  execFileSync("bash", [path.join(__dirname, "../tmux/note-tab.sh"), "Gone.md"], { env: { ...process.env, NOTES_DIR: notesDir } });
+  assert.equal(tmux("list-windows", "-t", "test").split("\n").length, windows);
+});
+
+test("with no tab of its own, a note asks which of the open tabs is its, or a new one, and links the one picked", (t) => {
+  const notesDir = fs.mkdtempSync(path.join(tmp, "note-choose-"));
+  fs.writeFileSync(path.join(notesDir, "Plan.md"), "# Plan\n");
+  const pick = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  const notes = tmux("new-window", "-d", "-t", "test", "-c", tmp, "-P", "-F", "#{window_id}");
+  t.after(() => [pick, notes].forEach((w) => tmux("kill-window", "-t", w)));
+  tmux("setw", "-t", pick, "@tab_label", "pick-me");
+  tmux("setw", "-t", notes, "@notes", "1");
+  const bin = fs.mkdtempSync(path.join(tmp, "fzf-bin-"));
+  const given = path.join(bin, "given");
+  // A stand-in fzf: keeps the list, picks the tab named pick-me.
+  fs.writeFileSync(path.join(bin, "fzf"), `#!/bin/sh\ntee '${given}' | grep 'pick-me'\n`, { mode: 0o755 });
+  execFileSync("bash", [path.join(__dirname, "../tmux/note-tab.sh"), "choose", "Plan.md", ""], { env: { ...process.env, NOTES_DIR: notesDir, PATH: `${bin}:${process.env.PATH}` } });
+  const offered = fs.readFileSync(given, "utf8").split("\n").filter(Boolean).map((line) => line.split("\t")[1]);
+  assert.equal(offered[0], "+ New tab, in a directory you pick");
+  assert.ok(offered.some((name) => /pick-me$/.test(name)), "the open tabs");
+  assert.ok(!offered.some((name) => name.startsWith(tmux("display", "-p", "-t", notes, "#{window_index} "))), "not Notes' own");
+  assert.equal(tmux("show", "-wqv", "-t", pick, "@tab_note"), "Plan.md", "the one picked is linked");
+  assert.equal(tmux("display", "-p", "-t", "test", "#{window_id}"), pick, "and gone to");
+});
+
 test("a turn that ends with its pane no longer where the tab's name came from names the tabs again", async (t) => {
   const work = path.join(tmp, "renamed-work");
   fs.mkdirSync(work, { recursive: true });

@@ -240,6 +240,15 @@ function M.delete()
   end
 end
 
+-- t: the tab for the note under the cursor, the one linked to it, or a new
+-- one from M-t's popup, so you pick its directory (tmux/note-tab.sh).
+function M.tab()
+  local item = item_at()
+  if not item or not item.note or store.in_trash(item.note) then return end
+  if (vim.env.TMUX or "") == "" then return vim.notify("A tab for a note needs tmux.") end
+  vim.system({ vim.fn.expand("~/.config/tmux/note-tab.sh"), store.relative(item.note) }, { detach = true })
+end
+
 -- s: marks the note for squashing, or unmarks it.
 function M.mark()
   local item = item_at()
@@ -348,6 +357,7 @@ function M.help()
     "  dd               delete (to Recently Deleted)",
     "  r                restore from Recently Deleted",
     "  p                pin or unpin",
+    "  t                its tab: go there, or open one",
     "  s  S             mark notes, squash them into one",
     "  m                move to a folder",
     "  R                rename a folder",
@@ -375,6 +385,7 @@ function M.keys(buf)
   end)
   map("n", M.new_note)
   map("N", M.new_folder)
+  map("t", M.tab)
   map("s", M.mark)
   map("S", M.squash)
   map("dd", M.delete)

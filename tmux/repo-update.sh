@@ -19,6 +19,10 @@
 #                                      on <client> when there is nothing new or
 #                                      it can't look.
 #   repo-update.sh prompt             the popup itself.
+#   repo-update.sh setup <client>     M-p's "Run Switchboard's setup": the guided
+#                                      ./setup.sh in a popup, whenever you like,
+#                                      to set up anything not in place yet or
+#                                      answer a question you said no to before
 #
 # It runs in the background, never on a key press or redraw, since it waits
 # on the network. Main is only fast-forwarded: with commits of your own not
@@ -124,8 +128,26 @@ case "${1:-}" in
     done_
     ;;
 
+  setup)
+    tmux display-popup -c "${2:-}" -E -w 90 -h 85% -T ' Switchboard setup ' "$0 run-setup"
+    ;;
+
+  run-setup)
+    # The guided setup, as an update runs it: it changes only what isn't in
+    # place and asks before anything else. Then tmux takes in what it linked.
+    printf '\n'
+    if [ -x "$REPO/setup.sh" ]; then
+      "$REPO/setup.sh"
+    else
+      printf '  There is no setup.sh in %s.\n' "$REPO"
+    fi
+    [ -n "${TMUX:-}" ] && tmux source-file ~/.config/tmux/tmux.conf && printf '\n  Reloaded tmux.\n'
+    printf '\n  \033[38;5;244mPress any key to close.\033[0m'
+    read -rsn 1
+    ;;
+
   *)
-    echo "Usage: $0 check [<client>] | periodic | now <client> | prompt" >&2
+    echo "Usage: $0 check [<client>] | periodic | now <client> | prompt | setup <client>" >&2
     exit 1
     ;;
 esac

@@ -50,7 +50,7 @@ tmux new-session -A -s main
 
 ## Staying up to date
 
-Each time tmux opens, and hourly after that, it checks GitHub for new commits and offers them in a popup that updates the clone and runs `setup.sh`. With the git hooks on, a `git pull` links whatever it added too.
+Each time tmux opens, and hourly after that, it checks GitHub for new commits and offers them in a popup that updates the clone and runs `setup.sh`. With the git hooks on, a `git pull` links whatever it added too. To run the setup again yourself, say to set up something you turned down the first time, use `M-p`, "Run Switchboard's setup".
 
 ## Making it yours
 

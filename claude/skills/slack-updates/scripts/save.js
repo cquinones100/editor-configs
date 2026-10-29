@@ -64,6 +64,16 @@ try {
 }
 const relay = read(path.join(process.env.SLACK_RELAY_STATE ?? path.join(os.homedir(), ".local/state/slack-relay"), "state.json"))?.dm ?? {};
 const text = (value, max) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+// A message keeps its lines, for the views to draw as Slack does (bullets,
+// quotes, code blocks), with no more than one blank line together.
+const message = (value, max) =>
+  String(value ?? "")
+    .split("\n")
+    .map((line) => line.replace(/[\t ]+$/, "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max);
 const https = (url) => (typeof url === "string" && /^https:\/\/[^\s]+$/.test(url) ? url : undefined);
 const items = (Array.isArray(found?.items) ? found.items : [])
   .filter((i) => i && KINDS.includes(i.kind) && /^\d+(\.\d+)?$/.test(String(i.ts ?? "")))
@@ -74,7 +84,7 @@ const items = (Array.isArray(found?.items) ? found.items : [])
     where: text(i.where, 80),
     user: text(i.user, 40),
     from: text(i.from, 80),
-    text: text(i.text, 400),
+    text: message(i.text, 2000),
     ts: String(i.ts),
     ...(/^\d+(\.\d+)?$/.test(String(i.thread ?? "")) && { thread: String(i.thread) }),
     ...(https(i.link) && { link: https(i.link) }),

@@ -1918,7 +1918,7 @@ test("mission control looks at Slack itself with one search, sorting what it fin
   assert.deepEqual(asked.map((a) => a.tool.replace(/^.*__/, "")), ["slack_read_user_profile", "slack_search_public_and_private"], "one profile, then one search for everything");
   const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
   const kinds = Object.fromEntries(saved.items.map((i) => [i.text, i.kind]));
-  assert.equal(kinds["did you see this? second line"], "dm");
+  assert.equal(kinds["did you see this?\nsecond line"], "dm", "its lines kept, for drawing as Slack does");
   assert.equal(kinds["@Me can you look"], "mention");
   assert.equal(kinds["an answer"], "thread", "a reply in a thread you started");
   assert.equal(kinds["deploy done"], "channel");
@@ -2013,6 +2013,25 @@ test("the sidebar's notifications sit at its bottom under their own heading, and
   assert.match(chosen.lines.at(-2).replace(/\x1b\[[0-9;]*m/g, ""), /^▌ ● 3 new on Slack/);
   const none = sidebar.sidebarLines({ tabs, sections: [], cols: 40, rows: 20, view: { focused: false, cursor: "@1", here: "@1", frame: 0 } });
   assert.ok(!none.lines.some((l) => l.includes("NOTIFICATIONS")), "nothing new, no block");
+});
+
+test("a Slack message is drawn as Slack draws it: its lines, bullets hanging, quotes, code blocks, styles, links and mentions as their text", () => {
+  const message = "Hey *team*, two things:\n• first _thing_ is ~old~ `x = 1`\n• a long bullet that wraps onto the next line and hangs under its text\n2. numbered\n> a quote\n```\nconst y = 2;\n```\nsee <https://x.example|the doc> &amp; <@U1|ada>";
+  const lines = sidebar.slackLines(message, 40);
+  const plain = lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
+  assert.deepEqual(plain, [
+    "Hey team, two things:",
+    "• first thing is old x = 1",
+    "• a long bullet that wraps onto the next",
+    "  line and hangs under its text",
+    "2. numbered",
+    "▎ a quote",
+    "  const y = 2;",
+    "see the doc & @ada",
+  ]);
+  assert.match(lines[0], /\x1b\[1mteam/, "bold");
+  assert.match(lines[1], /\x1b\[3mthing/, "italic");
+  assert.match(lines[1], /\x1b\[9mold/, "struck");
 });
 
 test("the Notifications view lists whole messages, the chosen one marked, its top line going back", () => {

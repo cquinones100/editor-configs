@@ -1568,7 +1568,7 @@ test("mission control's Settings view lists the options by category, / narrows t
     // / then "notif": the Notifications header and its two options, and no other category.
     for (const key of ["/", "n", "o", "t", "i", "f", "Enter"]) await sidebar.missionKey(client, { key });
     const items = sidebar.viewsFor(client)[client.view.view - 1].items;
-    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications", "Next meeting"], "the Notifications category, and the Sidebar's options that mention notifications");
+    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications", "Notifications as a list", "Next meeting"], "the Notifications category, and the Sidebar's options that mention notifications");
     assert.doesNotMatch(plain(sent.at(-1)), /Theme/);
 
     // Enter on an on/off option turns it off, and only what differs from the default is written.
@@ -2013,6 +2013,24 @@ test("the sidebar's notifications sit at its bottom under their own heading, and
   assert.match(chosen.lines.at(-2).replace(/\x1b\[[0-9;]*m/g, ""), /^▌ ● 3 new on Slack/);
   const none = sidebar.sidebarLines({ tabs, sections: [], cols: 40, rows: 20, view: { focused: false, cursor: "@1", here: "@1", frame: 0 } });
   assert.ok(!none.lines.some((l) => l.includes("NOTIFICATIONS")), "nothing new, no block");
+});
+
+test("moved onto, the notifications take the sidebar as a list of whole messages, the chosen one marked, its top line going back", () => {
+  const items = [
+    { title: "Standup in 3m · ↵ joins", body: "1:00–1:15 PM\nAB-12" },
+    { title: "DM Dee · Dee", body: "can you look at the deploy before lunch? it failed twice this morning and I'm not sure why" },
+  ];
+  const out = sidebar.noticeListLines(items, 1, 30, 20);
+  const plain = out.lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+  assert.equal(out.lines.length, 20);
+  assert.match(plain[0], /‹ tabs +NOTIFICATIONS 2/);
+  assert.deepEqual(out.owners.slice(0, 2), ["back", "back"]);
+  assert.ok(plain.some((l) => l === "  Standup in 3m · ↵ joins"));
+  assert.ok(plain.some((l) => l === "▌ DM Dee · Dee"), "the chosen one marked");
+  assert.ok(plain.filter((l) => /deploy|morning|sure why/.test(l)).length > 1, "a long message wrapped whole, not cut");
+  const dee = plain.findIndex((l) => l === "▌ DM Dee · Dee");
+  assert.equal(out.owners[dee], 1, "each line says which item it is, for the pointer");
+  assert.match(plain.at(-1), /jk move +↵ actions +esc back/);
 });
 
 test("Enter on an item in a built-in view offers its actions as a menu, its usual one first", async (t) => {

@@ -171,6 +171,8 @@ and `@agent_since` from `agent-state.sh`. It finds a pane's Claude session from
 the `tmux` field (`main:@27.%28`) in `~/.claude/sessions/<pid>.json`, not from
 `claude-pane.sh`.
 
+A sidebar moved onto its notifications (the keys, a click, or the pointer: sidebars ask for mouse motion, mode 1003) lists them whole (`noticeItems`, `noticeListLines`), and Enter opens a mission control popup with that one's menu alone (`item:<n>`, `noticeChoices`, the views' own `itemChoices` and `boardChoices`), which closes once something is picked; `notice_list` setting.
+
 Sidebar panes carry the `@sidebar` pane option. Anything that walks every pane
 to find a worktree, a Claude session or a pane to type into skips them, as
 `wt-jump` does. A binding that acts on the current pane starts with

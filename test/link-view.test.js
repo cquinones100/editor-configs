@@ -53,6 +53,30 @@ test("the picker lists a pane's links newest first, a link written into text wit
   ]);
 });
 
+test("in the notes pane, the picker lists the open note's links, top to bottom, since Notes hides their addresses", () => {
+  const notes = path.join(tmp, "NotesForLinks");
+  fs.mkdirSync(notes, { recursive: true });
+  fs.writeFileSync(path.join(notes, "Plan.md"), "# Plan\n\n- read [the PR](https://github.com/o/r/pull/3) first\n- then https://plain.example/two.\n- again [same](https://github.com/o/r/pull/3)\n");
+  fs.writeFileSync(path.join(notes, ".notes.json"), JSON.stringify({ last: "Plan.md" }));
+  execFileSync("tmux", ["-S", socket, "-f", "/dev/null", "new-session", "-d", "-s", "notes", "-x", "200", "-y", "20", "echo the PR; sleep 60"], { env });
+  const pane = execFileSync("tmux", ["-S", socket, "display", "-p", "-t", "notes", "#{pane_id}"], { env, encoding: "utf8" }).trim();
+  const links = () =>
+    spawnSync("bash", [path.join(__dirname, "../tmux/link-view.sh"), "links", pane], {
+      env: { ...env, TMUX: `${socket},0,0`, NOTES_DIR: notes, LC_ALL: "en_US.UTF-8" },
+      encoding: "utf8",
+    });
+  const plainPane = links();
+  assert.equal(plainPane.stdout.trim(), "", "an ordinary pane showing no address has no links");
+  assert.match(plainPane.stderr, /No links in this pane/);
+  execFileSync("tmux", ["-S", socket, "set", "-p", "-t", pane, "@notes_pane", "1"], { env });
+  const notesPane = links();
+  assert.equal(notesPane.status, 0, notesPane.stderr);
+  assert.deepEqual(notesPane.stdout.trim().split("\n").map((row) => row.replace(/\x1b\[[0-9;]*m/g, "").split("\t")), [
+    ["the PR  https://github.com/o/r/pull/3", "https://github.com/o/r/pull/3"],
+    ["https://plain.example/two", "https://plain.example/two"],
+  ]);
+});
+
 test("search everything finds the notes holding every word, newest first, as links the link view reads, and nothing in .trash", () => {
   const notes = path.join(tmp, "Notes");
   fs.mkdirSync(path.join(notes, "Work"), { recursive: true });

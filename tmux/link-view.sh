@@ -16,6 +16,7 @@
 #                                    it in the browser; with browser, the other
 #                                    way round (M-p's "Open a link from this
 #                                    pane in the browser")
+#   link-view.sh links <pane>        the links pick lists for <pane>, a line each
 #   link-view.sh open <pane> <url>   read <url> in a pane beside <pane>
 #   link-view.sh show [<url>]        in that pane: read it, else LINK_VIEW_URL
 #   link-view.sh browser <pane>      open the link read in <pane>'s window
@@ -32,10 +33,27 @@ repo=${SWITCHBOARD_DIR:-$HOME/switchboard}
 # A note found by search.sh comes as a file:// link, read only from the notes.
 safe='^(https?|file)://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$'
 
-case "${1:-}" in
-  pick)
-    pane=${2:-} first=${3:-read}
-    [ -n "$pane" ] || exit 0
+# The links <pane> shows, a "<shown>\t<url>" line each (see pick).
+links_of() {
+  local pane=$1 notes_dir note links
+  # In the notes pane (@notes_pane), the links of the note it shows, top to
+  # bottom: Notes hides a link's address behind its text, so its screen has
+  # none to find. The note is the one .notes.json says is open, read from
+  # the notes directory alone.
+  notes_dir=${NOTES_DIR:-$HOME/Notes}
+  note=$(jq -r '.last // empty' "$notes_dir/.notes.json" 2>/dev/null)
+  if [ "$(tmux display -p -t "$pane" '#{@notes_pane}')" = 1 ] && [ -n "$note" ] && [[ $note != *..* ]] && [ -f "$notes_dir/$note" ]; then
+    links=$(perl -CSD -ne '
+      while (m{\[([^\]\n]*)\]\((https?://[^)\s]+)\)|(?<![(\[])(https?://[A-Za-z0-9._~:/?#\@!\$&*+,;=%-]+)}g) {
+        my ($text, $url) = defined $2 ? ($1, $2) : ("", $3);
+        $url =~ s/[.,;:!?]+$// unless defined $2;
+        next if $seen{$url}++;
+        $text =~ s/\s+/ /g; $text =~ s/^ | $//g;
+        $text = substr($text, 0, 57) . "..." if length $text > 60;
+        print length $text && $text ne $url ? "$text  \e[38;5;244m$url\e[0m\t$url\n" : "$url\t$url\n";
+      }' "$notes_dir/$note")
+    [ -n "$links" ] || { echo "No links in ${note%.md}" >&2; return 1; }
+  else
     # Every link in what the pane shows and has scrolled past, newest first, a
     # line each: what fzf shows, a tab, the URL. A link written into text (an
     # OSC 8 hyperlink, kept by capture-pane -e) shows its text before its URL.
@@ -61,10 +79,21 @@ case "${1:-}" in
           print length $text ? "$text  \e[38;5;244m$_\e[0m\t$_\n" : "$_\t$_\n";
         }
       }')
-    if [ -z "$links" ]; then
-      tmux display-message "No links in this pane"
-      exit 0
-    fi
+    [ -n "$links" ] || { echo "No links in this pane" >&2; return 1; }
+  fi
+  printf '%s\n' "$links"
+}
+
+case "${1:-}" in
+  links)
+    links_of "${2:?pane}"
+    ;;
+
+  pick)
+    pane=${2:-} first=${3:-read}
+    [ -n "$pane" ] || exit 0
+    links=$(links_of "$pane" 2>"${TMPDIR:-/tmp}/link-view.$$") || { tmux display-message "$(cat "${TMPDIR:-/tmp}/link-view.$$")"; rm -f "${TMPDIR:-/tmp}/link-view.$$"; exit 0; }
+    rm -f "${TMPDIR:-/tmp}/link-view.$$"
     # The same list either way; Enter does what was asked for, Ctrl-O the other.
     if [ "$first" = browser ]; then
       prompt='Open: ' header='Enter opens it in the browser · Ctrl-O reads it beside the pane'

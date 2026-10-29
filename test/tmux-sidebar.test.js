@@ -1826,7 +1826,7 @@ test("mission control looks at Slack itself with one search, sorting what it fin
     `### Result ${n} of 6\nChannel: ${where} (ID: ${channel})\n${participants ? `Participants: ${participants}\n` : ""}From: ${from} (ID: ${user})\nTime: 2026-10-29 09:55:36 EDT\nMessage_ts: ${ts}\nPermalink: [link](https://x.slack.com/archives/${channel}/p${ts.replace(".", "")}${thread ? `?thread_ts=${thread}&cid=${channel}` : ""})\nText: \n${text}\n\n---\n\n`;
   const mine = `${now - 50}.000100`;
   const page = [
-    result(1, { channel: "DED", where: "DM", participants: "Me (ID: U0MEMEME1), Ed (ID: UED)", from: "Ed <ed@example.com>", user: "UED", ts: `${now - 40}.000100`, text: "did you see this?\nsecond line" }),
+    result(1, { channel: "DDEE", where: "DM", participants: "Me (ID: U0MEMEME1), Dee (ID: UDEE)", from: "Dee <dee@example.com>", user: "UDEE", ts: `${now - 40}.000100`, text: "did you see this?\nsecond line" }),
     result(2, { channel: "CGEN", where: "#general", from: "Ada", user: "UADA", ts: `${now - 30}.000100`, text: "<@U0MEMEME1|Me> can you look" }),
     result(3, { channel: "CDEV", where: "#dev", from: "Me", user: "U0MEMEME1", ts: mine, text: "my question" }),
     result(4, { channel: "CDEV", where: "#dev", from: "Lin", user: "ULIN", ts: `${now - 20}.000100`, thread: mine, text: "an answer" }),
@@ -1851,8 +1851,8 @@ test("mission control looks at Slack itself with one search, sorting what it fin
   assert.equal(kinds["deploy done"], "channel");
   assert.equal(kinds["lunch?"], undefined, "a channel not chosen is left out");
   assert.equal(kinds["my question"], undefined, "what you wrote isn't shown");
-  assert.equal(saved.items.find((i) => i.kind === "dm").where, "Ed");
-  assert.equal(saved.items.find((i) => i.kind === "dm").from, "Ed", "names without their email");
+  assert.equal(saved.items.find((i) => i.kind === "dm").where, "Dee");
+  assert.equal(saved.items.find((i) => i.kind === "dm").from, "Dee", "names without their email");
   assert.equal(saved.replied[`CDEV:${mine}`], mine, "but counts as having read that thread");
 
   await sidebar.lookSlack(() => {}, call);

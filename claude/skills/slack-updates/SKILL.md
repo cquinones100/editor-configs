@@ -19,6 +19,8 @@ Collect what is new for the user on Slack and save it for mission control's Slac
    - **thread**: new replies by others in threads the user started: search `from:<@ID> is:thread` over the last day, keep only their messages that begin a thread (the message's `ts` is its thread's `ts`), and read each of those threads with the read-thread tool from the Unix time on. Replies in other people's threads count only when they mention the user, which the mentions search already finds.
    - **channel**: everything new in the channels listed in `~/.config/slack-updates/config.json` (`{"channels": ["C…"]}`), each read with the read-channel tool from the Unix time on. No file, no channels.
 
+   - **replied**: the user's own messages since the Unix time, from a search `from:<@ID>` with `after` and `sort: timestamp`, following its pages to the end, each as its channel's ID, its `ts` and its thread's `ts` when it is in one. These aren't shown; they tell the view that what came before them in the same DM or thread has been read in Slack.
+
    A message found two ways goes in once, under the first of those kinds. Use `include_context: false` and a concise response format to keep the reads small.
 
 4. **Save.** Pipe them to the script as JSON, each with its kind, the channel's ID, where it was (`#channel`, or the person for a DM), the author's ID and name, the text, its `ts`, its thread's `ts` (`thread`, when it is a reply in a thread; mission control uses it to bring back a message you dismissed when its thread gets a reply), and its permalink:
@@ -28,6 +30,8 @@ Collect what is new for the user on Slack and save it for mission control's Slac
    {"items": [{"kind": "mention", "channel": "C…", "where": "#general", "user": "U…", "from": "Ada", "text": "…", "ts": "1761660000.000100", "thread": "1761650000.000200", "link": "https://….slack.com/archives/…"}]}
    EOF
    ```
+
+   with the user's own messages beside them as `"replied": [{"channel": "D…", "ts": "…", "thread": "…"}]`.
 
    Save even when nothing is new: an empty list still marks the look, so the view knows it is current. The script leaves out the Slack relay's own messages and DM.
 

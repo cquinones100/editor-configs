@@ -1743,6 +1743,11 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   execFileSync("node", [save], { input: JSON.stringify({ items: [{ kind: "mention", channel: "C1", where: "#general", user: "U5", from: "Cy", text: "a reply", ts: String(Date.now() / 1000), thread: items[0].ts }] }), env });
   const replied = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
   assert.deepEqual(replied.titles, ["@ Cy · #general", "DM Bo · Bo"], "a reply in its thread comes back, the dismissed message itself doesn't");
+  // Something you wrote later in the same DM, or the same thread, means you read it in Slack.
+  const later = String(Date.now() / 1000 + 1);
+  execFileSync("node", [save], { input: JSON.stringify({ items: [], replied: [{ channel: "D9", ts: later }, { channel: "C1", ts: later, thread: items[0].ts }] }), env });
+  const read = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
+  assert.deepEqual([...read.titles].sort(), ["@ Cy · #general · seen", "DM Bo · Bo · seen"], "both read in Slack");
   const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
   fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ ...saved, checked: Date.now() - 3_600_000 }));
   const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));

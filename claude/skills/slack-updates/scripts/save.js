@@ -13,7 +13,11 @@
 //   "channel": "C…", "where": "#general" or a person's name, "user": "U…",
 //   "from": "Ada", "text": "…", "ts": "1761660000.000100", "thread": the
 //   thread's ts when it is a reply in one,
-//   "link": "https://….slack.com/archives/…" }] }. What the Slack relay posted,
+//   "link": "https://….slack.com/archives/…" }], "replied": [{ "channel":
+//   "C…", "ts": "…", "thread": "…" }] }, replied being what you wrote yourself
+//   since the last look, kept as the newest ts you wrote in each conversation
+//   (by channel) and each thread (by channel and thread), so the view counts
+//   what came before it there as read. What the Slack relay posted,
 // or anything in its DM, is left out (its state file names both), as is
 // anything over a day old. At most MAX_ITEMS are kept, newest first.
 
@@ -75,6 +79,17 @@ const items = (Array.isArray(found?.items) ? found.items : [])
 
 const key = (i) => `${i.channel}:${i.ts}`;
 const now = Date.now();
+const TS = /^\d+(\.\d+)?$/;
+const replied = { ...(saved.replied ?? {}) };
+(Array.isArray(found?.replied) ? found.replied : [])
+  .filter((r) => r && /^[A-Z0-9]+$/.test(String(r.channel ?? "")) && TS.test(String(r.ts ?? "")))
+  .forEach((r) => {
+    const thread = TS.test(String(r.thread ?? "")) ? String(r.thread) : String(r.ts);
+    [r.channel, `${r.channel}:${thread}`].forEach((k) => {
+      if (!(Number(replied[k]) >= Number(r.ts))) replied[k] = String(r.ts);
+    });
+  });
+Object.keys(replied).forEach((k) => now - Number(replied[k]) * 1000 >= KEEP_MS && delete replied[k]);
 const merged = new Map([...saved.items, ...items].map((i) => [key(i), i]));
 const kept = [...merged.values()]
   .filter((i) => now - Number(i.ts) * 1000 < KEEP_MS)
@@ -82,7 +97,7 @@ const kept = [...merged.values()]
   .slice(0, MAX_ITEMS);
 
 fs.mkdirSync(dir, { recursive: true });
-fs.writeFileSync(`${file}.tmp`, JSON.stringify({ checked: now, items: kept }));
+fs.writeFileSync(`${file}.tmp`, JSON.stringify({ checked: now, items: kept, replied }));
 fs.renameSync(`${file}.tmp`, file);
 fs.appendFileSync(path.join(dir, "nudge"), "\n");
 console.log(`Saved ${items.length} new, ${kept.length} in the last day.`);

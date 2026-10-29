@@ -824,7 +824,7 @@ No shell function, so nothing to add to your shell config.
 ### Notes
 
 - Finished means Linear's own `completed` or `canceled` state type, so a custom
-  state like "Deployed to Production" or "Duplicate" counts without any
+  state like "Shipped" or "Duplicate" counts without any
   configuration. The state's real name is what gets printed.
 - The ticket is read from the branch first and the directory name second. Those
   usually agree, but when they don't the branch is the truth — a worktree named

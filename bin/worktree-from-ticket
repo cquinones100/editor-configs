@@ -390,8 +390,8 @@ const main = async () => {
   linkLocalSettings(root, worktreePath);
 
   // Keyed on the state type, not its name: a workspace can call its completed
-  // state anything it likes (ours is "Deployed to Production", so nothing is
-  // literally named Done), while the type is one of Linear's fixed set. The
+  // state anything it likes ("Shipped", say, so nothing is literally named
+  // Done), while the type is one of Linear's fixed set. The
   // three closed ones are completed, canceled, and duplicate. The state goes in
   // the prompt as a fact rather than something the session has to go look up,
   // and the clause is dropped entirely if Linear ever returns no state.

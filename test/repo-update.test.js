@@ -53,3 +53,34 @@ test("the update prompt fast-forwards main on yes, leaves it on no, and refuses 
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("Update Switchboard with nothing new still runs the guided setup, saying why, for a clone pulled by hand", () => {
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repo-update-now-")));
+  const repo = path.join(tmp, "switchboard");
+  const bin = path.join(tmp, "bin");
+  const calls = path.join(tmp, "tmux-calls");
+  fs.mkdirSync(bin);
+  // A stand-in tmux: keeps each call, a line each, and answers nothing.
+  fs.writeFileSync(path.join(bin, "tmux"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\n`, { mode: 0o755 });
+  const env = { ...process.env, HOME: tmp, SWITCHBOARD_DIR: repo, TMUX: "", PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
+  try {
+    const origin = path.join(tmp, "origin.git");
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin], { env });
+    execFileSync("git", ["clone", "-q", origin, repo], { env, stdio: "ignore" });
+    execFileSync("git", ["-C", repo, "commit", "-q", "--allow-empty", "-m", "start"], { env });
+    execFileSync("git", ["-C", repo, "push", "-q", "origin", "main"], { env, stdio: "ignore" });
+
+    spawnSync("bash", [script, "now", "client-1"], { env, encoding: "utf8" });
+    const said = fs.readFileSync(calls, "utf8");
+    assert.match(said, /display-message -c client-1 Switchboard is up to date/);
+    assert.match(said, /display-popup -c client-1 .*Switchboard setup .*SETUP_WHY=.*up\\? to\\? date.* run-setup/s);
+
+    // The hourly check says nothing and runs nothing when there is nothing new.
+    fs.writeFileSync(calls, "");
+    fs.rmSync(path.join(tmp, ".local/state/switchboard/update-checked"), { force: true });
+    spawnSync("bash", [script, "periodic"], { env, encoding: "utf8" });
+    assert.doesNotMatch(fs.readFileSync(calls, "utf8"), /display-popup/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

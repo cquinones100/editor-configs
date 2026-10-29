@@ -15,9 +15,11 @@
 #                                      more commits land. Started by health.sh.
 #   repo-update.sh now <client>       M-p's "Update Switchboard": the same as
 #                                      check, whatever the update_check setting
-#                                      and however recently it looked, and says
-#                                      on <client> when there is nothing new or
-#                                      it can't look.
+#                                      and however recently it looked; with
+#                                      nothing new, or GitHub out of reach, it
+#                                      says so on <client> and runs the guided
+#                                      setup all the same, for a clone pulled
+#                                      by hand
 #   repo-update.sh prompt             the popup itself.
 #   repo-update.sh setup <client>     M-p's "Run Switchboard's setup": the guided
 #                                      ./setup.sh in a popup, whenever you like,
@@ -47,6 +49,13 @@ case "${1:-}" in
     esac
     # What happened, said on the client that asked; nothing for the others.
     say() { [ "$1" = now ] && tmux display-message -c "${2:-}" "$3"; return 0; }
+    # Asked for with nothing new to take, or GitHub out of reach, the setup
+    # still runs, saying why first, so a clone pulled by hand (or changed some
+    # other way) gets whatever its setup has to do.
+    setup_anyway() {
+      [ "$1" = now ] || return 0
+      tmux display-popup -c "${2:-}" -E -w 90 -h 85% -T ' Switchboard setup ' "SETUP_WHY=$(printf %q "$3") $0 run-setup"
+    }
     mkdir -p "$STATE"
     now=$(date +%s)
     if [ "$1" = periodic ]; then
@@ -64,9 +73,9 @@ case "${1:-}" in
     fi
     trap 'rmdir "$lock" 2>/dev/null' EXIT
     [ "$1" = now ] && tmux display-message -c "${2:-}" "Looking for Switchboard updates…"
-    GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git_ fetch --quiet origin main 2>/dev/null || { say "$1" "${2:-}" "Couldn't reach GitHub to look for Switchboard updates."; exit 0; }
+    GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git_ fetch --quiet origin main 2>/dev/null || { say "$1" "${2:-}" "Couldn't reach GitHub to look for Switchboard updates."; setup_anyway "$1" "${2:-}" "Couldn't reach GitHub to look for updates; running the setup with what you have."; exit 0; }
     behind=$(git_ rev-list --count main..origin/main 2>/dev/null) || exit 0
-    [ "${behind:-0}" -gt 0 ] || { say "$1" "${2:-}" "Switchboard is up to date ($(git_ log -1 --format=%h main))."; exit 0; }
+    [ "${behind:-0}" -gt 0 ] || { say "$1" "${2:-}" "Switchboard is up to date ($(git_ log -1 --format=%h main))."; setup_anyway "$1" "${2:-}" "Switchboard is up to date ($(git_ log -1 --format=%h main)); running its setup for anything not in place yet."; exit 0; }
     tip=$(git_ rev-parse origin/main)
     if [ "$1" = periodic ]; then
       read -r offered 2>/dev/null < "$STATE/update-offered"
@@ -136,6 +145,7 @@ case "${1:-}" in
     # The guided setup, as an update runs it: it changes only what isn't in
     # place and asks before anything else. Then tmux takes in what it linked.
     printf '\n'
+    [ -n "${SETUP_WHY:-}" ] && printf '  %s\n\n' "$SETUP_WHY"
     if [ -x "$REPO/setup.sh" ]; then
       "$REPO/setup.sh"
     else

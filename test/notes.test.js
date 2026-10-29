@@ -772,3 +772,65 @@ test("picking a style from the Format menu goes on to the note's own a, to type 
   assert.equal(result.ticked.line, "- [x] milk");
   assert.deepEqual(result.ticked.fed, [], "ticking a box is done, not written in");
 });
+
+test("squashing notes merges them with Claude into a new note, in the first one's folder, the originals to Recently Deleted", (t) => {
+  const bin = fs.mkdtempSync(path.join(tmp, "claude-bin-"));
+  const asked = path.join(bin, "asked");
+  // A stand-in claude -p: keeps what it was given, answers a merged note.
+  fs.writeFileSync(path.join(bin, "claude"), `#!/bin/sh\nprintf '%s\\n' "$@" > '${asked}'\ncat >> '${asked}'\nprintf '# Groceries and errands\\n\\n- [ ] milk\\n- [ ] post office\\n'\n`, { mode: 0o755 });
+  const saved = { PATH: process.env.PATH, TMUX: process.env.TMUX };
+  process.env.PATH = `${bin}:${saved.PATH}`;
+  delete process.env.TMUX;
+  t.after(() => Object.assign(process.env, saved));
+  const { result, dir } = lua(`
+    local s = require("notes.store")
+    local a = s.create("", "Groceries")
+    local f = io.open(a, "w"); f:write("# Groceries\\n\\n- [ ] milk\\n"); f:close()
+    local b = s.create("", "Errands")
+    local g = io.open(b, "w"); g:write("# Errands\\n\\n- [ ] post office\\n"); g:close()
+    local made
+    require("notes.squash").run({ a, b }, function(path, why) made = { path = path and s.relative(path), why = why } end)
+    vim.wait(5000, function() return made ~= nil end, 20)
+    io.write(vim.json.encode({ made = made, text = made.path and io.open(s.absolute(made.path)):read("*a"), a = vim.uv.fs_stat(a) ~= nil, b = vim.uv.fs_stat(b) ~= nil }))
+  `);
+  assert.equal(result.made.why, undefined);
+  assert.equal(result.made.path, "Groceries and errands.md");
+  assert.equal(result.text, "# Groceries and errands\n\n- [ ] milk\n- [ ] post office\n");
+  assert.equal(result.a, false, "the originals leave the notes");
+  assert.equal(result.b, false);
+  assert.ok(fs.existsSync(path.join(dir, ".trash", "Groceries.md")) && fs.existsSync(path.join(dir, ".trash", "Errands.md")), "to Recently Deleted");
+  const given = fs.readFileSync(asked, "utf8");
+  assert.match(given, /^-p\n--model\nsonnet\n--tools\n\n--no-session-persistence\n/);
+  assert.match(given, /<note 1>\n# Groceries[\s\S]*<note 2>\n# Errands/);
+});
+
+test("tabs linked to squashed notes link to the new note", (t) => {
+  const bin = fs.mkdtempSync(path.join(tmp, "claude-bin-"));
+  fs.writeFileSync(path.join(bin, "claude"), `#!/bin/sh\ncat >/dev/null\nprintf '# Both\\n\\n- one\\n- two\\n'\n`, { mode: 0o755 });
+  const socket = path.join(fs.mkdtempSync("/tmp/sq-"), "tmux.sock");
+  execFileSync("tmux", ["-S", socket, "-f", "/dev/null", "new-session", "-d", "sleep 60"]);
+  const pid = execFileSync("tmux", ["-S", socket, "display", "-p", "#{pid}"], { encoding: "utf8" }).trim();
+  const window = execFileSync("tmux", ["-S", socket, "display", "-p", "#{window_id}"], { encoding: "utf8" }).trim();
+  const other = execFileSync("tmux", ["-S", socket, "new-window", "-d", "-P", "-F", "#{window_id}", "sleep 60"], { encoding: "utf8" }).trim();
+  execFileSync("tmux", ["-S", socket, "set", "-w", "-t", window, "@tab_note", "One.md"]);
+  execFileSync("tmux", ["-S", socket, "set", "-w", "-t", other, "@tab_note_last", "Two.md"]);
+  const saved = { PATH: process.env.PATH, TMUX: process.env.TMUX };
+  process.env.PATH = `${bin}:${saved.PATH}`;
+  process.env.TMUX = `${socket},${pid},0`;
+  t.after(() => {
+    Object.assign(process.env, saved);
+    execFileSync("tmux", ["-S", socket, "kill-server"]);
+  });
+  lua(`
+    local s = require("notes.store")
+    local a = s.create("", "One")
+    local b = s.create("", "Two")
+    local done
+    require("notes.squash").run({ a, b }, function(path) done = path or false end)
+    vim.wait(5000, function() return done ~= nil end, 20)
+    io.write(vim.json.encode({}))
+  `);
+  const show = (w, option) => execFileSync("tmux", ["-S", socket, "show", "-wqv", "-t", w, option], { encoding: "utf8" }).trim();
+  assert.equal(show(window, "@tab_note"), "Both.md");
+  assert.equal(show(other, "@tab_note_last"), "Both.md");
+});

@@ -18,7 +18,8 @@ M.ns = vim.api.nvim_create_namespace("notes.sidebar")
 -- What is shown: a folder (nil for All Notes, "" for the top folder,
 -- store.TRASH for Recently Deleted), or the notes with a tag, or those
 -- matching a search.
-M.state = { folder = nil, tag = nil, query = nil, items = {} }
+-- marked: the notes marked with s for squashing, in the order marked.
+M.state = { folder = nil, tag = nil, query = nil, items = {}, marked = {} }
 
 local function when(mtime)
   local now = os.time()
@@ -109,7 +110,8 @@ function M.build(current_path)
     section = this
     local item = { note = note.path }
     local open = current_path and vim.fs.normalize(current_path) == note.path
-    add(fit((note.pinned and "● " or "  ") .. note.title, width), open and "NotesSidebarOpen" or "NotesSidebarTitle", item)
+    local marked = vim.tbl_contains(s.marked, note.path)
+    add(fit((marked and "✓ " or note.pinned and "● " or "  ") .. note.title, width), open and "NotesSidebarOpen" or "NotesSidebarTitle", item)
     local detail = s.query and note.match or note.preview
     if s.folder == nil and not s.query and not s.tag and note.folder ~= "" then detail = "▸ " .. note.folder .. "  " .. detail end
     add(fit("  " .. when(note.mtime) .. "  " .. detail, width), "NotesSidebarDetail", item)
@@ -238,6 +240,43 @@ function M.delete()
   end
 end
 
+-- s: marks the note for squashing, or unmarks it.
+function M.mark()
+  local item = item_at()
+  if not item or not item.note or store.in_trash(item.note) then return end
+  local at = vim.tbl_contains(M.state.marked, item.note)
+  if at then
+    M.state.marked = vim.tbl_filter(function(p) return p ~= item.note end, M.state.marked)
+  else
+    table.insert(M.state.marked, item.note)
+  end
+  M.draw()
+end
+
+-- S: squashes the marked notes into one (squash.lua), after asking, since
+-- their text goes to Claude to merge.
+function M.squash()
+  local marked = vim.tbl_filter(function(p) return vim.uv.fs_stat(p) ~= nil end, M.state.marked)
+  if #marked < 2 then
+    vim.notify("Mark two or more notes with s, then S squashes them into one.")
+    return
+  end
+  local squash = require("notes.squash")
+  vim.ui.select({ "Squash them", "Keep them as they are" }, {
+    prompt = ("Squash %d notes into one? Their text goes to Claude (%s) to merge; the originals go to Recently Deleted."):format(#marked, squash.options.model),
+  }, function(choice)
+    if choice ~= "Squash them" then return end
+    vim.notify(("Squashing %d notes…"):format(#marked))
+    squash.run(marked, function(path, why)
+      if not path then return vim.notify("Notes weren't squashed: " .. why, vim.log.levels.WARN) end
+      M.state.marked = {}
+      require("notes").open(path)
+      M.draw()
+      vim.notify("Squashed into " .. store.title_of(io.open(path):read("*a")))
+    end)
+  end)
+end
+
 function M.restore()
   local item = item_at()
   if not item or not item.note or not store.in_trash(item.note) then return end
@@ -301,6 +340,7 @@ function M.help()
     "  dd               delete (to Recently Deleted)",
     "  r                restore from Recently Deleted",
     "  p                pin or unpin",
+    "  s  S             mark notes, squash them into one",
     "  m                move to a folder",
     "  R                rename a folder",
     "  /                search every note",
@@ -327,6 +367,8 @@ function M.keys(buf)
   end)
   map("n", M.new_note)
   map("N", M.new_folder)
+  map("s", M.mark)
+  map("S", M.squash)
   map("dd", M.delete)
   map("D", M.delete)
   map("r", M.restore)

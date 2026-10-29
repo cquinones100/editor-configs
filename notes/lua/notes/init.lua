@@ -44,6 +44,8 @@ M.options = {
   strike_checked = true,
   -- A blank line between the items left to do and the ticked ones.
   gap_before_checked = true,
+  -- The model that merges notes squashed in the sidebar (s marks, S squashes).
+  squash_model = "sonnet",
 }
 
 function M.setup(opts)
@@ -51,6 +53,7 @@ function M.setup(opts)
   format.options.move_checked_to_bottom = M.options.move_checked_to_bottom
   format.options.gap_before_checked = M.options.gap_before_checked
   render.options.strike_checked = M.options.strike_checked
+  require("notes.squash").options.model = M.options.squash_model
 end
 
 -- ── Notes and their buffers ────────────────────────────────────────────────

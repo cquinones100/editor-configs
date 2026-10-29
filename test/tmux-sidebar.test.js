@@ -1767,7 +1767,7 @@ test("the Slack view lists what /slack-updates saved, newest first, without the 
   const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "slack.json"), "utf8"));
   fs.writeFileSync(path.join(stateDir, "slack.json"), JSON.stringify({ ...saved, checked: Date.now() - 3_600_000 }));
   const old = JSON.parse(execFileSync("node", ["-e", script], { env, encoding: "utf8" }));
-  assert.match(old.error, /^Out of date, last looked 1h ago: mission control looks every 2 minutes while you're here\.$/);
+  assert.match(old.error, /^Out of date, last looked 1h ago: mission control looks every minute while you're here\.$/);
 });
 
 test("mission control looks at Slack itself with one search, sorting what it finds as /slack-updates does", async () => {

@@ -1634,7 +1634,7 @@ test("mission control's Settings view lists the options by category, / narrows t
     // / then "notif": the Notifications header and its two options, and no other category.
     for (const key of ["/", "n", "o", "t", "i", "f", "Enter"]) await sidebar.missionKey(client, { key });
     const items = sidebar.viewsFor(client)[client.view.view - 1].items;
-    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications", "Notifications view", "Next meeting"], "the Notifications category, and the Sidebar's options that mention notifications");
+    assert.deepEqual(items.map((i) => i.title), ["Notifications", "Push notifications", "Finished tabs clear", "Sidebar", "Notifications", "Notifications view", "New notes", "Next meeting"], "the Notifications category, and the Sidebar's options that mention notifications");
     assert.doesNotMatch(plain(sent.at(-1)), /Theme/);
 
     // Enter on an on/off option turns it off, and only what differs from the default is written.
@@ -2543,6 +2543,11 @@ Agree the plan.
 [00:04](https://fathom.video/calls/111?timestamp=4) Bo Park: Hi.
 `);
   assert.deepEqual(JSON.parse(fs.readFileSync(state, "utf8")).written, [11]);
+  // It is a new note for the sidebar's notifications until Notes shows it.
+  assert.deepEqual(sidebar.newNotes().map((n) => [n.path, n.title, n.source]), [["Meetings/Plan - review 2026-10-27.md", "Plan / review 2026-10-27", "Fathom"]]);
+  fs.writeFileSync(path.join(notes, ".notes.json"), JSON.stringify({ last: "Meetings/Plan - review 2026-10-27.md" }));
+  assert.deepEqual(sidebar.newNotes(), [], "read once Notes shows it");
+  fs.rmSync(path.join(notes, ".notes.json"));
 
   // The next look writes nothing twice, and asks again only for the waiting one.
   asked.length = 0;

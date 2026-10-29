@@ -8,6 +8,8 @@
 #        notes-open.sh side <client_name> <pane> M-e: to the right of <pane>
 #        notes-open.sh away <client_name> <pane> M-w on Notes: back to its own tab
 #        notes-open.sh show <window>           Notes beside <window> shows its note
+#        notes-open.sh note <client_name> <note>  shows <note> (a path in the
+#                                              notes directory), then as M-N
 #
 # The notes pane is found by its @notes_pane option, which this sets, so it is
 # found wherever it has been moved, and renaming its tab doesn't lose it; a
@@ -182,6 +184,23 @@ if [ "${1:-}" = side ]; then
   fi
   show_for "$here_window"
   exit 0
+fi
+
+# A note to read (the sidebar's new-note notification): made the one Notes
+# shows, in the running app or for the one about to start, then gone to as
+# M-N goes.
+if [ "${1:-}" = note ]; then
+  want=${3:-}
+  if [ -n "$want" ] && [[ $want != *..* ]] && [ -f "$notes_dir/$want" ]; then
+    meta="$notes_dir/.notes.json"
+    if [ -n "$(notes_pane)" ]; then
+      quoted=${want//\'/\'\'}
+      nvim --server "$notes_socket" --remote-expr "luaeval('require(\"notes\").open(require(\"notes.store\").absolute(_A))', '$quoted')" >/dev/null 2>&1
+    else
+      { [ -f "$meta" ] && jq --arg last "$want" '.last = $last' "$meta" || jq -n --arg last "$want" '{last: $last}'; } >"$meta.tmp" 2>/dev/null && mv "$meta.tmp" "$meta"
+    fi
+  fi
+  set -- "${2:-}"
 fi
 
 client=${1:-}

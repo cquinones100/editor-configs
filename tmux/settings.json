@@ -59,6 +59,13 @@
     "default": true
   },
   {
+    "key": "new_notes",
+    "category": "Sidebar",
+    "label": "New notes",
+    "description": "In the sidebar's notifications, a note written for you (a meeting's from Fathom, the standup) until you read it, Enter offering to open it in Notes",
+    "default": true
+  },
+  {
     "key": "next_meeting",
     "category": "Sidebar",
     "label": "Next meeting",

@@ -550,6 +550,24 @@ test("a tab whose turn ended with background tasks still running reads as workin
   ], "not one that needs you");
 });
 
+test("a background command stays running though Claude Code copies its request, untimed, into the transcript after it", () => {
+  const file = path.join(home, ".claude/projects/-work/blob.jsonl");
+  const now = Date.now();
+  const at = (ms) => new Date(now - ms).toISOString();
+  const call = { type: "tool_use", id: "c1", name: "Bash", input: { command: "codex-review --base main", description: "review", run_in_background: true } };
+  const started = { type: "tool_result", tool_use_id: "c1", content: "Command running in background with ID: rev1. Output is being written to: /tmp/x" };
+  const entries = [
+    { type: "assistant", timestamp: at(5_000), message: { content: [call] } },
+    { type: "user", timestamp: at(4_000), message: { content: [started] } },
+    // The request's copy, with no time of its own.
+    { type: "api-request-blob", message: { content: [call, started] } },
+  ];
+  fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+  const work = sidebar.backgroundWork(file, now - 60_000);
+  assert.equal(work.count, 1, "still running");
+  assert.equal(work.loop?.kind, "review", "and seen as the review loop");
+});
+
 test("a Monitor watch runs through its events until it expires, and a tab only watching is in Monitoring", () => {
   const file = path.join(home, ".claude/projects/-work/watch.jsonl");
   const now = Date.now();

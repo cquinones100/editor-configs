@@ -810,7 +810,7 @@ test("M-e shows each tab its own note: the one its Claude works from, else the l
   assert.equal(opened(), "C.md", "the note its Claude works from comes first");
 });
 
-test("asked for a tab's note, the notes about its ticket come first, then its repository's, then the last one shown there", (t) => {
+test("asked for a tab's note, the notes about its ticket come first, then those titled like the tab, the last one shown there, and its repository's", (t) => {
   const notesDir = fs.mkdtempSync(path.join(tmp, "pick-notes-"));
   const repo = path.join(tmp, "widgets");
   fs.mkdirSync(path.join(notesDir, ".trash"), { recursive: true });
@@ -820,14 +820,15 @@ test("asked for a tab's note, the notes about its ticket come first, then its re
   write("Widgets.md", "the widgets repo");
   write("Sprint.md", "- [ ] AB-12 filter the list");
   write("Last.md", "nothing related");
+  write("Filter ideas.md", "nothing else");
   fs.writeFileSync(path.join(notesDir, ".trash/Old.md"), "AB-12");
   const window = tmux("new-window", "-d", "-t", "test", "-c", repo, "-P", "-F", "#{window_id}");
   t.after(() => tmux("kill-window", "-t", window));
   tmux("setw", "-t", window, "@tab_label", "AB-12: Filter the list");
   tmux("setw", "-t", window, "@tab_note_last", "Last.md");
   const rows = execFileSync("bash", [path.join(__dirname, "../tmux/note-pick.sh"), "list", window], { env: { ...process.env, NOTES_DIR: notesDir }, encoding: "utf8" }).trim().split("\n").map((line) => line.split("\t"));
-  assert.deepEqual(rows.slice(0, 3).map(([title]) => title), ["Sprint", "Widgets", "Last"]);
-  assert.deepEqual(rows.map(([, rel]) => rel).sort(), ["Groceries.md", "Last.md", "Sprint.md", "Widgets.md"], "every note once, none from the trash");
+  assert.deepEqual(rows.slice(0, 4).map(([title]) => title), ["Sprint", "Filter ideas", "Last", "Widgets"]);
+  assert.deepEqual(rows.map(([, rel]) => rel).sort(), ["Filter ideas.md", "Groceries.md", "Last.md", "Sprint.md", "Widgets.md"], "every note once, none from the trash");
 });
 
 test("a tab with Notes beside its pane says so in the sidebar, and the Notes tab itself doesn't", async (t) => {

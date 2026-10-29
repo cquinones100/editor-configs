@@ -2099,6 +2099,35 @@ test("a Slack message is drawn as Slack draws it: its lines, bullets hanging, qu
   assert.match(lines[1], /\x1b\[9mold/, "struck");
 });
 
+test("a view whose integration isn't set up is still there to go to, and says how to set it up, whole", async (t) => {
+  const stateDir = sidebar.STATE_DIR;
+  fs.rmSync(path.join(stateDir, "calendar.json"), { force: true });
+  // Calendar: no feed in the Keychain, nothing /today saved, no Calendar tab.
+  const calendar = sidebar.builtInViews(sidebar.state).find((v) => v.title === "Calendar");
+  assert.ok(calendar, "the Calendar view is there");
+  assert.match(calendar.error, /google-calendar-ical/);
+  assert.match(calendar.error, /Open a Calendar tab/);
+  const drawn = sidebar.missionLines({ tabs: [], sections: [calendar], cols: 80, rows: 30, view: { view: 1, cursor: 0, frame: 0 }, config }).map((l) => l.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""));
+  assert.ok(drawn.filter((l) => /\S/.test(l) && !/MISSION|keys|Calendar/.test(l)).length > 3, "wrapped over several lines, not cut");
+  assert.ok(drawn.some((l) => l.includes("Secret address in iCal format")));
+
+  // Linear: no key.
+  const bin = fs.mkdtempSync(path.join(tmp, "nokey-bin-"));
+  fs.writeFileSync(path.join(bin, "security"), "#!/bin/sh\nexit 44\n", { mode: 0o755 });
+  const saved = { PATH: process.env.PATH, LINEAR_API_KEY: process.env.LINEAR_API_KEY };
+  process.env.PATH = `${bin}:${saved.PATH}`;
+  delete process.env.LINEAR_API_KEY;
+  t.after(() => Object.assign(process.env, saved));
+  await sidebar.fetchInbox();
+  assert.match(sidebar.inboxView().error, /Linear isn't set up: .*linear-api-key/);
+
+  // GitHub: no tab in a GitHub repository, then gh missing.
+  await sidebar.fetchCi([{ path: tmp }], () => {});
+  assert.match(sidebar.ciView().error, /None of your tabs is in a GitHub repository/);
+  assert.match(sidebar.githubWhy({ code: "ENOENT", message: "spawn gh ENOENT" }), /brew install gh, then gh auth login/);
+  assert.match(sidebar.githubWhy({ message: "You are not logged into any GitHub hosts. To log in, run: gh auth login" }), /isn't signed in: run gh auth login/);
+});
+
 test("the Notifications view lists whole messages, the chosen one marked, its top line going back", () => {
   const items = [
     { title: "Standup in 3m · ↵ joins", body: "1:00–1:15 PM\nAB-12" },

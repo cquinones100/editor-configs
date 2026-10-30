@@ -27,7 +27,7 @@ isn't the commit the skill last found clean, or whose review started past
 where main is on the remote (both recorded in the clone's
 `review-loop-clean`, `git rev-parse --git-path review-loop-clean`, from
 `codex-review`'s `reviewedCommit` and `mergeBase`), so a fix made after the
-review needs a review of its own, and so does a commit the review left out. Claude can't skip
+review needs a review of its own, and so does a commit the review left out. The skill offers to squash the loop's own commits before the push; a squash that leaves the tree exactly as reviewed records its new commit in their place, with the same base, and one that changes it records nothing. Claude can't skip
 it: this repository's own `.claude/settings.json` runs
 `claude/hooks/enforce-push-review.sh` before every command in it, which
 refuses `git push --no-verify`, and `enforce-git-hooks-run.sh`, which refuses

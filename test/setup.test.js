@@ -264,6 +264,43 @@ test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or
   }
 });
 
+test("setup.sh claude_md adds gh as a credential helper of a rules clone on GitHub, once", () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-claude-md-gh-")));
+  // A space in gh's path, which the helper has to quote.
+  const bin = path.join(home, "my bin");
+  // No network: the clone's update goes to a proxy that isn't there, and fails at once.
+  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "http.proxy", GIT_CONFIG_VALUE_0: "http://127.0.0.1:9", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
+  const clone = path.join(home, ".local/share/switchboard/claude-md");
+  const url = "https://gist.github.com/abc123.git";
+  try {
+    fs.symlinkSync(repo, path.join(home, "switchboard"));
+    fs.mkdirSync(bin);
+    // gh signed in only once SIGNED_IN is there.
+    fs.writeFileSync(path.join(bin, "gh"), `#!/bin/sh\n[ "$1 $2" = "auth token" ] && [ -e "${home}/SIGNED_IN" ]\n`, { mode: 0o755 });
+    fs.mkdirSync(path.join(home, ".config/switchboard"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/switchboard/claude.json"), JSON.stringify({ repo: url }));
+    execFileSync("git", ["init", "-q", "-b", "main", clone], { env });
+    fs.writeFileSync(path.join(clone, "CLAUDE.md"), "# Rules\n");
+    execFileSync("git", ["-C", clone, "add", "."], { env });
+    execFileSync("git", ["-C", clone, "commit", "-q", "-m", "rules"], { env });
+    execFileSync("git", ["-C", clone, "remote", "add", "origin", url], { env });
+    execFileSync("git", ["-C", clone, "config", "credential.helper", "osxkeychain"], { env });
+
+    // Not signed in to gh: the clone's own helper is kept.
+    spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" });
+    assert.equal(execFileSync("git", ["-C", clone, "config", "--local", "--get-all", "credential.helper"], { env, encoding: "utf8" }), "osxkeychain\n");
+
+    fs.writeFileSync(path.join(home, "SIGNED_IN"), "");
+    assert.match(spawnSync("bash", [script, "--check", "claude_md"], { env, encoding: "utf8" }).stdout, /add gh as a credential helper for your CLAUDE\.md's repository/);
+    assert.equal(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).status, 0);
+    const helpers = execFileSync("git", ["-C", clone, "config", "--local", "--get-all", "credential.helper"], { env, encoding: "utf8" });
+    assert.equal(helpers, `osxkeychain\n!'${path.join(bin, "gh")}' auth git-credential\n`, "gh's, quoted, after the clone's own, which git asks first");
+    assert.doesNotMatch(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).stdout, /credential helper/, "a second run changes nothing");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("setup.sh config (and tmux) moves the AWS login's Chrome profile into browser.json, once", () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-aws-")));
   const env = { ...process.env, HOME: home };

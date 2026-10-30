@@ -168,7 +168,8 @@ claude_settings() {
 # rules come from where ~/.config/switchboard/claude.json says, a git
 # repository ({"repo": "<url>", "file": "CLAUDE.md"}, cloned into
 # ~/.local/share/switchboard/claude-md and pulled on every run, fast-forward
-# only; without "file", its CLAUDE.md at the root or nested least deep) or a
+# only, with gh among its credential helpers on GitHub; without "file", its
+# CLAUDE.md at the root or nested least deep) or a
 # file ({"path": "~/somewhere/CLAUDE.md"}), else
 # ~/.config/switchboard/CLAUDE.md when there is one. Then ~/.claude/CLAUDE.md
 # is a short file importing both, which Claude Code follows (@path), so an edit
@@ -190,14 +191,28 @@ WRITTEN_MARK="<!-- Written by Switchboard's setup.sh: your rules, then Switchboa
 # the system lets go of when the run ends, however it ends (lockf on macOS,
 # flock on Linux), reading the setting afresh, so whichever writes last writes
 # what the setting says by then. A check (--check) takes no lock.
+# gh's sign-in as a git credential helper, for a repository on GitHub (a gist
+# too), so cloning a private one, updating it and pushing from the clone work
+# without a password prompt; nothing when gh holds no sign-in (read locally,
+# `auth token`). Given to git after the helpers already set, which it asks
+# first, so a sign-in that works keeps working. gh's path is quoted for the
+# shell git runs the helper in, in single quotes, which any shell reads.
+claude_md_gh_helper() {
+  # A user in the URL (https://me@github.com/...) is still GitHub.
+  local gh q=\' github='^https://([^/@]+@)?(gist\.)?github\.com/'
+  [[ $1 =~ $github ]] && gh=$(command -v gh) &&
+    "$gh" auth token --hostname github.com >/dev/null 2>&1 || return 0
+  printf '%s' "!'${gh//$q/$q\\$q$q}' auth git-credential"
+}
 # Brings the clone of your rules' repository up to date, when claude.json
 # names the one it is a clone of, fast-forward only. Outside the lock, since it
 # waits on the network.
 claude_md_pull() {
-  local config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md repo
+  local config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md repo helper
   repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
   if [[ -n $repo && -d $clone/.git && $(git -C "$clone" remote get-url origin 2>/dev/null) == "$repo" ]]; then
-    git -C "$clone" pull --quiet --ff-only 2>/dev/null || echo "  could not update your CLAUDE.md's repository: git -C $clone pull --ff-only" >&2
+    helper=$(claude_md_gh_helper "$repo")
+    git ${helper:+-c "credential.helper=$helper"} -C "$clone" pull --quiet --ff-only 2>/dev/null || echo "  could not update your CLAUDE.md's repository: git -C $clone pull --ff-only" >&2
   fi
   return 0
 }
@@ -231,7 +246,7 @@ claude_md() {
 }
 claude_md_now() {
   local file=~/.claude/CLAUDE.md config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md
-  local repo mine="" want backup="" target named found="" least="" depth slashes
+  local repo mine="" want backup="" target named found="" least="" depth slashes helper=""
   local -a candidates=()
   if [[ -L $file ]] && target=$(readlink "$file") && [[ $target == */claude/CLAUDE.md && ! -e ~/.config/switchboard/CLAUDE.md ]]; then
     if ! $CHECK; then
@@ -244,6 +259,7 @@ claude_md_now() {
   fi
   repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
   if [[ -n $repo ]]; then
+    helper=$(claude_md_gh_helper "$repo")
     # A clone of another repository, from before the setting changed, is
     # moved aside rather than pulled.
     if [[ -d $clone/.git && $(git -C "$clone" remote get-url origin 2>/dev/null) != "$repo" ]]; then
@@ -256,7 +272,7 @@ claude_md_now() {
       # A clone, which waits on the network, is left to setup and Settings.
       ${SWITCHBOARD_PULL_ONLY:-false} && return 0
       if ! $CHECK; then
-        mkdir -p "${clone%/*}" && git clone --quiet "$repo" "$clone" || { echo "  could not clone $repo for your CLAUDE.md" >&2; return 1; }
+        mkdir -p "${clone%/*}" && git ${helper:+-c "credential.helper=$helper"} clone --quiet "$repo" "$clone" || { echo "  could not clone $repo for your CLAUDE.md" >&2; return 1; }
       fi
       change "clone your CLAUDE.md's repository"
     elif ! $CHECK && ! ${PULLED:-false}; then
@@ -268,6 +284,12 @@ claude_md_now() {
     if [[ $(jq -r '.repo // empty' "$config" 2>/dev/null) != "$repo" ]]; then
       claude_md_now
       return
+    fi
+    # gh's helper, from above, kept in the clone.
+    if [[ -n $helper && -d $clone/.git ]] && ! git -C "$clone" config --local --get-all credential.helper 2>/dev/null | grep -qxF -- "$helper" &&
+      ! { $CHECK && [[ -n $backup ]]; }; then
+      $CHECK || git -C "$clone" config --local --add credential.helper "$helper" || return 1
+      change "add gh as a credential helper for your CLAUDE.md's repository"
     fi
     named=$(jq -r '.file // empty' "$config")
     if [[ -n $named ]]; then

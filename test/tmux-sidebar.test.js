@@ -2535,6 +2535,52 @@ test("moving onto the notifications brings a Notifications window to the front, 
   fs.rmSync(path.join(stateDir, "slack-dismissed.json"), { force: true });
 });
 
+test("M-a goes from a finished tab to one waiting on you before the next finished one", (t) => {
+  const stateDir = path.join(home, ".local/state/tmux-sidebar");
+  fs.mkdirSync(stateDir, { recursive: true });
+  const windows = ["cat", "cat", "cat"].map(() => tmux("new-window", "-d", "-P", "-F", "#{window_id}", "-c", tmp, "cat"));
+  const [doneA, doneB, waiting] = windows;
+  const pane = (w) => tmux("display", "-p", "-t", w, "#{pane_id}");
+  const session = tmux("display", "-p", "-t", doneA, "#{session_id}");
+  // The daemon's Needs you, as it writes it: waiting first, then done; and its
+  // pid, alive (this test's own process), so the walk reads the list.
+  const needs = path.join(stateDir, "needs");
+  const pid = path.join(stateDir, "daemon.pid");
+  const hadPid = fs.existsSync(pid) ? fs.readFileSync(pid, "utf8") : undefined;
+  fs.writeFileSync(needs, [[waiting, pane(waiting), session, "waiting"], [doneA, pane(doneA), session, "done"], [doneB, pane(doneB), session, "done"]].map((r) => r.join("\t")).join("\n") + "\n");
+  fs.writeFileSync(pid, String(process.pid));
+  t.after(() => {
+    windows.forEach((w) => { try { tmux("kill-window", "-t", w); } catch {} });
+    fs.rmSync(needs, { force: true });
+    if (hadPid === undefined) fs.rmSync(pid, { force: true }); else fs.writeFileSync(pid, hadPid);
+  });
+  const press = (from) => {
+    tmux("select-window", "-t", from);
+    execFileSync("bash", [path.join(__dirname, "../tmux/agent-state.sh"), "next"], { env: { ...process.env, TMUX_PANE: pane(from) } });
+    return tmux("display", "-p", "-t", session, "#{window_id}");
+  };
+  assert.equal(press(doneA), waiting, "from a finished tab, the waiting one first");
+  assert.equal(press(waiting), doneB, "then on to the finished one after the one it left");
+  assert.equal(press(doneB), waiting, "the waiting one again before the next finished one");
+  assert.equal(press(waiting), doneA, "and round, every finished tab reached");
+
+  // Answered, the waiting tab leaves the list: the walk still picks up after
+  // the finished one it left.
+  assert.equal(press(doneA), waiting);
+  fs.writeFileSync(needs, [[doneA, pane(doneA), session, "done"], [doneB, pane(doneB), session, "done"]].map((r) => r.join("\t")).join("\n") + "\n");
+  assert.equal(press(waiting), doneB, "on to the finished one after the one it left");
+
+  // A finished tab that clears once seen, mid-walk: the detour to a waiting
+  // tab still goes on from the rest of the walk after it.
+  const doneC = tmux("new-window", "-d", "-P", "-F", "#{window_id}", "-c", tmp, "cat");
+  t.after(() => { try { tmux("kill-window", "-t", doneC); } catch {} });
+  fs.writeFileSync(needs, [[doneA, pane(doneA), session, "done"], [doneB, pane(doneB), session, "done"], [doneC, pane(doneC), session, "done"]].map((r) => r.join("\t")).join("\n") + "\n");
+  assert.equal(press(doneA), doneB);
+  fs.writeFileSync(needs, [[waiting, pane(waiting), session, "waiting"], [doneA, pane(doneA), session, "done"], [doneC, pane(doneC), session, "done"]].map((r) => r.join("\t")).join("\n") + "\n");
+  assert.equal(press(doneB), waiting, "doneB seen and gone: the waiting one first");
+  assert.equal(press(waiting), doneC, "then on from where the walk was, not back to doneA");
+});
+
 test("M-c puts the cursor in the pane running Claude in the tab, and says so when there is none", async (t) => {
   const script = path.join(__dirname, "../tmux/claude-focus.sh");
   const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", "-c", tmp, "cat");

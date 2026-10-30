@@ -324,14 +324,18 @@ case "${1:-}" in
     # background or loops, which only the daemon can tell from the transcript.
     # Each press goes to the tab after this one there, wrapping at the end; a
     # done tab leaves the list once seen, so pressed again from it, the walk
-    # carries on with the tabs that were after it (@agent_walk_rest).
+    # carries on with the tabs that were after it (@agent_walk_rest). From a
+    # tab that only finished, or one not in the list, a tab pinned or waiting
+    # on you comes first, before the next finished one; the next press from
+    # there picks up where the finished ones were left (@agent_walk_after), so
+    # the walk still reaches every one.
     needs_file=~/.local/state/tmux-sidebar/needs
     daemon=$(cat ~/.local/state/tmux-sidebar/daemon.pid 2>/dev/null)
     if [ -n "$daemon" ] && kill -0 "$daemon" 2>/dev/null && [ -f "$needs_file" ]; then
       here=$(tmux display -p '#{window_id}')
-      windows=() panes=() sessions=()
-      while IFS=$'\t' read -r w p s; do
-        [ -n "$w" ] && windows+=("$w") && panes+=("$p") && sessions+=("$s")
+      windows=() panes=() sessions=() whys=()
+      while IFS=$'\t' read -r w p s why; do
+        [ -n "$w" ] && windows+=("$w") && panes+=("$p") && sessions+=("$s") && whys+=("${why:-done}")
       done <"$needs_file"
       n=${#windows[@]}
       if [ "$n" -eq 0 ]; then
@@ -340,7 +344,41 @@ case "${1:-}" in
       fi
       at=-1
       for i in "${!windows[@]}"; do [ "${windows[$i]}" = "$here" ] && at=$i; done
-      if [ "$at" -ge 0 ]; then
+      # The first tab pinned or waiting on you, other than this one.
+      urgent=-1
+      for i in "${!windows[@]}"; do
+        [ "$i" != "$at" ] && [ "$urgent" -lt 0 ] && [ "${whys[$i]}" != done ] && urgent=$i
+      done
+      # Where the finished ones were left when the walk went to an urgent one,
+      # kept whether or not that one is still listed (answered, it leaves).
+      after=-1
+      if [ "$(tmux show -gqv @agent_walk_window)" = "$here" ]; then
+        resume=$(tmux show -gqv @agent_walk_after)
+        for i in "${!windows[@]}"; do [ -n "$resume" ] && [ "${windows[$i]}" = "$resume" ] && [ "$i" != "$at" ] && after=$i; done
+      fi
+      tmux set -gu @agent_walk_after
+      # Where the walk would go on from a tab that left the list (seen, it
+      # clears): the first of the rest it noted that is still listed.
+      rest=-1
+      if [ "$at" -lt 0 ] && [ "$(tmux show -gqv @agent_walk_window)" = "$here" ]; then
+        for id in $(tmux show -gqv @agent_walk_rest); do
+          for i in "${!windows[@]}"; do [ "$rest" -lt 0 ] && [ "${windows[$i]}" = "$id" ] && rest=$i; done
+        done
+      fi
+      if [ "$urgent" -ge 0 ] && { [ "$at" -lt 0 ] || [ "${whys[$at]}" = done ]; }; then
+        to=$urgent
+        # From a listed finished tab, the one after it; from one no longer
+        # listed, the place already kept.
+        if [ "$at" -ge 0 ]; then
+          tmux set -g @agent_walk_after "${windows[$(( (at + 1) % n ))]}"
+        elif [ "$after" -ge 0 ]; then
+          tmux set -g @agent_walk_after "${windows[$after]}"
+        elif [ "$rest" -ge 0 ] && [ "$rest" != "$urgent" ]; then
+          tmux set -g @agent_walk_after "${windows[$rest]}"
+        fi
+      elif [ "$after" -ge 0 ]; then
+        to=$after
+      elif [ "$at" -ge 0 ]; then
         if [ "$n" -eq 1 ]; then
           tmux display-message "This is the only tab that needs you."
           exit 0
@@ -391,13 +429,16 @@ case "${1:-}" in
     # as a tab: a done tab stops being done the moment it is focused, so by the
     # next press it is no longer in the list to count from. Pressed from that
     # same tab, the walk carries on from its place; pressed anywhere else, it
-    # starts again from the top.
+    # starts again from the top. From a finished tab in the walk, a tab still
+    # waiting on you comes first, as with the daemon's list above.
     last_window=$(tmux show -gqv @agent_walk_window)
     last_key=$(tmux show -gqv @agent_walk_key)
     target=$(awk -F'\t' -v here="$here" -v last_window="$last_window" -v last_key="$last_key" '
       BEGIN { split(last_key, k, " ") }
       { line[NR] = $0; rank[NR] = $1; since[NR] = $2; win[NR] = $3 }
       END {
+        if (here == last_window && k[1] == 1)
+          for (i = 1; i <= NR; i++) if (rank[i] == 0 && win[i] != here) { print line[i]; exit }
         if (here == last_window && last_key != "") {
           for (i = 1; i <= NR; i++)
             if (rank[i] > k[1] || (rank[i] == k[1] && since[i] > k[2]) || (rank[i] == k[1] && since[i] == k[2] && win[i] > k[3])) { print line[i]; exit }

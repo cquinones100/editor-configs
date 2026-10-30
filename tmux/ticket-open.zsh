@@ -12,7 +12,7 @@
 # is usually where it came from.
 #
 # The workspace comes from $LINEAR_WORKSPACE, or linearWorkspace in
-# ~/.config/worktree-from-ticket/config.json, as linear-ticket.sh reads it, so
+# ~/.config/switchboard/linear.json, as linear-ticket.sh reads it, so
 # no workspace or team name lives in this repository.
 #
 # zsh for vared, which edits a prefilled line.
@@ -76,7 +76,7 @@ elif [[ ! $input =~ $ticket_id ]]; then
   fail "Not a ticket ID, number or Linear URL: $input"
 fi
 
-config="${XDG_CONFIG_HOME:-$HOME/.config}/worktree-from-ticket/config.json"
+config="$HOME/.config/switchboard/linear.json"
 workspace="${LINEAR_WORKSPACE:-$(jq -r '.linearWorkspace // empty' "$config" 2>/dev/null)}"
 [[ -n $workspace ]] || fail "No Linear workspace set: add linearWorkspace to $config."
 

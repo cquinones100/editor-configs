@@ -63,10 +63,18 @@ Your own settings go in `~/.config/switchboard/`, which is never in this reposit
 | `ghostty` | Ghostty, after its config |
 | `lazygit.yml` | lazygit, over its config, in panes tmux starts |
 | `CLAUDE.md` | Claude Code, your own rules, imported with Switchboard's part into `~/.claude/CLAUDE.md` |
+| `claude.json` | where your CLAUDE.md's rules come from, a file or a git repository |
+| `browser.json` | the Chrome profile each site's links open in, `awsapps.com` for the AWS login |
+| `linear.json` | your Linear workspace, the team and labels `/shape` files tickets with |
+| `slack-updates.json` | the channels the Slack view shows in full |
+| `slack-relay.json` | your Slack member ID, the one person the relay listens to |
+| `oncall.json`, `oncall-rules.md` | the channels `/oncall` watches and your team's rules |
+| `sidebar.json`, `sidebar-plugins/` | the sidebar's and mission control's sizes, and the plugins that load |
+| `trusted-dirs` | the directories whose own scripts may run |
 
 Claude Code reads no file after its own, so `setup.sh` adds what Switchboard needs (its hooks, statusline and the permissions its loops run with) to your `~/.claude/settings.json` and leaves the rest of it yours. Your `~/.claude/CLAUDE.md` imports Switchboard's part (`claude/switchboard.md`: the tabs, the notes app) and your own rules, from `~/.config/switchboard/CLAUDE.md`, or from where `~/.config/switchboard/claude.json` says: a file (`{"path": "~/somewhere/CLAUDE.md"}`) or a git repository of yours (`{"repo": "<url>", "file": "CLAUDE.md"}`, cloned and kept up to date on every setup run), so you can keep your rules in a repository of your own and share them across machines. Settings' "Your CLAUDE.md" sets it for you, and `./setup.sh claude_md` writes it again.
 
-Settings (`M-p`) keeps what you change there in the same folder, as `settings.json`.
+Settings (`M-p`) keeps what you change there in the same folder, as `settings.json`, and lists every setting in the files above too, under each file's name: Enter types a value in, or opens a whole file in Neovim. Setup moves these files here from where they were kept before (`~/.config/worktree-from-ticket`, `slack-relay`, `slack-updates`, `oncall`, `tmux-sidebar`, `aws-login`).
 
 ## Where things are
 

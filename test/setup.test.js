@@ -183,6 +183,194 @@ test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or
   }
 });
 
+test("setup.sh config (and tmux) moves the AWS login's Chrome profile into browser.json, once", () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-aws-")));
+  const env = { ...process.env, HOME: home };
+  try {
+    fs.symlinkSync(repo, path.join(home, "switchboard"));
+    fs.mkdirSync(path.join(home, ".config/aws-login"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".config/switchboard"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/aws-login/config"), "# mine\nchrome_profile=Profile 3\n");
+    fs.writeFileSync(path.join(home, ".config/switchboard/browser.json"), JSON.stringify({ hosts: { "slack.com": "Profile 2" } }));
+    const run = () => spawnSync("bash", [script, "--check", "config"], { env, encoding: "utf8" });
+    assert.match(run().stdout, /move the AWS login's Chrome profile \(Profile 3\)/);
+    assert.ok(fs.existsSync(path.join(home, ".config/aws-login/config")), "--check changes nothing");
+    const result = spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, ".config/switchboard/browser.json"), "utf8")), { hosts: { "slack.com": "Profile 2", "awsapps.com": "Profile 3" } });
+    assert.ok(!fs.existsSync(path.join(home, ".config/aws-login/config")));
+    assert.ok(fs.readdirSync(path.join(home, ".config/aws-login")).some((n) => n.startsWith("config.bak.")));
+    assert.doesNotMatch(run().stdout, /AWS login/, "a second run has nothing to move");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("setup.sh config moves each tool's own config into ~/.config/switchboard, keeping one already there", () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-configs-")));
+  const env = { ...process.env, HOME: home };
+  try {
+    fs.symlinkSync(repo, path.join(home, "switchboard"));
+    fs.mkdirSync(path.join(home, ".config/worktree-from-ticket"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".config/oncall"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".config/tmux-sidebar/plugins"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".config/switchboard"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/worktree-from-ticket/config.json"), JSON.stringify({ linearTeam: "ABC" }));
+    fs.writeFileSync(path.join(home, ".config/oncall/config.json"), JSON.stringify({ channels: [], rules: "~/.config/oncall/rules.md" }));
+    fs.writeFileSync(path.join(home, ".config/oncall/rules.md"), "# Rules\n");
+    fs.writeFileSync(path.join(home, ".config/tmux-sidebar/plugins/demo.js"), "module.exports = {};\n");
+    fs.mkdirSync(path.join(home, "outside"), { recursive: true });
+    fs.writeFileSync(path.join(home, "outside/beside.js"), "module.exports = {};\n");
+    fs.symlinkSync("../../../outside/beside.js", path.join(home, ".config/tmux-sidebar/plugins/beside.js"));
+    fs.mkdirSync(path.join(home, ".config/tmux-sidebar/plugins/shared"));
+    fs.writeFileSync(path.join(home, ".config/tmux-sidebar/plugins/shared/impl.js"), "module.exports = {};\n");
+    fs.symlinkSync("shared/impl.js", path.join(home, ".config/tmux-sidebar/plugins/inner.js"));
+    fs.symlinkSync("../plugins/shared/impl.js", path.join(home, ".config/tmux-sidebar/plugins/named.js"));
+    fs.symlinkSync(".", path.join(home, ".config/tmux-sidebar/plugins/self"));
+    fs.symlinkSync(path.join(home, ".config/tmux-sidebar/plugins/shared/impl.js"), path.join(home, ".config/tmux-sidebar/plugins/absolute.js"));
+    fs.symlinkSync(path.join(home, ".config/tmux-sidebar/plugins/absolute.js"), path.join(home, ".config/tmux-sidebar/plugins/chained.js"));
+    // One already moved by hand: kept, and the old one left.
+    fs.writeFileSync(path.join(home, ".config/tmux-sidebar/config.json"), JSON.stringify({ plugins: ["old"] }));
+    fs.writeFileSync(path.join(home, ".config/switchboard/sidebar.json"), JSON.stringify({ plugins: ["demo"] }));
+    const result = spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    const read = (p) => fs.readFileSync(path.join(home, ".config/switchboard", p), "utf8");
+    assert.deepEqual(JSON.parse(read("linear.json")), { linearTeam: "ABC" });
+    assert.deepEqual(JSON.parse(read("oncall.json")), { channels: [], rules: "~/.config/switchboard/oncall-rules.md" });
+    assert.equal(read("oncall-rules.md"), "# Rules\n");
+    assert.ok(fs.existsSync(path.join(home, ".config/switchboard/sidebar-plugins/demo.js")));
+    assert.ok(fs.existsSync(path.join(home, ".config/switchboard/sidebar-plugins/beside.js")), "a relative link in the folder still reaches its file");
+    assert.equal(fs.readlinkSync(path.join(home, ".config/switchboard/sidebar-plugins/inner.js")), path.join(home, ".config/switchboard/sidebar-plugins/shared/impl.js"), "one to a file in the folder follows it");
+    assert.ok(fs.existsSync(path.join(home, ".config/switchboard/sidebar-plugins/named.js")), "one that names the folder too");
+    assert.ok(fs.existsSync(path.join(home, ".config/switchboard/sidebar-plugins/self/demo.js")), "and one to the folder itself");
+    assert.ok(fs.existsSync(path.join(home, ".config/switchboard/sidebar-plugins/inner.js")));
+    assert.ok(fs.existsSync(path.join(home, ".config/switchboard/sidebar-plugins/absolute.js")), "an absolute one into the folder follows its file");
+    assert.ok(fs.existsSync(path.join(home, ".config/switchboard/sidebar-plugins/chained.js")), "and one leading through another");
+    assert.deepEqual(JSON.parse(read("sidebar.json")), { plugins: ["demo"] });
+    assert.ok(fs.existsSync(path.join(home, ".config/tmux-sidebar/config.json")));
+    assert.match(result.stderr, /tmux-sidebar\/config.json is still there/);
+    assert.ok(!fs.existsSync(path.join(home, ".config/worktree-from-ticket")), "its emptied directory goes");
+    assert.doesNotMatch(spawnSync("bash", [script, "config"], { env, encoding: "utf8" }).stdout, /move/, "a second run moves nothing");
+
+    // Plugins with something else beside their folder, which they may load,
+    // stay where they are, with a word about it.
+    fs.mkdirSync(path.join(home, ".config/tmux-sidebar/plugins"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".config/tmux-sidebar/node_modules"), { recursive: true });
+    fs.renameSync(path.join(home, ".config/switchboard/sidebar-plugins"), path.join(home, "kept-plugins"));
+    const beside = spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.match(beside.stdout, /link ~\/.config\/switchboard\/sidebar-plugins to ~\/.config\/tmux-sidebar\/plugins/);
+    assert.ok(fs.existsSync(path.join(home, ".config/tmux-sidebar/plugins")));
+    assert.equal(fs.readlinkSync(path.join(home, ".config/switchboard/sidebar-plugins")), fs.realpathSync(path.join(home, ".config/tmux-sidebar/plugins")), "linked, so the plugins still load");
+    fs.rmSync(path.join(home, ".config/switchboard/sidebar-plugins"));
+    fs.rmSync(path.join(home, ".config/tmux-sidebar"), { recursive: true });
+
+    // A link moves as a link to the same file; a rules path written in full is updated.
+    fs.mkdirSync(path.join(home, "dots"), { recursive: true });
+    fs.writeFileSync(path.join(home, "dots/relay.json"), JSON.stringify({ owner: "U1" }));
+    fs.mkdirSync(path.join(home, ".config/slack-relay"), { recursive: true });
+    fs.symlinkSync("../../dots/relay.json", path.join(home, ".config/slack-relay/config.json"));
+    fs.rmSync(path.join(home, ".config/switchboard/oncall.json"));
+    fs.rmSync(path.join(home, ".config/switchboard/oncall-rules.md"));
+    fs.mkdirSync(path.join(home, ".config/oncall"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/oncall/config.json"), JSON.stringify({ rules: path.join(home, ".config/oncall/./rules.md") }));
+    fs.writeFileSync(path.join(home, ".config/oncall/rules.md"), "# Rules\n");
+    assert.equal(spawnSync("bash", [script, "config"], { env, encoding: "utf8" }).status, 0);
+    assert.equal(fs.readlinkSync(path.join(home, ".config/switchboard/slack-relay.json")), path.join(home, "dots/relay.json"));
+    assert.deepEqual(JSON.parse(read("oncall.json")), { rules: "~/.config/switchboard/oncall-rules.md" });
+
+    // A linked on-call config keeps its link, the rules path changed in the file it points to.
+    fs.rmSync(path.join(home, ".config/switchboard/oncall.json"));
+    fs.rmSync(path.join(home, ".config/switchboard/oncall-rules.md"));
+    fs.writeFileSync(path.join(home, "dots/oncall.json"), JSON.stringify({ rules: "~/.config/oncall/rules.md" }), { mode: 0o600 });
+    fs.mkdirSync(path.join(home, ".config/oncall"), { recursive: true });
+    fs.symlinkSync(path.join(home, "dots/oncall.json"), path.join(home, ".config/oncall/config.json"));
+    fs.writeFileSync(path.join(home, ".config/oncall/rules.md"), "# Rules\n");
+    assert.equal(spawnSync("bash", [script, "config"], { env, encoding: "utf8" }).status, 0);
+    assert.ok(fs.lstatSync(path.join(home, ".config/switchboard/oncall.json")).isSymbolicLink());
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, "dots/oncall.json"), "utf8")), { rules: "~/.config/switchboard/oncall-rules.md" });
+
+    assert.equal(fs.statSync(path.join(home, "dots/oncall.json")).mode & 0o777, 0o600, "its mode kept");
+
+    // An on-call config already moved that names the old rules file: pointed
+    // at the rules file's new place when that moves.
+    fs.writeFileSync(path.join(home, ".config/switchboard/oncall.json"), JSON.stringify({ rules: "~/.config/oncall/rules.md" }));
+    fs.rmSync(path.join(home, ".config/switchboard/oncall-rules.md"), { force: true });
+    fs.mkdirSync(path.join(home, ".config/oncall"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/oncall/rules.md"), "# Rules\n");
+    spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.deepEqual(JSON.parse(read("oncall.json")), { rules: "~/.config/switchboard/oncall-rules.md" });
+    assert.equal(read("oncall-rules.md"), "# Rules\n");
+
+    // One old config linked to another that moves first: linked to its new place.
+    fs.rmSync(path.join(home, ".config/switchboard/slack-relay.json"), { force: true });
+    fs.rmSync(path.join(home, ".config/switchboard/slack-updates.json"), { force: true });
+    fs.mkdirSync(path.join(home, ".config/slack-relay"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".config/slack-updates"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/slack-relay/config.json"), JSON.stringify({ owner: "U1", channels: ["C1"] }));
+    fs.symlinkSync("../slack-relay/config.json", path.join(home, ".config/slack-updates/config.json"));
+    spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.equal(fs.readlinkSync(path.join(home, ".config/switchboard/slack-updates.json")), path.join(home, ".config/switchboard/slack-relay.json"));
+    assert.deepEqual(JSON.parse(read("slack-updates.json")), { owner: "U1", channels: ["C1"] });
+    fs.rmSync(path.join(home, ".config/switchboard/slack-updates.json"));
+
+    // Linked to one that stays (its new place already taken): still linked to it.
+    fs.mkdirSync(path.join(home, ".config/slack-relay"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".config/slack-updates"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/slack-relay/config.json"), JSON.stringify({ channels: ["C2"] }));
+    fs.symlinkSync("../slack-relay/config.json", path.join(home, ".config/slack-updates/config.json"));
+    spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.deepEqual(JSON.parse(read("slack-updates.json")), { channels: ["C2"] });
+    assert.deepEqual(JSON.parse(read("slack-relay.json")), { owner: "U1", channels: ["C1"] });
+    fs.rmSync(path.join(home, ".config/switchboard/slack-updates.json"));
+    fs.rmSync(path.join(home, ".config/slack-relay"), { recursive: true });
+
+    // A link to nothing already there is kept, the old file left beside it.
+    fs.mkdirSync(path.join(home, ".config/slack-updates"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/slack-updates/config.json"), "{}");
+    fs.symlinkSync(path.join(home, "gone.json"), path.join(home, ".config/switchboard/slack-updates.json"));
+    spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.equal(fs.readlinkSync(path.join(home, ".config/switchboard/slack-updates.json")), path.join(home, "gone.json"));
+    assert.ok(fs.existsSync(path.join(home, ".config/slack-updates/config.json")));
+    fs.rmSync(path.join(home, ".config/switchboard/slack-updates.json"));
+    fs.rmSync(path.join(home, ".config/slack-updates"), { recursive: true });
+
+    // The Linear config under XDG_CONFIG_HOME, where worktree-from-ticket read it,
+    // over one left in ~/.config.
+    fs.rmSync(path.join(home, ".config/switchboard/linear.json"));
+    fs.mkdirSync(path.join(home, ".config/worktree-from-ticket"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/worktree-from-ticket/config.json"), JSON.stringify({ linearTeam: "STALE" }));
+    fs.mkdirSync(path.join(home, "xdg/worktree-from-ticket"), { recursive: true });
+    fs.writeFileSync(path.join(home, "xdg/worktree-from-ticket/config.json"), JSON.stringify({ linearTeam: "XDG" }));
+    assert.equal(spawnSync("bash", [script, "config"], { env: { ...env, XDG_CONFIG_HOME: path.join(home, "xdg") }, encoding: "utf8" }).status, 0);
+    assert.deepEqual(JSON.parse(read("linear.json")), { linearTeam: "XDG" });
+
+    // A linked browser.json keeps its link, the profile added in the file it points to.
+    fs.writeFileSync(path.join(home, "dots/browser.json"), JSON.stringify({ hosts: { "a.com": "P" } }));
+    fs.rmSync(path.join(home, ".config/switchboard/browser.json"), { force: true });
+    fs.symlinkSync(path.join(home, "dots/browser.json"), path.join(home, ".config/switchboard/browser.json"));
+    fs.mkdirSync(path.join(home, ".config/aws-login"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/aws-login/config"), "chrome_profile=Profile 3\n");
+    assert.equal(spawnSync("bash", [script, "config"], { env, encoding: "utf8" }).status, 0);
+    assert.ok(fs.lstatSync(path.join(home, ".config/switchboard/browser.json")).isSymbolicLink());
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, "dots/browser.json"), "utf8")), { hosts: { "a.com": "P", "awsapps.com": "Profile 3" } });
+    fs.rmSync(path.join(home, ".config/switchboard/browser.json"));
+
+    // A browser.json that can't be read is never written over.
+    fs.mkdirSync(path.join(home, ".config/aws-login"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/aws-login/config"), "chrome_profile=Profile 3\n");
+    fs.writeFileSync(path.join(home, ".config/switchboard/browser.json"), '{"hosts": {"a.com": "P"},}');
+    fs.mkdirSync(path.join(home, ".config/slack-updates"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".config/slack-updates/config.json"), JSON.stringify({ channels: ["C1"] }));
+    const broken = spawnSync("bash", [script, "config"], { env, encoding: "utf8" });
+    assert.match(broken.stderr, /browser.json can't be read/);
+    assert.deepEqual(JSON.parse(read("slack-updates.json")), { channels: ["C1"] }, "the other files still move");
+    assert.equal(read("browser.json"), '{"hosts": {"a.com": "P"},}');
+    assert.ok(fs.existsSync(path.join(home, ".config/aws-login/config")));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("setup.sh claude turns a CLAUDE.md linked into the repo's old claude/CLAUDE.md into your own rules file, from git once it is gone", () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-claude-link-")));
   const env = { ...process.env, HOME: home };

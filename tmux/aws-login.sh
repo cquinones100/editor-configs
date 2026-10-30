@@ -9,12 +9,12 @@
 # has its own sso_start_url instead is cached apart and doesn't cover those.
 # With several sessions, it says which there are rather than guess.
 #
-# Which Chrome profile is yours, not this public repository's: it is read from
-# ~/.config/aws-login/config, a line chrome_profile=<a Chrome profile
-# directory, such as Profile 2>; without one, Chrome picks.
+# Which Chrome profile is yours, not this public repository's: the one
+# ~/.config/switchboard/browser.json gives awsapps.com, AWS's access portal,
+# as it gives every site its profile ({"hosts": {"awsapps.com": "Profile 2"}});
+# without one, Chrome picks.
 
 dim=$'\033[2m' red=$'\033[31m' green=$'\033[32m' reset=$'\033[0m'
-config=~/.config/aws-login/config
 
 done_with() {
   printf '\n  %s\n\n  %sPress any key to close.%s' "$1" "$dim" "$reset"
@@ -22,7 +22,7 @@ done_with() {
   exit 0
 }
 
-chrome_profile=$(sed -n 's/^chrome_profile=//p' "$config" 2>/dev/null | tail -n 1)
+chrome_profile=$(jq -r '.hosts["awsapps.com"] // empty' ~/.config/switchboard/browser.json 2>/dev/null)
 command -v aws >/dev/null 2>&1 || done_with "${red}aws isn't on the PATH.${reset} Install it with: brew install awscli"
 
 sessions=$(sed -n 's/^\[sso-session \(.*\)\]$/\1/p' ~/.aws/config 2>/dev/null)

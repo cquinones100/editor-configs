@@ -49,10 +49,10 @@ esac
 if [[ $OS == macos ]]; then
   LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
   # Karabiner only exists on macOS.
-  PARTS=(lazygit neovim git claude claude_md karabiner tmux ghostty terminal pgcli bin)
+  PARTS=(lazygit neovim git claude claude_md karabiner tmux config ghostty terminal pgcli bin)
 else
   LAZYGIT_DIR="$HOME/.config/lazygit"
-  PARTS=(lazygit neovim git claude claude_md tmux ghostty terminal pgcli bin)
+  PARTS=(lazygit neovim git claude claude_md tmux config ghostty terminal pgcli bin)
 fi
 
 # ── Parts ───────────────────────────────────────────────────────────────────
@@ -365,8 +365,160 @@ lib_packages() {
 }
 
 # tmux.conf and every script it runs, each linked into ~/.config/tmux.
+# The Chrome profile for M-A's AWS login, once in ~/.config/aws-login/config
+# (chrome_profile=<profile>), becomes awsapps.com's in
+# ~/.config/switchboard/browser.json, where every site's profile is, unless
+# that names one already; the old file is moved aside.
+# A file's permission bits, with macOS's stat or GNU's, whose -f means
+# something else.
+mode_of() { if [[ $OS == macos ]]; then stat -f %Lp "$1"; else stat -c %a "$1"; fi; }
+aws_login_config() {
+  local old=~/.config/aws-login/config browser=~/.config/switchboard/browser.json profile backup
+  [[ -f $old ]] || return 0
+  profile=$(sed -n 's/^chrome_profile=//p' "$old" | tail -n 1)
+  # A browser.json that is there but can't be read is never written over.
+  if [[ -f $browser ]] && ! jq -e . "$browser" >/dev/null 2>&1; then
+    echo "  ~/.config/switchboard/browser.json can't be read as JSON; fix it, then run ./setup.sh config again to move the AWS login's Chrome profile into it" >&2
+    return 1
+  fi
+  if [[ -n $profile ]] && ! jq -e '.hosts["awsapps.com"]' "$browser" >/dev/null 2>&1; then
+    if ! $CHECK; then
+      mkdir -p "${browser%/*}"
+      # Written into the file a link points to, keeping the link.
+      local real=$browser
+      [[ -L $browser ]] && { real=$(realpath "$browser") || { echo "  ~/.config/switchboard/browser.json is a link to nothing" >&2; return 1; }; }
+      if [[ -f $real ]]; then
+        jq --arg p "$profile" '.hosts["awsapps.com"] = $p' "$real" >"$real.tmp" && chmod "$(mode_of "$real")" "$real.tmp" || { rm -f "$real.tmp"; return 1; }
+      else
+        jq -n --arg p "$profile" '{hosts: {"awsapps.com": $p}}' >"$real.tmp" || return 1
+      fi
+      mv "$real.tmp" "$real" || return 1
+    fi
+    change "move the AWS login's Chrome profile ($profile) into ~/.config/switchboard/browser.json"
+  fi
+  backup="$old.bak.$(date +%Y%m%d%H%M%S)"
+  $CHECK || mv "$old" "$backup" || return 1
+  change "move ~/.config/aws-login/config aside to $backup"
+}
+# Each tool's own config, once in a directory of its own under ~/.config,
+# moved into ~/.config/switchboard beside the rest of your settings, where
+# Settings lists them: a file already there is kept, and the old one left in
+# place with a word about it.
+own_configs() {
+  local pair old new i j
+  local pairs=(
+    worktree-from-ticket/config.json:linear.json
+    slack-relay/config.json:slack-relay.json
+    slack-updates/config.json:slack-updates.json
+    oncall/config.json:oncall.json
+    oncall/rules.md:oncall-rules.md
+    tmux-sidebar/config.json:sidebar.json
+    tmux-sidebar/plugins:sidebar-plugins
+  )
+  # Each old path, and the file it really is, found before anything moves,
+  # since one may be a link to another that moves first (slack-updates linked
+  # to the relay's file, say): such a link is pointed at that file's new place.
+  # Whether each will really move: there, a file of its own, and nothing in
+  # the way at its new place.
+  local olds=() reals=() moves=()
+  for ((i = 0; i < ${#pairs[@]}; i++)); do
+    pair=${pairs[i]} old=~/.config/${pair%%:*} new=~/.config/switchboard/${pair#*:}
+    # worktree-from-ticket read its config under XDG_CONFIG_HOME when that was
+    # set, so that one, when there, is the one it used.
+    [[ $pair == worktree-from-ticket/* && -n ${XDG_CONFIG_HOME:-} && -e $XDG_CONFIG_HOME/${pair%%:*} ]] && old=$XDG_CONFIG_HOME/${pair%%:*}
+    olds[i]=$old reals[i]=$(realpath "$old" 2>/dev/null) moves[i]=false
+    [[ -e $old && ! -L $old && ! -e $new && ! -L $new && $pair != tmux-sidebar/plugins:* ]] && moves[i]=true
+  done
+  for ((i = 0; i < ${#pairs[@]}; i++)); do
+    pair=${pairs[i]} old=${olds[i]} new=~/.config/switchboard/${pair#*:}
+    [[ -e $old || -L $old ]] || continue
+    if [[ -e $new || -L $new ]]; then
+      echo "  ~/.config/${pair%%:*} is still there beside ${new/#$HOME/~}, which is the one read; move what you want from it by hand" >&2
+      continue
+    fi
+    # Plugins may load files or node_modules from beside their folder, which
+    # wouldn't come with it: then the folder stays, and sidebar-plugins links
+    # to it, so they load as before (Node resolves a linked file from where it
+    # really is).
+    if [[ $pair == tmux-sidebar/plugins:* ]] && [[ -n $(find ~/.config/tmux-sidebar -mindepth 1 -maxdepth 1 ! -name plugins ! -name config.json -print -quit) ]]; then
+      if ! $CHECK; then
+        mkdir -p ~/.config/switchboard && ln -s "$(realpath "$old")" "$new" || return 1
+      fi
+      change "link ${new/#$HOME/~} to ~/.config/tmux-sidebar/plugins, which stays beside what its plugins may load"
+      continue
+    fi
+    if ! $CHECK; then
+      mkdir -p ~/.config/switchboard || return 1
+      # The rules file the on-call config in use names, moved or already there
+      # (it comes first in the list), however its path is written: compared as
+      # the files they name before the move, so ~/, ./ and a full path all match.
+      local names_rules=false config=~/.config/switchboard/oncall.json rules
+      if [[ $pair == oncall/rules.md:* && -e $config ]]; then
+        rules=$(jq -r '.rules // empty' "$config" 2>/dev/null)
+        [[ -n $rules && $(realpath "${rules/#\~/$HOME}" 2>/dev/null) == "$(realpath "$old")" ]] && names_rules=true
+      fi
+      if [[ -L $old ]]; then
+        # A link (into a dotfiles repository, say) stays one, to the same file:
+        # its target made absolute, since a relative one means something else
+        # from the new place.
+        local target=${reals[i]}
+        [[ -n $target ]] || { echo "  ~/.config/${pair%%:*} is a link to nothing; left as it is" >&2; continue; }
+        # A link to another old config that moves is pointed at its new place;
+        # one to a config that stays keeps pointing at it.
+        for ((j = 0; j < ${#pairs[@]}; j++)); do
+          [[ $j != "$i" && ${moves[j]} == true && $target == "${reals[j]}" ]] && target=~/.config/switchboard/${pairs[j]#*:}
+        done
+        ln -s "$target" "$new" && rm "$old" || return 1
+      else
+        # A folder's links keep reaching their files: one to something inside
+        # it is pointed at where that file moves; a relative one to something
+        # outside it (a plugin linked from beside it) is made absolute, since
+        # it would mean something else from the new place.
+        # Every link's file is found before any is changed, since one may lead
+        # through another.
+        if [[ -d $old ]]; then
+          local link to inside links=() tos=() i
+          inside=$(realpath "$old")
+          while IFS= read -r link; do
+            to=$(realpath "$link" 2>/dev/null) || continue
+            links+=("$link") tos+=("$to")
+          done < <(find "$old" -type l)
+          for ((i = 0; i < ${#links[@]}; i++)); do
+            link=${links[i]} to=${tos[i]}
+            if [[ $to == "$inside" || $to == "$inside"/* ]]; then
+              # Pointed at where its file moves, however it was written (a
+              # relative one may name the folder itself, ../plugins/x).
+              ln -sfn "$new${to#"$inside"}" "$link"
+            else
+              [[ $(readlink "$link") == /* ]] || ln -sfn "$to" "$link"
+            fi
+          done
+        fi
+        mv "$old" "$new" || return 1
+      fi
+      if $names_rules; then
+        local real
+        # Its mode kept, since the replacement is a new file.
+        real=$(realpath "$config") && jq '.rules = "~/.config/switchboard/oncall-rules.md"' "$real" >"$real.tmp" &&
+          chmod "$(mode_of "$real")" "$real.tmp" && mv "$real.tmp" "$real"
+      fi
+      rmdir "${old%/*}" 2>/dev/null
+    fi
+    change "move ~/.config/${pair%%:*} to ${new/#$HOME/~}"
+  done
+}
+# The steps alone; tmux runs them too.
+part_config() {
+  # The other files move even when the AWS profile can't, which says why.
+  local aws=0
+  aws_login_config || aws=1
+  own_configs || return 1
+  return $aws
+}
+
 part_tmux() {
   dir ~/.config/tmux
+  part_config
   put_link "$SRC/tmux/tmux.conf" ~/.config/tmux/tmux.conf
   tmux_plugins
   mermaid_ascii
@@ -810,10 +962,10 @@ else
   optional "Linear, for M-i, M-l and ticket titles in tab names: a personal API key from Linear's settings, then security add-generic-password -a \"\$USER\" -s linear-api-key -w"
 fi
 # /shape files tickets in the team named here.
-if [[ -n $(jq -r '.linearTeam // empty' ~/.config/worktree-from-ticket/config.json 2>/dev/null) ]]; then
+if [[ -n $(jq -r '.linearTeam // empty' ~/.config/switchboard/linear.json 2>/dev/null) ]]; then
   ok "the Linear team for /shape"
 else
-  optional "the Linear team /shape files tickets in: add \"linearTeam\": \"<team key>\" to ~/.config/worktree-from-ticket/config.json"
+  optional "the Linear team /shape files tickets in: add \"linearTeam\": \"<team key>\" to ~/.config/switchboard/linear.json"
 fi
 
 # Without these hooks every tab shows idle, and M-a has nothing to walk. Only
@@ -890,7 +1042,7 @@ else
   optional "this clone's git hooks, if you commit to it: ./setup.sh git"
 fi
 
-if [[ -f ~/.config/slack-relay/config.json ]]; then
+if [[ -f ~/.config/switchboard/slack-relay.json ]]; then
   ok "slack-relay"
 else
   optional "slack-relay, to use the tabs from Slack: see slack-relay in bin/README.md"

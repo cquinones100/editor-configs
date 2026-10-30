@@ -198,7 +198,7 @@ const linearKey = () => {
     return execFileSync("security", ["find-generic-password", "-s", "linear-api-key", "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {}
   try {
-    return JSON.parse(fs.readFileSync(path.join(os.homedir(), ".config/worktree-from-ticket/config.json"), "utf8")).linearApiKey;
+    return JSON.parse(fs.readFileSync(path.join(os.homedir(), ".config/switchboard/linear.json"), "utf8")).linearApiKey;
   } catch {
     return undefined;
   }

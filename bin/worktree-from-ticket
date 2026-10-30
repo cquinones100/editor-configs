@@ -7,7 +7,7 @@
 // repo root so this works from inside an existing worktree.
 //
 // Needs a Linear personal API key (https://linear.app/settings/api), from
-// LINEAR_API_KEY, the Keychain (service linear-api-key), or ~/.config/worktree-from-ticket/config.json.
+// LINEAR_API_KEY, the Keychain (service linear-api-key), or ~/.config/switchboard/linear.json.
 //
 //   worktree-from-ticket ABC-123          creates the worktree, opens claude
 //   worktree-from-ticket init zsh         prints the `wt` shell function
@@ -25,9 +25,9 @@ const DEFAULT_WORKTREE_DIR = ".claude/worktrees";
 const SELF = fs.realpathSync(process.argv[1]);
 
 const CONFIG_PATH = path.join(
-  process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
-  "worktree-from-ticket",
-  "config.json",
+  path.join(os.homedir(), ".config"),
+  "switchboard",
+  "linear.json",
 );
 
 const usage = () => {

@@ -25,7 +25,7 @@ case "$what" in
     [ -n "$ticket" ] || { say "This branch doesn't name a ticket."; exit 0; }
     value=$ticket
     if [ "$what" = ticket-url ]; then
-      config="${XDG_CONFIG_HOME:-$HOME/.config}/worktree-from-ticket/config.json"
+      config="$HOME/.config/switchboard/linear.json"
       workspace="${LINEAR_WORKSPACE:-$(jq -r '.linearWorkspace // empty' "$config" 2>/dev/null)}"
       [ -n "$workspace" ] || { say "No Linear workspace set: add linearWorkspace to $config."; exit 0; }
       value="https://linear.app/$workspace/issue/$ticket"

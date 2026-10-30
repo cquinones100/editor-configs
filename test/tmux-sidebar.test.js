@@ -21,7 +21,7 @@ const home = path.join(tmp, "home");
 const socket = path.join(tmp, "tmux.sock");
 fs.mkdirSync(path.join(home, ".claude/sessions"), { recursive: true });
 fs.mkdirSync(path.join(home, ".claude/projects/-work"), { recursive: true });
-fs.mkdirSync(path.join(home, ".config/tmux-sidebar/plugins"), { recursive: true });
+fs.mkdirSync(path.join(home, ".config/switchboard/sidebar-plugins"), { recursive: true });
 
 // HOME is changed before the server starts, so nothing run in its panes (the
 // sidebar client starts tmux/sidebar.sh) ever sees your real one.
@@ -227,7 +227,7 @@ test("frames fill the pane exactly, however long the names", async () => {
 });
 
 test("a plugin's items are fetched, kept when a later fetch fails, and only named plugins load", async () => {
-  fs.writeFileSync(path.join(home, ".config/tmux-sidebar/plugins/demo.js"), `
+  fs.writeFileSync(path.join(home, ".config/switchboard/sidebar-plugins/demo.js"), `
     let calls = 0;
     module.exports = {
       title: "Demo",
@@ -1727,6 +1727,88 @@ test("mission control's Settings view lists the options by category, / narrows t
   }
 });
 
+test("Settings lists the settings in your own files under each file's name, and Enter types one in, keeping the rest of the file", async () => {
+  const dir = path.join(home, ".config/switchboard");
+  const linear = path.join(dir, "linear.json");
+  const sent = [];
+  const client = { kind: "mission", socket: { write: (text) => sent.push(text), end() {} }, view: { view: 0, cursor: 0 }, cols: 200, rows: 80, tmuxClient: "none" };
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(linear, JSON.stringify({ linearWorkspace: "acme", linearApiKey: "kept" }));
+    await sidebar.refresh();
+    client.view.view = sidebar.viewsFor(client).findIndex((s) => s.title === "Settings") + 1;
+    const items = () => sidebar.viewsFor(client)[client.view.view - 1].items;
+    const at = (title) => items().findIndex((i) => i.title === title && i.own);
+    client.view.cursor = at("Team");
+    await sidebar.missionKey(client, { key: "k" });
+    await sidebar.missionKey(client, { key: "j" });
+    const shown = plain(sent.at(-1));
+    assert.match(shown, /LINEAR \(LINEAR\.JSON\) 3[\s\S]*Workspace +acme[\s\S]*Team +not set/);
+    const headers = items().filter((i) => i.group === "category").map((i) => i.title);
+    ["Browser (browser.json)", "Slack (slack-updates.json)", "Slack relay (slack-relay.json)", "On call (oncall.json)", "Sidebar layout (sidebar.json)", "Your files"].forEach((h) => assert.ok(headers.includes(h), h));
+
+    // A word: typed in and saved, the file's other keys kept.
+    await sidebar.missionKey(client, { key: "Enter" });
+    for (const key of [..."ABC"]) await sidebar.missionKey(client, { key });
+    await sidebar.missionKey(client, { key: "Enter" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(linear, "utf8")), { linearWorkspace: "acme", linearApiKey: "kept", linearTeam: "ABC" });
+
+    // A list, comma-separated; then emptied, which unsets it.
+    client.view.cursor = at("Labels");
+    await sidebar.missionKey(client, { key: "Enter" });
+    for (const key of [..."bug,", "Space", ..."ux"]) await sidebar.missionKey(client, { key });
+    await sidebar.missionKey(client, { key: "Enter" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(linear, "utf8")).linearLabels, ["bug", "ux"]);
+    client.view.cursor = at("Labels");
+    await sidebar.missionKey(client, { key: "Enter" });
+    for (let i = 0; i < 7; i++) await sidebar.missionKey(client, { key: "BSpace" });
+    await sidebar.missionKey(client, { key: "Enter" });
+    assert.ok(!("linearLabels" in JSON.parse(fs.readFileSync(linear, "utf8"))));
+
+    // A list whose entry holds a comma opens whole rather than being split.
+    fs.writeFileSync(linear, JSON.stringify({ linearLabels: ["UI, UX"] }));
+    assert.equal(items().find((i) => i.title === "Labels" && i.own).own.kind, "file");
+    fs.writeFileSync(linear, "{}");
+    // A number that isn't one says so and saves nothing; a map of site=profile.
+    client.view.cursor = at("Sidebar width");
+    await sidebar.missionKey(client, { key: "Enter" });
+    await sidebar.missionKey(client, { key: "x" });
+    await sidebar.missionKey(client, { key: "Enter" });
+    assert.equal(client.note, "Not saved: x isn't a whole number, 20 or more");
+    assert.equal(sidebar.parseTyped("number", "34.5").error, "34.5 isn't a whole number, 1 or more");
+    assert.equal(sidebar.parseTyped("number", "1", 20).error, "1 isn't a whole number, 20 or more");
+    assert.ok(!fs.existsSync(path.join(dir, "sidebar.json")));
+    assert.deepEqual(sidebar.parseTyped("map", "linear.app=Profile 2, awsapps.com=Profile 3").value, { "linear.app": "Profile 2", "awsapps.com": "Profile 3" });
+    assert.equal(sidebar.parseTyped("map", "linear.app").error, '"linear.app" isn\'t site=profile');
+
+    // A file that can't be parsed is never written over; one's mode is kept.
+    fs.chmodSync(linear, 0o600);
+    assert.equal(sidebar.writeOwn("linear.json", "linearTeam", "text", "XYZ"), undefined);
+    assert.equal(fs.statSync(linear).mode & 0o777, 0o600);
+    fs.writeFileSync(linear, '{"linearTeam": "ABC",}');
+    assert.match(sidebar.writeOwn("linear.json", "linearTeam", "text", "XYZ"), /can't be read/);
+    assert.equal(fs.readFileSync(linear, "utf8"), '{"linearTeam": "ABC",}');
+    fs.writeFileSync(linear, "null");
+    assert.match(sidebar.writeOwn("linear.json", "linearTeam", "text", "XYZ"), /isn't a JSON object/);
+    assert.ok(sidebar.viewsFor(client).length, "mission control still draws");
+    assert.equal(items().find((i) => i.title === "Team" && i.own).value, "unreadable");
+
+    // Saved through a link, the link stays and the file it points to changes.
+    const real = path.join(home, "linear-real.json");
+    fs.writeFileSync(real, "{}");
+    fs.rmSync(linear);
+    fs.symlinkSync(real, linear);
+    assert.equal(sidebar.writeOwn("linear.json", "linearTeam", "text", "XYZ"), undefined);
+    assert.ok(fs.lstatSync(linear).isSymbolicLink());
+    assert.deepEqual(JSON.parse(fs.readFileSync(real, "utf8")), { linearTeam: "XYZ" });
+    fs.rmSync(real);
+    assert.match(sidebar.writeOwn("linear.json", "linearTeam", "text", "XYZ"), /a link to nothing/, "a link whose file is gone isn't replaced");
+    assert.ok(fs.lstatSync(linear).isSymbolicLink());
+  } finally {
+    fs.rmSync(linear, { force: true });
+  }
+});
+
 test("Settings' Your CLAUDE.md says where your rules come from, and picking a file writes claude.json and your CLAUDE.md", async () => {
   const claudeJson = path.join(home, ".config/switchboard/claude.json");
   const rules = path.join(home, "my-rules.md");
@@ -2068,7 +2150,7 @@ test("an empty Slack view says when Slack was last checked", () => {
 test("mission control looks at Slack itself with one search, sorting what it finds as /slack-updates does", async () => {
   const stateDir = process.env.TMUX_SIDEBAR_STATE_DIR;
   fs.mkdirSync(path.join(home, ".config/slack-updates"), { recursive: true });
-  fs.writeFileSync(path.join(home, ".config/slack-updates/config.json"), JSON.stringify({ channels: ["COPS"] }));
+  fs.writeFileSync(path.join(home, ".config/switchboard/slack-updates.json"), JSON.stringify({ channels: ["COPS"] }));
   const now = Math.floor(Date.now() / 1000);
   const result = (n, { channel, where, from, user, ts, thread, text, participants = "" }) =>
     `### Result ${n} of 6\nChannel: ${where} (ID: ${channel})\n${participants ? `Participants: ${participants}\n` : ""}From: ${from} (ID: ${user})\nTime: 2026-10-29 09:55:36 EDT\nMessage_ts: ${ts}\nPermalink: [link](https://x.slack.com/archives/${channel}/p${ts.replace(".", "")}${thread ? `?thread_ts=${thread}&cid=${channel}` : ""})\nText: \n${text}\n\n---\n\n`;

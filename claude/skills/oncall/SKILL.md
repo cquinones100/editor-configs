@@ -5,7 +5,7 @@ description: >
   only about what needs you: the urgent alerts at once, the rest only if they're still a problem
   after about 30 minutes with nobody on them. Start it as `/loop /oncall` (self-paced, no
   interval); each run is one tick. The channels, and the team's own rules for what is urgent,
-  come from ~/.config/oncall/config.json. Use when someone says "start the on-call watch",
+  come from ~/.config/switchboard/oncall.json. Use when someone says "start the on-call watch",
   "watch the alerts", "I'm on call", or asks to mark a monitor chronic or what the watch has seen.
 ---
 
@@ -33,7 +33,7 @@ flowchart LR
 
 Check these on the first tick, and stop with what is missing rather than watching half-blind:
 
-- **The config**, `~/.config/oncall/config.json`, which is the user's and never in a repository, since it names their team's channels. `config.example.json` beside this file shows its shape:
+- **The config**, `~/.config/switchboard/oncall.json`, which is the user's and never in a repository, since it names their team's channels. `config.example.json` beside this file shows its shape:
   - `channels`: each alert channel's `id`, its `name` (only for messages), and optionally `watch`, a sentence saying which posts in it count (`"only the deploy workflow's failure posts"`; everything when absent), and `urgent`, a sentence on what in it is urgent, on top of the rules below.
   - `rules`: optional, the path of a Markdown file with the team's own rules, read every tick and followed over the general ones below where they differ: its alert sources, what pages, runbooks, worked examples. Keep it in the team's repository or beside the config, not here.
   - `repo`: optional, the GitHub repository (`owner/name`) runbooks, workflow runs and code are looked up in.

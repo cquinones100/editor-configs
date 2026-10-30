@@ -3,7 +3,7 @@
 # Usage: linear-ticket.sh <pane_current_path>
 #
 # The workspace slug comes from $LINEAR_WORKSPACE, or the linearWorkspace key in
-# ~/.config/worktree-from-ticket/config.json — the same config worktree-from-ticket
+# ~/.config/switchboard/linear.json — the same config worktree-from-ticket
 # reads. Keeping it there means no workspace or team identifier lives in this repo.
 
 cd "$1" 2>/dev/null || exit 0
@@ -14,7 +14,7 @@ ticket=$(git branch --show-current 2>/dev/null |
   grep -ioE '[a-z][a-z0-9]*-[0-9]+' | head -1 | tr 'a-z' 'A-Z')
 [ -z "$ticket" ] && exit 0
 
-config="${XDG_CONFIG_HOME:-$HOME/.config}/worktree-from-ticket/config.json"
+config="$HOME/.config/switchboard/linear.json"
 workspace="${LINEAR_WORKSPACE:-$(jq -r '.linearWorkspace // empty' "$config" 2>/dev/null)}"
 [ -z "$workspace" ] && exit 0
 

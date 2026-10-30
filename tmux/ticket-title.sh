@@ -49,7 +49,7 @@ mkdir "$lock" 2>/dev/null || exit 0
 (
   trap 'rmdir "$lock" 2>/dev/null' EXIT
 
-  config="${XDG_CONFIG_HOME:-$HOME/.config}/worktree-from-ticket/config.json"
+  config="$HOME/.config/switchboard/linear.json"
   # The macOS Keychain (service linear-api-key), else the config file's linearApiKey.
   key="${LINEAR_API_KEY:-$(security find-generic-password -s linear-api-key -w 2>/dev/null || jq -r '.linearApiKey // empty' "$config" 2>/dev/null)}"
   [ -n "$key" ] || exit 0

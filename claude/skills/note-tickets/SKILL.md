@@ -24,7 +24,7 @@ Arguments: which notes to read. Any of a folder (`Work`), a note (`Work/Planning
 
 2. **Collect the open items.** An item is an unticked checklist line, `- [ ] …`, at any indent; ticked ones (`- [x]`) are done. Skip any item that already names a ticket: an ID like `ABC-123`, or a Linear issue link. A nested item belongs to the one above it; keep it with its parent rather than as an item of its own. Keep each item's note and line number. Don't infer tasks from prose: only checklist items count. If the notes have none, say so and stop.
 
-3. **Settle the team.** Read `linearTeam` and `linearLabels` from `~/.config/worktree-from-ticket/config.json`, as `/shape` does. If `linearTeam` is missing, ask, and suggest adding it to that file.
+3. **Settle the team.** Read `linearTeam` and `linearLabels` from `~/.config/switchboard/linear.json`, as `/shape` does. If `linearTeam` is missing, ask, and suggest adding it to that file.
 
 4. **Look each item up in Linear.** Search the team's open tickets, and those closed in the last 90 days, by the item's key words, and read the likely matches. Sort each item into one of:
    - **Covered**: a ticket does this work. Name it, and say how sure you are.

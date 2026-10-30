@@ -38,7 +38,7 @@
 // posts through Slack's Web API as the app's bot, and hears you through Socket
 // Mode, a connection it opens to Slack, so nothing on this Mac listens for
 // connections. Only messages typed by the member named in
-// ~/.config/slack-relay/config.json, in that DM, are acted on, and everything
+// ~/.config/switchboard/slack-relay.json, in that DM, are acted on, and everything
 // it writes can only go to that DM (see slack.js). Its tokens are in the
 // macOS Keychain. Tab states are read every second, from tmux.
 //

@@ -13,7 +13,7 @@
 // branch always survives; only the checkout is removed.
 //
 // Needs fzf, and a Linear personal API key (https://linear.app/settings/api)
-// from LINEAR_API_KEY, the Keychain (service linear-api-key), or ~/.config/worktree-from-ticket/config.json —
+// from LINEAR_API_KEY, the Keychain (service linear-api-key), or ~/.config/switchboard/linear.json —
 // the same key worktree-from-ticket already uses.
 //
 //   worktree-done            pick finished worktrees to remove
@@ -45,9 +45,9 @@ const DONE_TYPES = new Set(["completed", "canceled"]);
 const CHUNK_SIZE = 100;
 
 const CONFIG_PATH = path.join(
-  process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
-  "worktree-from-ticket",
-  "config.json",
+  path.join(os.homedir(), ".config"),
+  "switchboard",
+  "linear.json",
 );
 
 const usage = () => {

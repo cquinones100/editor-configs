@@ -2481,6 +2481,8 @@ test("moving onto the notifications brings a Notifications window to the front, 
   assert.equal(tmux("show", "-wqv", "-t", window, "@notices_window"), "1");
   assert.equal(tmux("show", "-wqv", "-t", window, "window-status-format"), "", "out of the tab bar");
   assert.equal(await sidebar.noticesWindow(session, "cat"), window, "one a session");
+  // M-p asking for a client tmux doesn't have finds no session and says so, without throwing.
+  await sidebar.goToNotices("/dev/no-such-client");
   await sidebar.refresh();
   assert.ok(!sidebar.state.tabs.some((x) => x.id === window), "no tab");
 

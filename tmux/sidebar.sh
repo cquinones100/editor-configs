@@ -8,6 +8,7 @@
 #                                 out the status line for the sidebar
 #   sidebar.sh nudge              tell the daemon something changed
 #   sidebar.sh focus <window>     M-s: put the cursor in the window's sidebar
+#   sidebar.sh notices <client>   M-p: to the notifications, as the sidebar's n goes
 #   sidebar.sh refocus <window>   the tab in front closed: the same, if the
 #                                 sidebar is on
 #   sidebar.sh mission <client> [work:tabs|work:untabbed]
@@ -95,6 +96,19 @@ case "${1:-}" in
       sleep 0.1
     done
     tmux display-message "The sidebar isn't running; see $state_dir/daemon.log."
+    ;;
+  notices)
+    # M-p's "Go to the notifications": asked of the daemon for the client,
+    # which goes there as the sidebar's n does, whatever a sidebar is doing
+    # and with no sidebar in the window at all.
+    # A daemon just started takes a moment to listen: tried again for up to
+    # two seconds, then it says why.
+    start
+    for _ in $(seq 20); do
+      printf 'go-notices %s\n' "${2:-}" | nc -U "$state_dir/sock" >/dev/null 2>&1 && exit 0
+      sleep 0.1
+    done
+    tmux display-message ${2:+-c "$2"} "The sidebar isn't running; see $state_dir/daemon.log."
     ;;
   refocus)
     # Unlike focus, never turns the sidebar on, and says nothing when there is

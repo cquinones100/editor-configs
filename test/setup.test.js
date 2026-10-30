@@ -346,6 +346,15 @@ test("setup.sh skills links Switchboard's skills, keeping one of your own by the
   }
 });
 
+test("setup.sh --parts lists every part with what it does", () => {
+  const listed = spawnSync("bash", [script, "--parts"], { encoding: "utf8" });
+  assert.equal(listed.status, 0);
+  const rows = listed.stdout.trim().split("\n").map((line) => line.split("\t"));
+  const parts = fs.readFileSync(script, "utf8").match(/^  PARTS=\((.*)\)$/m)[1].split(" ");
+  assert.deepEqual(rows.map(([name]) => name), parts);
+  rows.forEach(([name, about]) => assert.ok(about && about !== name, `${name} says what it does`));
+});
+
 test("setup.sh config (and tmux) moves the AWS login's Chrome profile into browser.json, once", () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-aws-")));
   const env = { ...process.env, HOME: home };

@@ -158,6 +158,47 @@ case "${1:-}" in
     tmux display-popup -c "${2:-}" -E -w 90 -h 85% -T ' Switchboard setup ' "$0 run-setup"
     ;;
 
+  # M-p's "Check Switchboard's setup": what the guided setup would do, changing nothing.
+  setup-check)
+    tmux display-popup -c "${2:-}" -E -w 90 -h 85% -T ' Switchboard setup, checked ' "$0 run-setup-check"
+    ;;
+
+  run-setup-check)
+    printf '\n'
+    if [ -x "$REPO/setup.sh" ]; then
+      "$REPO/setup.sh" --check
+    else
+      printf '  There is no setup.sh in %s.\n' "$REPO"
+    fi
+    printf '\n  \033[38;5;244mPress any key to close.\033[0m'
+    read -rsn 1
+    ;;
+
+  # M-p's "Run a part of Switchboard's setup": the parts setup.sh lists, Tab
+  # choosing several; Enter runs them, Ctrl-O only checks them.
+  setup-part)
+    tmux display-popup -c "${2:-}" -E -w 90 -h 85% -T ' A part of Switchboard setup ' "$0 run-setup-part"
+    ;;
+
+  run-setup-part)
+    [ -x "$REPO/setup.sh" ] || { printf '\n  There is no setup.sh in %s.\n\n  Press any key to close.' "$REPO"; read -rsn 1; exit 0; }
+    picked=$("$REPO/setup.sh" --parts | fzf --multi --delimiter=$'\t' --with-nth=1,2 --layout=reverse --border=rounded --height=100% \
+      --prompt='part> ' --header='Enter runs it (Tab picks several), Ctrl-O only checks what it would change' --expect=ctrl-o)
+    key=$(head -1 <<<"$picked")
+    chosen=()
+    while IFS=$'\t' read -r part _; do [ -n "$part" ] && chosen+=("$part"); done < <(tail -n +2 <<<"$picked")
+    [ ${#chosen[@]} -gt 0 ] || exit 0
+    printf '\n'
+    if [ "$key" = ctrl-o ]; then
+      "$REPO/setup.sh" --check "${chosen[@]}"
+    else
+      "$REPO/setup.sh" "${chosen[@]}"
+      [ -n "${TMUX:-}" ] && tmux source-file ~/.config/tmux/tmux.conf && printf '\n  Reloaded tmux.\n'
+    fi
+    printf '\n  \033[38;5;244mPress any key to close.\033[0m'
+    read -rsn 1
+    ;;
+
   run-setup)
     # The guided setup, as an update runs it: it changes only what isn't in
     # place and asks before anything else. Then tmux takes in what it linked.
@@ -174,7 +215,7 @@ case "${1:-}" in
     ;;
 
   *)
-    echo "Usage: $0 check [<client>] | periodic | now <client> | prompt | setup <client>" >&2
+    echo "Usage: $0 check [<client>] | periodic | now <client> | prompt | setup <client> | setup-check <client> | setup-part <client>" >&2
     exit 1
     ;;
 esac

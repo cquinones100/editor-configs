@@ -9,11 +9,12 @@
 #                            scripts in bin/): checks what it needs, installs
 #                            what is missing after asking, links the configs,
 #                            and asks about each optional part
-#   ./setup.sh <part>...     only those parts, without questions: lazygit,
-#                            neovim, git, claude, karabiner, tmux,
-#                            ghostty, terminal, pgcli, bin, or the name of one script in
-#                            bin/ to link just that one
+#   ./setup.sh <part>...     only those parts, without questions (--parts
+#                            lists them), or the name of one script in bin/
+#                            to link just that one
 #   --check                  with either: say what would change, change nothing
+#   ./setup.sh --parts       the parts, a line each: its name, a tab, what it
+#                            does (M-p's "Run a part of Switchboard's setup")
 #
 # Each part says what it changed, or that it was up to date. A link already
 # pointing at the right file is left alone, and a real file or directory in
@@ -22,9 +23,14 @@
 set -u
 
 CHECK=false
+LIST_PARTS=false
 parts=()
 for arg in "$@"; do
-  if [[ $arg == --check ]]; then CHECK=true; else parts+=("$arg"); fi
+  case $arg in
+    --check) CHECK=true ;;
+    --parts) LIST_PARTS=true ;;
+    *) parts+=("$arg") ;;
+  esac
 done
 
 # Resolved from this script's own location, so one bin script can be linked
@@ -857,6 +863,30 @@ renamed() {
     fi
   done
 }
+# What each part does, for --parts.
+about_part() {
+  case $1 in
+    lazygit) echo "link lazygit's config" ;;
+    neovim) echo "link Neovim's config" ;;
+    git) echo "use this clone's git hooks" ;;
+    claude) echo "link this repo's whole Claude Code setup in place of yours" ;;
+    claude_md) echo "write ~/.claude/CLAUDE.md to import your rules and Switchboard's part" ;;
+    skills) echo "link the skills that ship with Switchboard into ~/.claude/skills" ;;
+    karabiner) echo "link Karabiner's config" ;;
+    tmux) echo "link tmux's config and scripts, the plugins and lib's packages" ;;
+    config) echo "move your own files into ~/.config/switchboard" ;;
+    ghostty) echo "link Ghostty's config" ;;
+    terminal) echo "make Option act as Alt in your terminal" ;;
+    pgcli) echo "link pgcli's config" ;;
+    bin) echo "link the scripts in bin/ into ~/.local/bin" ;;
+    *) echo "$1" ;;
+  esac
+}
+if $LIST_PARTS; then
+  for part in "${PARTS[@]}"; do printf '%s\t%s\n' "$part" "$(about_part "$part")"; done
+  exit 0
+fi
+
 renamed
 
 if (( ${#parts[@]} )); then

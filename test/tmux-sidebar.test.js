@@ -2535,6 +2535,34 @@ test("moving onto the notifications brings a Notifications window to the front, 
   fs.rmSync(path.join(stateDir, "slack-dismissed.json"), { force: true });
 });
 
+test("M-c puts the cursor in the pane running Claude in the tab, and says so when there is none", async (t) => {
+  const script = path.join(__dirname, "../tmux/claude-focus.sh");
+  const window = tmux("new-window", "-d", "-P", "-F", "#{window_id}", "-c", tmp, "cat");
+  t.after(() => {
+    try { tmux("kill-window", "-t", window); } catch {}
+  });
+  const first = tmux("display", "-p", "-t", window, "#{pane_id}");
+  // A pane running node, with a session file for its process, as Claude Code
+  // writes one: Claude, as claude-pane.sh tells it.
+  const claude = tmux("split-window", "-d", "-t", window, "-P", "-F", "#{pane_id}", "node -e 'setTimeout(() => {}, 60000)'");
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const tty = tmux("display", "-p", "-t", claude, "#{pane_tty}");
+  const pid = execFileSync("ps", ["-t", tty.replace("/dev/", ""), "-o", "pid=,comm="], { encoding: "utf8" }).split("\n").find((l) => /node/.test(l)).trim().split(/\s+/)[0];
+  fs.mkdirSync(path.join(home, ".claude/sessions"), { recursive: true });
+  const session = path.join(home, ".claude/sessions", `${pid}.json`);
+  fs.writeFileSync(session, JSON.stringify({ pid: Number(pid), sessionId: "focus-test" }));
+  t.after(() => fs.rmSync(session, { force: true }));
+  tmux("select-pane", "-t", first);
+  execFileSync("bash", [script, window]);
+  assert.equal(tmux("display", "-p", "-t", window, "#{pane_id}"), claude, "the cursor in Claude's pane");
+
+  // With no Claude, nothing moves.
+  fs.rmSync(session);
+  tmux("select-pane", "-t", first);
+  execFileSync("bash", [script, window]);
+  assert.equal(tmux("display", "-p", "-t", window, "#{pane_id}"), first);
+});
+
 test("a dismissed meeting stays dismissed whichever source the day is read from, and only that meeting", () => {
   const start = "2026-10-30T18:00:00Z";
   const fromFeed = { id: "a1", title: "Interview", start };

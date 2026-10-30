@@ -43,6 +43,7 @@ tmux new-session -A -s main
 | `M-Space` | Mission control: every tab, the Work map, PRs, Settings |
 | `M-t` | New tab running Claude, in a directory you pick |
 | `M-s` | Into the sidebar and back out |
+| `M-c` | Into the pane running Claude in this tab |
 | `M-f` | Pin the tab to the top of Needs you |
 | `M-v` / `M-d` | The branch's PR description / its diff, as GitHub shows them |
 

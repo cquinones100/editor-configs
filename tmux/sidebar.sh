@@ -28,8 +28,11 @@ state_dir=~/.local/state/tmux-sidebar
 client=~/.config/tmux/sidebar-pane.zsh
 
 running() {
-  local pid
-  read -r pid 2>/dev/null <"$state_dir/daemon.pid" && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+  local pid=""
+  # The daemon writes its pid with no newline after it, so read says it
+  # reached the end without one; what it read is all that counts.
+  read -r pid _ 2>/dev/null <"$state_dir/daemon.pid"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
 }
 
 nudge() {

@@ -1119,7 +1119,13 @@ fi
 # code, so a pull that adds to it shows nothing until it restarts. Its pid file
 # is written as it starts, so a newer file under lib/ means it is stale.
 pidfile=~/.local/state/tmux-sidebar/daemon.pid
-if ! $CHECK && read -r pid 2>/dev/null <"$pidfile" && kill -0 "$pid" 2>/dev/null &&
+# Read with cut, since the daemon writes its pid with no newline after it,
+# which read would take as a failure.
+pid=$(cut -d' ' -f1 "$pidfile" 2>/dev/null)
+# Only the sidebar daemon itself is stopped, its whole command line node
+# running bin/tmux-sidebar daemon: a pid left by a daemon that died may name
+# some other process by now.
+if ! $CHECK && [[ -n $pid ]] && [[ $(ps -p "$pid" -o command= 2>/dev/null) =~ ^[^\ ]*node\ [^\ ]*/tmux-sidebar\ daemon$ ]] &&
   [[ -n $(find "$REPO_DIR/lib" "$REPO_DIR/bin/tmux-sidebar" -newer "$pidfile" -print -quit 2>/dev/null) ]]; then
   kill "$pid"
   for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done

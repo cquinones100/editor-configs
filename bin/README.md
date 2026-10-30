@@ -664,6 +664,7 @@ Mission control's views, which `Tab` and `]` go through, are its tabs, then the 
 | Key | In the sidebar | In mission control |
 | --- | --- | --- |
 | `M-s` | jump in from any pane, on the tab you are in, and back out | |
+| `M-c` | into the pane running Claude in the tab you are in, from the sidebar or a pane beside it | |
 | `C-w h` / `C-w l` | move in, on the tab you are in, and back out, as between any panes | |
 | (closing the tab in front) | the cursor lands in the sidebar of the tab that takes its place, to pick the next one | |
 | `M-Space` | open mission control | close it |

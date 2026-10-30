@@ -1108,7 +1108,8 @@ test("a waiting tab is answered from mission control: its options shown, a numbe
 
     // Enter's menu answers it, as the a key used to.
     await sidebar.missionKey(client, { key: "Enter" });
-    await sidebar.missionKey(client, { key: "a" });
+    client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "a");
+    await sidebar.missionKey(client, { key: "Enter" });
     assert.equal(client.answering.found.question, "Do you want to proceed?");
     assert.deepEqual(client.answering.found.options.map((o) => o.label), ["Yes", "No, and tell Claude what to do differently"]);
     // A box over the view, the tabs still in sight around it.
@@ -1201,7 +1202,8 @@ test("Space peeks at a tab from mission control: its screen, or its whole last t
     client.view.cursor = sidebar.missionGrid(sidebar.state.tabs).order.findIndex((t) => t.id === window);
     // No Claude there: its screen, scrolled to the end, and up with k, from Enter's menu.
     await sidebar.missionKey(client, { key: "Enter" });
-    await sidebar.missionKey(client, { key: "v" });
+    client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "v");
+    await sidebar.missionKey(client, { key: "Enter" });
     assert.equal(client.peek.mode, "screen");
     assert.match(plain(sent.at(-1)), /PEEK.*60/s);
     await sidebar.missionKey(client, { key: "g" });
@@ -1257,13 +1259,15 @@ test("/ filters mission control's cards, and X closes every merged tab and remov
     // From Enter's menu on the merged tab: X asks first; n leaves everything as it was.
     client.view.cursor = sidebar.missionGrid(sidebar.state.tabs).order.findIndex((t) => t.id === landed);
     await sidebar.missionKey(client, { key: "Enter" });
-    await sidebar.missionKey(client, { key: "X" });
+    client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "X");
+    await sidebar.missionKey(client, { key: "Enter" });
     assert.match(plain(sent.at(-1)), /Close 1 merged tab and remove their worktrees\? \[Y\/n\][\s\S]*feat landed/);
     await sidebar.missionKey(client, { key: "n" });
     assert.ok(fs.existsSync(worktree));
     // y closes the tab and removes its worktree, and says so.
     await sidebar.missionKey(client, { key: "Enter" });
-    await sidebar.missionKey(client, { key: "X" });
+    client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "X");
+    await sidebar.missionKey(client, { key: "Enter" });
     await sidebar.missionKey(client, { key: "y" });
     assert.ok(!tmux("list-windows", "-a", "-F", "#{window_id}").split("\n").includes(landed), "the tab is closed");
     assert.ok(!fs.existsSync(worktree), "its worktree is removed");
@@ -1409,18 +1413,21 @@ test("the work map lists every open tab, lines its rows up in columns, and keeps
   // x in Enter's menu asks first, and git keeps a worktree with a file it doesn't track.
   fs.writeFileSync(path.join(done, "notes.txt"), "keep me");
   await sidebar.missionKey(client, { key: "Enter" });
-  await sidebar.missionKey(client, { key: "x" });
+  client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "x");
+  await sidebar.missionKey(client, { key: "Enter" });
   assert.match(client.confirm.text, /Remove this merged worktree\?/);
   await sidebar.missionKey(client, { key: "y" });
   assert.match(client.note, /^Kept abc-31-done: /);
   assert.ok(fs.existsSync(done));
   fs.rmSync(path.join(done, "notes.txt"));
   await sidebar.missionKey(client, { key: "Enter" });
-  await sidebar.missionKey(client, { key: "x" });
+  client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "x");
+  await sidebar.missionKey(client, { key: "Enter" });
   await sidebar.missionKey(client, { key: "n" });
   assert.ok(fs.existsSync(done), "n keeps it");
   await sidebar.missionKey(client, { key: "Enter" });
-  await sidebar.missionKey(client, { key: "x" });
+  client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "x");
+  await sidebar.missionKey(client, { key: "Enter" });
   await sidebar.missionKey(client, { key: "Enter" });
   assert.equal(client.note, "Removed abc-31-done.", "Enter confirms as y does");
   assert.ok(!fs.existsSync(done));
@@ -1828,7 +1835,8 @@ test("Settings' Your CLAUDE.md says where your rules come from, and picking a fi
     // Enter, f, a path and Enter: claude.json names it, and setup's claude_md writes the import.
     await sidebar.missionKey(client, { key: "Enter" });
     assert.match(plain(sent.at(-1)), /Local file[\s\S]*Another file…[\s\S]*A git repository…/);
-    await sidebar.missionKey(client, { key: "f" });
+    client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "f");
+    await sidebar.missionKey(client, { key: "Enter" });
     for (const key of [..."~/my-rules.md"]) await sidebar.missionKey(client, { key });
     assert.match(plain(sent.at(-1)), /› ~\/my-rules\.md/);
     await sidebar.missionKey(client, { key: "Enter" });
@@ -1838,7 +1846,8 @@ test("Settings' Your CLAUDE.md says where your rules come from, and picking a fi
 
     // Back to the local file: claude.json goes.
     await sidebar.missionKey(client, { key: "Enter" });
-    await sidebar.missionKey(client, { key: "l" });
+    client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "l");
+    await sidebar.missionKey(client, { key: "Enter" });
     assert.ok(!fs.existsSync(claudeJson));
   } finally {
     for (const f of [claudeJson, rules, path.join(home, "switchboard"), path.join(home, ".claude/CLAUDE.md")]) fs.rmSync(f, { force: true });
@@ -2002,8 +2011,8 @@ test("Enter on a board's PR or ticket offers what to do with it, and each item s
   assert.equal(placed.length, 6, "a box of its own lines, the view left around it");
   assert.ok(placed.every(([row, col]) => row > 1 && col > 1), "set in, not over the whole frame");
   assert.match(placed[0][2], /AB-1 Do it/);
-  assert.match(placed[1][2], /w {2}Start work on it in a new tab \(wt\)/);
-  assert.match(placed[2][2], /o {2}Open it in the browser/);
+  assert.match(placed[1][2], /Start work on it in a new tab \(wt\)/);
+  assert.match(placed[2][2], /Open it in the browser/);
 });
 
 test("Enter on a Slack message shows the message whole above what to do with it", () => {
@@ -2012,7 +2021,18 @@ test("Enter on a Slack message shows the message whole above what to do with it"
   const rows = [...modal.matchAll(/\x1b\[\d+;\d+H([^\x1b]*(?:\x1b\[[0-9;]*m[^\x1b]*)*)/g)].map((m) => m[1].replace(/\x1b\[[0-9;]*m/g, ""));
   assert.match(rows[1], /Can you look at the deploy\?/);
   assert.ok(rows.filter((row) => /word/.test(row)).length > 1, "a long line is wrapped, not cut");
-  assert.ok(rows.findIndex((row) => /o {2}Open it in Slack/.test(row)) > rows.findLastIndex((row) => /word/.test(row)), "the choices after it");
+  assert.ok(rows.findIndex((row) => /Open it in Slack/.test(row)) > rows.findLastIndex((row) => /word/.test(row)), "the choices after it");
+
+  // In a short pane, the box grows only as far as it can: every option shown,
+  // the chosen one among them, the message cut short to make room.
+  const many = ["Open it in Slack", "Read it here", "Open a tab for this thread", "Dismiss it"].map((label, i) => ({ key: String(i), label }));
+  const longBody = Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n");
+  const short = sidebar.chooseModal({ title: "t", body: longBody, choices: many, cursor: 3 }, 100, 16);
+  const shortRows = [...short.matchAll(/\x1b\[\d+;\d+H([^\x1b]*(?:\x1b\[[0-9;]*m[^\x1b]*)*)/g)].map((m) => m[1].replace(/\x1b\[[0-9;]*m/g, ""));
+  many.forEach((c) => assert.ok(shortRows.some((row) => row.includes(c.label)), c.label));
+  assert.ok(shortRows.some((row) => /› Dismiss it/.test(row)), "the chosen one shown, marked");
+  assert.ok(shortRows.some((row) => /…/.test(row)), "the message cut short");
+  assert.ok(shortRows.length <= 16, "within the pane");
 });
 
 test("each mission control view but Settings can be turned off in Settings, the Work map staying for M-j and M-o", () => {
@@ -2332,7 +2352,8 @@ test("acting on a Slack message marks it seen, and only it", async (t) => {
   assert.deepEqual(titles(), ["DM Bo · Bo", "DM Dee · Dee"], "both new");
   // The newest first: Bo's. Its menu's thread tab, which only opens a popup.
   await sidebar.missionKey(client, { key: "Enter" });
-  await sidebar.missionKey(client, { key: "t" });
+  client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "t");
+  await sidebar.missionKey(client, { key: "Enter" });
   assert.deepEqual(titles(), ["DM Dee · Dee", "DM Bo · Bo · seen"], "Bo's seen, below the new one");
 });
 
@@ -2507,7 +2528,8 @@ test("moving onto the notifications brings a Notifications window to the front, 
 
   // Any action dismisses the notification: here, Dismiss it itself.
   await sidebar.noticesKey(client, { key: "Enter" });
-  await sidebar.missionKey(client, { key: "x" });
+  client.choose.cursor = client.choose.choices.findIndex((c) => c.key === "x");
+  await sidebar.missionKey(client, { key: "Enter" });
   await new Promise((resolve) => setTimeout(resolve, 2_100));
   assert.deepEqual(sidebar.noticeItems().map((i) => i.body), ["@you the review"], "the chosen one is gone");
   fs.rmSync(path.join(stateDir, "slack-dismissed.json"), { force: true });

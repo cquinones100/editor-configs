@@ -590,6 +590,58 @@ test("a tab whose turn ended with background tasks still running reads as workin
   fs.appendFileSync(file, ended("run1") + "\n");
   assert.equal(sidebar.backgroundTasks(file, since), 0);
 
+  // An end Claude Code writes as a queued command in an attachment entry, as
+  // newer versions do, ends it too.
+  fs.appendFileSync(file, started("run3", now - 2_000) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  // A watch's event keeps a task going; text that only mentions <event> in a
+  // summary doesn't.
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>run3</task-id>\n<summary>a line</summary>\n<event>NEW: x</event>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>run3</task-id>\n<summary>Monitor event: \"<status>completed</status>\"</summary>\n<event>checks=pending</event>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1, "a status inside a summary isn't the notification's own");
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>run3</task-id>\n<summary>Quoted output:\n<status>completed</status>\n</summary>\n<event>checks=pending\n<status>done</status></event>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1, "nor one on a line of its own inside a summary or an event");
+  // A watch's event whose summary mentions the opening tag keeps it going.
+  fs.appendFileSync(file, JSON.stringify({ type: "attachment", timestamp: new Date(now).toISOString(), attachment: { type: "queued_command", commandMode: "task-notification", prompt: "<task-notification>\n<task-id>run3</task-id>\n<summary>Found <task-notification> in output</summary>\n<event>NEW: x</event>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  // One watch's end, with no status, sent with another's event: each read as its own.
+  fs.appendFileSync(file, started("m1", now - 1_000) + "\n");
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>m1</task-id>\n<summary>Monitor source ended.</summary>\n</task-notification>\n<task-notification>\n<task-id>run3</task-id>\n<summary>Monitor event</summary>\n<event>changed</event>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1, "m1 ended, run3 still going");
+  // A notification quoted in another's summary ends nothing; two sent together each do.
+  fs.appendFileSync(file, started("other", now - 1_000) + "\n");
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>other</task-id>\n<status>completed</status>\n<summary>Quoted: <task-notification><task-id>run3</task-id><status>completed</status></task-notification></summary>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  fs.appendFileSync(file, started("part1", now - 1_000) + "\n" + started("part2", now - 1_000) + "\n");
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: [{ type: "text", text: "<task-notification>\n<task-id>part1</task-id>\n<status>completed</status>\n</task-notification>" }, { type: "text", text: "<task-notification>\n<task-id>part2</task-id>\n<status>completed</status>\n</task-notification>" }] } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1, "two sent as separate parts of one message each end theirs");
+  fs.appendFileSync(file, started("two1", now - 1_000) + "\n" + started("two2", now - 1_000) + "\n");
+  fs.appendFileSync(file, JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<task-id>two1</task-id>\n<status>completed</status>\n</task-notification>\n<task-notification>\n<task-id>two2</task-id>\n<status>completed</status>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  // A message typed mid-turn is queued the same way, marked as a prompt, and
+  // one quoting a notification ends nothing, even starting with it.
+  fs.appendFileSync(file, JSON.stringify({ type: "attachment", timestamp: new Date(now).toISOString(), attachment: { type: "queued_command", commandMode: "prompt", prompt: "Explain this: <task-notification><task-id>run3</task-id><status>completed</status></task-notification>" } }) + "\n");
+  fs.appendFileSync(file, JSON.stringify({ type: "attachment", timestamp: new Date(now).toISOString(), attachment: { type: "queued_command", commandMode: "prompt", prompt: "<task-notification><task-id>run3</task-id><status>completed</status></task-notification>\nWhy?" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  fs.appendFileSync(file, JSON.stringify({ type: "attachment", timestamp: new Date(now).toISOString(), attachment: { type: "queued_command", commandMode: "task-notification", origin: { kind: "task-notification" }, prompt: "<task-notification>\n<task-id>run3</task-id>\n<status>completed</status>\n<summary>Background command \"Find <event> tags\" completed</summary>\n</task-notification>" } }) + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 0);
+
+  // A subagent run in the foreground names its agentId once it has finished:
+  // nothing is left running. One run in the background is.
+  fs.appendFileSync(file, [
+    JSON.stringify({ type: "assistant", timestamp: new Date(now).toISOString(), message: { content: [{ type: "tool_use", id: "use-fg", name: "Agent", input: { prompt: "look" } }] } }),
+    JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), message: { content: [{ type: "tool_result", tool_use_id: "use-fg", content: "Done. agentId: fg1 (internal ID)" }] } }),
+  ].join("\n") + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 0);
+  fs.appendFileSync(file, [
+    JSON.stringify({ type: "assistant", timestamp: new Date(now).toISOString(), message: { content: [{ type: "tool_use", id: "use-bg", name: "Agent", input: { prompt: "look", run_in_background: true } }] } }),
+    JSON.stringify({ type: "user", timestamp: new Date(now).toISOString(), message: { content: [{ type: "tool_result", tool_use_id: "use-bg", content: "Started. agentId: bg1" }] } }),
+  ].join("\n") + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 1);
+  fs.appendFileSync(file, ended("bg1") + "\n");
+  assert.equal(sidebar.backgroundTasks(file, since), 0);
+
   // A command that outran its timeout and was moved to the background runs on
   // too, and one whose output only quotes those words starts nothing.
   fs.appendFileSync(file, [

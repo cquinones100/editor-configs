@@ -32,12 +32,15 @@ const CONFIG_PATH = path.join(
 
 const usage = () => {
   console.error(
-    "Usage: worktree-from-ticket [path] <linear-ticket-id-or-url>\n" +
+    "Usage: worktree-from-ticket [path] <linear-ticket-id-or-url> [--prompt <text>]\n" +
       "       worktree-from-ticket init <zsh|bash>\n\n" +
       "Examples:\n" +
       "  worktree-from-ticket ABC-123\n" +
       "  worktree-from-ticket .worktrees ABC-123\n" +
-      `\nPath defaults to ${DEFAULT_WORKTREE_DIR} under the repo root.`,
+      '  worktree-from-ticket ABC-123 --prompt "start with the migration"\n' +
+      `\nPath defaults to ${DEFAULT_WORKTREE_DIR} under the repo root.\n` +
+      "--prompt adds to the prompt Claude starts with. The wt function also takes\n" +
+      "it from WT_PROMPT, which it clears, so /wt can hand its text over.",
   );
   process.exit(1);
 };
@@ -65,11 +68,19 @@ const fail = (message) => {
 // The path comes back via --cd-file rather than stdout because $( ) would make
 // stdout a pipe, and anything interactive downstream would see a non-TTY.
 //
+// WT_PROMPT, which /wt sets on the pane it respawns, is added to the prompt
+// and cleared, so a later `wt` in the same shell, or Claude's own commands,
+// don't see it again.
+//
 // `rc`, not `status`: `status` is a read-only special variable in zsh.
 const shellFunction = () => `wt() {
   local cdfile rc dir prompt
+  local -a extra
+  extra=()
+  [ -n "\${WT_PROMPT:-}" ] && extra=(--prompt "$WT_PROMPT")
+  unset WT_PROMPT
   cdfile=$(mktemp) || return 1
-  ${SELF} --no-claude --cd-file "$cdfile" "$@"
+  ${SELF} --no-claude --cd-file "$cdfile" "\${extra[@]}" "$@"
   rc=$?
   if [ $rc -ne 0 ]; then
     rm -f "$cdfile"
@@ -340,7 +351,18 @@ const ensureWorktree = (worktreePath, branch) => {
 };
 
 const main = async () => {
-  const argv = process.argv.slice(2);
+  // Each --prompt and its text come out first, so text that reads as a flag
+  // (`--prompt --help`) is only ever the prompt; several are joined, as when
+  // the wt function adds WT_PROMPT's to one of yours.
+  const argv = [];
+  const prompts = [];
+  const all = process.argv.slice(2);
+  for (let index = 0; index < all.length; index++) {
+    if (all[index] !== "--prompt") argv.push(all[index]);
+    else if (index + 1 < all.length) prompts.push(all[++index]);
+    else fail("--prompt requires text");
+  }
+  const extraText = prompts.join(" ");
 
   if (argv[0] === "init") {
     const shell = argv[1];
@@ -400,7 +422,10 @@ const main = async () => {
     : "";
   const isClosed = ["completed", "canceled", "duplicate"].includes(issue.state?.type);
 
-  // One line: the `wt` shell function reads it back as line 2 of the cd-file.
+  // What --prompt adds, made one line, since the `wt` function reads the
+  // prompt back as line 2 of the cd-file.
+  const extra = extraText.replace(/\s+/g, " ").trim();
+
   const prompt =
     `Work on ticket ${issue.identifier}${stateClause}. ` +
     (isClosed
@@ -426,7 +451,8 @@ const main = async () => {
     "in production once it is deployed, each a few terse steps saying where to go and what to look for, changing " +
     "nothing real in production; \"None.\" for either when the work can't be seen there. " +
     "Don't summarize what changed, because I review the PR itself; " +
-    "don't mention the review loop otherwise; and don't mention that tests, lint, or checks weren't run.";
+    "don't mention the review loop otherwise; and don't mention that tests, lint, or checks weren't run." +
+    (extra ? ` Also, from me for this ticket: ${extra}` : "");
 
   // Read by the `wt` shell function: line 1 the worktree path, line 2 the
   // prompt. The prompt lives here so the function and the standalone path can't

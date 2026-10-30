@@ -90,6 +90,14 @@ root, checks out a matching branch, moves your shell into it, and opens claude
 there. The shell stays in the worktree for the whole session, so new tmux panes
 and splits open in the worktree too — and you're still there after claude exits.
 
+`wt ABC-123 --prompt "start with the migration"` adds your own words to the end
+of the prompt. `/wt` in a Claude session hands its tab to `wt` the same way,
+with anything after the ticket (`/wt ABC-123 start with the migration`, or
+`/wt start with the migration` for the session's own ticket) passed in
+`WT_PROMPT`, which the `wt` function adds and clears. Since the session ends,
+`/wt` first lists anything it still has running in the background (commands,
+agents, watches, loops) and asks whether to stop it or wait.
+
 ### Setup
 
 1. **Install the script.** From a clone of this repo:
@@ -177,7 +185,13 @@ an existing ticket that needs work.
 ```
 shape "people can't tell which phase is active"
 shape ABC-123
+shape ABC-123 split out the API part
 ```
+
+Anything after a ticket is your direction for the shaping, kept in mind
+throughout; `/shape ABC-123 split out the API part` does the same. M-p's
+**Shape a new Linear ticket from what you type** (`note-shape.sh prompt`) asks
+for the idea in a popup, then the repo, and opens a tab shaping it.
 
 It starts Claude with the `/shape` skill, which holds the instructions, so
 `/shape` works the same inside a session you already have. Claude reads the

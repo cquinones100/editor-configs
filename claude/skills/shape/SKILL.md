@@ -1,7 +1,7 @@
 ---
 name: shape
 description: Shape a Linear ticket with the user. Read the code first, check Linear for tickets that already cover the work, draft the ticket in the team's usual form, and create or update it once the user approves. Given an existing ticket, asks whether to run a review loop on it or keep shaping it. Hands off to /wt afterwards.
-argument-hint: "[idea, or ticket ID or URL]"
+argument-hint: "[idea, or ticket ID or URL and what to do with it]"
 disable-model-invocation: true
 ---
 
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Turn a rough idea into a Linear ticket someone can pick up and build: clear on the problem, grounded in the code as it is, honest about scope. The `shape` command in `bin/` starts a session with this skill; it also works in a session that is already running.
 
-Arguments: a description of the problem or idea, or a Linear ticket ID or URL (`ABC-123`, or a link with `/issue/ABC-123/` in it) to work on an existing ticket. With neither, ask what the ticket is about. Given a ticket, read it first and then ask what to do with it (see "Given a ticket" below).
+Arguments: a description of the problem or idea, or a Linear ticket ID or URL (`ABC-123`, or a link with `/issue/ABC-123/` in it) to work on an existing ticket. Text after a ticket (and after `--continue`, when that is there) is the user's direction for this shaping, such as what to change or look into: keep it in mind throughout, and let it decide between a review loop and shaping where it says which. With neither, ask what the ticket is about. Given a ticket, read it first and then ask what to do with it (see "Given a ticket" below).
 
 ## Ground rules
 

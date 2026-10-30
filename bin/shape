@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // shape <what the ticket is about>
-// shape <linear-ticket-id-or-url>
+// shape <linear-ticket-id-or-url> [what to do with it]
 //
 // Starts a Claude session that shapes a Linear ticket with you: it reads the
 // code, checks Linear for tickets that already cover it, drafts the ticket,
@@ -11,6 +11,8 @@
 //
 //   shape "people can't tell which phase is active"
 //   shape ABC-123        an existing ticket: review it, or refine it
+//   shape ABC-123 split out the API part
+//                        the same, with your direction for the shaping
 //   shape --continue ABC-123
 //                        refine it, without first asking whether to review it
 //
@@ -31,10 +33,11 @@ const fail = (message) => {
 const usage = () => {
   console.error(
     "Usage: shape <what the ticket is about>\n" +
-      "       shape [--continue] <linear-ticket-id-or-url>\n\n" +
+      "       shape [--continue] <linear-ticket-id-or-url> [what to do with it]\n\n" +
       "Examples:\n" +
       '  shape "people can\'t tell which phase is active"\n' +
-      "  shape ABC-123",
+      "  shape ABC-123\n" +
+      "  shape ABC-123 split out the API part",
   );
   process.exit(1);
 };
@@ -101,15 +104,22 @@ const nameTab = (label) => {
 
 const main = () => {
   const argv = process.argv.slice(2);
-  if (argv.includes("--help") || argv.includes("-h")) usage();
+  // Help only in place of the ticket or idea: further on, it is direction.
+  if (["--help", "-h"].includes(argv[0]) || (argv[0] === "--continue" && ["--help", "-h"].includes(argv[1]))) usage();
   // For a ticket, carry straight on shaping it: the /shape skill reads the
   // flag after the ticket and skips asking whether to run a review loop.
-  const carryOn = argv.includes("--continue");
-  const args = argv.filter((arg) => arg !== "--continue");
+  // Only before the ticket or right after it: further on, it is part of
+  // your direction and passes through as written.
+  const flagAt = argv.slice(0, 2).indexOf("--continue");
+  const carryOn = flagAt !== -1;
+  const args = argv.filter((_, index) => index !== flagAt);
   if (!args.length) usage();
 
   const input = args.join(" ").trim();
-  const ticket = ticketIn(input);
+  // A ticket alone, or a ticket first and then what to do with it.
+  const first = input.split(/\s+/)[0];
+  const ticket = ticketIn(first);
+  const direction = ticket ? input.slice(first.length).trim() : "";
   const root = mainCheckout();
 
   warnIfBehind(root);
@@ -117,7 +127,7 @@ const main = () => {
   const words = input.split(/\s+/).slice(0, 4).join(" ");
   nameTab(`Shaping: ${ticket ? ticket.toUpperCase() : words}${!ticket && input.split(/\s+/).length > 4 ? "..." : ""}`);
 
-  const claude = spawnSync("claude", [`/shape ${ticket ? `${ticket.toUpperCase()}${carryOn ? " --continue" : ""}` : input}`], {
+  const claude = spawnSync("claude", [`/shape ${ticket ? `${ticket.toUpperCase()}${carryOn ? " --continue" : ""}${direction ? ` ${direction}` : ""}` : input}`], {
     cwd: root,
     stdio: "inherit",
   });

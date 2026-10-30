@@ -1491,7 +1491,10 @@ prints its findings as JSON, or Claude Code when Codex isn't installed or
 signed in. It is the reviewer half of the `review-loop`
 Claude skill in `claude/skills/review-loop`, which calls it, fixes what it
 agrees with, commits, and calls it again until the findings list comes back
-empty. It is also fine to run by hand for a second opinion.
+empty. Before its first round the skill also runs Claude Code's
+`/security-review` on the branch once, its findings fixed or asked about as
+the rounds' are (the `review_security` setting, under Safety, turns it off).
+It is also fine to run by hand for a second opinion.
 
 Working straight on `main`, with no branch or PR, it reviews the commits not
 yet on `origin/main`, fetched first: what you are about to push. With every

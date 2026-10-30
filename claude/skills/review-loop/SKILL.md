@@ -10,7 +10,7 @@ argument-hint: "[all]"
 
 This is Switchboard's personal copy, installed for repositories that have none. Before anything else, look for the repository's own: `.claude/skills/review-loop/SKILL.md` in this worktree, then in its main clone (the directory above `git rev-parse --path-format=absolute --git-common-dir`), which a branch cut before the repository added the skill won't have in its worktree. If either exists, read it and follow it instead of this file, with the same arguments, and stop reading here. Only with neither, go on below.
 
-Have Codex review the current branch, fix the findings you agree with, commit, and review again. Stop after two consecutive clean rounds, or when the round cap is hit. Push once at the end, after asking.
+Run a security review of the branch once, then have Codex review it, fix the findings you agree with, commit, and review again. Stop after two consecutive clean rounds, or when the round cap is hit. Push once at the end, after asking.
 
 The reviewer is the `codex-review` command. It runs Codex read-only against committed history and prints one JSON object with `summary`, `findings`, the commit it reviewed, and `reviewer`. When Codex isn't installed or signed in, it has a headless Claude review in its place, with the same prompt, the same JSON and less access (no commands, no reads outside the repository), and says so on stderr; the loop runs the same either way. If `codex-review` itself is not on `PATH`, say so and stop; do not substitute your own review for the command's.
 
@@ -35,6 +35,7 @@ Arguments: `all` means also ask about low-severity findings from the first round
    - Remove untracked files you created yourself during this session that are build output or scratch, such as archives, compiled bundles, or generated fixtures. Delete them; do not commit them.
    - Anything untracked that you did not create, stop and ask about. It may be work in progress.
 4. Record the starting commit with `git rev-parse HEAD` so the final report can show `git log <start>..HEAD`.
+5. Run a security review of the branch, once, before the first round, so its fixes go through the rounds like any other change. Skip it when Settings turns it off, read with the parser Settings uses, so only a JSON `false` in a file Settings can read counts: `node -e 'const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.exit(s && typeof s === "object" && !Array.isArray(s) && s.review_security === false ? 0 : 1)' "${SWITCHBOARD_SETTINGS:-$HOME/.config/switchboard/settings.json}"` succeeds. Otherwise invoke Claude Code's `security-review` skill with the Skill tool; if this session has none, say so in a line and go on. It reviews what the branch adds to the remote's default branch and takes no base, so when the rounds are given `--base` (commits already pushed, or a PR whose base isn't the default branch), it can't cover that range: say so in the final report rather than count it as run. Triage what it reports as step 3 of a round says, reading the code each finding points at: a critical or high one you agree with fixed without asking, a medium or low one asked about, a wrong one disputed in the notes file, a left one a `Known gap`, and a fix only in this repository. Commit the fixes, then start the rounds. The final report lists its findings under **Security review**.
 
 ## Each round (at most 5)
 
@@ -77,6 +78,7 @@ Say which of these ended the loop: two consecutive clean rounds, the round cap, 
 - **Disputed**: each finding rejected and why, copied from the notes file. These are for the user to overrule.
 - **Known gaps**: each accepted limitation and its reason, copied from the notes file.
 - **Left alone**: low-severity findings from the last non-confirmation round, if any.
+- **Security review**: what `/security-review` found and what became of each, or that it found nothing, was turned off or wasn't available.
 - **Outside this repository**: each finding in a file of another repository, with the file and that repository, left for the user.
 - **PR description**: whether it changed and how.
 

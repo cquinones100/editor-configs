@@ -283,6 +283,13 @@
     "default": true
   },
   {
+    "key": "review_security",
+    "category": "Safety",
+    "label": "Security review in the review loop",
+    "description": "/review-loop runs Claude Code's /security-review on the branch once before its first round, its findings fixed or asked about as the rounds' are",
+    "default": true
+  },
+  {
     "key": "confirm_close",
     "category": "Safety",
     "label": "Ask before closing a pane",

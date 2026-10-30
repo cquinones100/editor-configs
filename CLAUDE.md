@@ -18,6 +18,10 @@ Every file of someone's own lives in `~/.config/switchboard/`, never in a direct
 
 Someone's own settings live in `~/.config/switchboard/`, never in this repository, and each tool reads them after this repo's own config, so they win and an update never touches them: `tmux.conf` (`source-file -q` at the end of `tmux/tmux.conf`, inside the `@conf_check` guard), `nvim.lua` (`dofile` at the end of `nvim/init.lua`), `ghostty` (an optional `config-file` last in `ghostty/config`) and `lazygit.yml` (tmux sets `LG_CONFIG_FILE` to lazygit's config and then it, when it is there, so panes tmux starts read both). A new tool's config gets the same: its own file there, read last, and a row in `README.md`'s "Making it yours".
 
+## Testing in the tmux in use
+
+The tmux server Switchboard runs in is the one being worked in. Before testing anything there, opening or closing a window, moving focus, sending keys, restarting the sidebar daemon to watch it, stop and say that the test needs the session and what it will do, and wait for a go-ahead, since the person may be typing in it. Test in the tests' throwaway server (a socket under `/tmp`, as `test/tmux-sidebar.test.js` sets up) where that can show the same thing.
+
 ## Pushing
 
 Always ask before pushing this repo, every time, whatever the branch and

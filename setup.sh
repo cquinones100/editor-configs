@@ -181,7 +181,47 @@ claude_settings() {
 # copied there without the import line.
 SWITCHBOARD_MD="@~/switchboard/claude/switchboard.md"
 WRITTEN_MARK="<!-- Written by Switchboard's setup.sh: your rules, then Switchboard's. Edit them where they live, not here. -->"
+# A background pull (the update check) and a change in Settings can overlap.
+# The pull, which can take as long as the network does, runs first and holds
+# nothing, and the update check never clones (SWITCHBOARD_PULL_ONLY), so
+# nothing it starts waits on the network under the lock; then the rest runs
+# one run at a time, under a lock on a file that
+# the system lets go of when the run ends, however it ends (lockf on macOS,
+# flock on Linux), reading the setting afresh, so whichever writes last writes
+# what the setting says by then. A check (--check) takes no lock.
 claude_md() {
+  $CHECK && { claude_md_now; return; }
+  # The locked run: its changes, a line each, for the run that started it to
+  # report as its own.
+  if ${SWITCHBOARD_CLAUDE_MD_LOCKED:-false}; then
+    header="" indent="" quiet=true
+    PULLED=true claude_md_now
+    return
+  fi
+  local config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md repo
+  repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
+  if [[ -n $repo && -d $clone/.git && $(git -C "$clone" remote get-url origin 2>/dev/null) == "$repo" ]]; then
+    git -C "$clone" pull --quiet --ff-only 2>/dev/null || echo "  could not update your CLAUDE.md's repository: git -C $clone pull --ff-only" >&2
+  fi
+  local lock=~/.local/state/switchboard/claude-md.lock
+  mkdir -p "${lock%/*}"
+  # The locked part runs as a run of this script of its own, holding the lock.
+  local again=(env SWITCHBOARD_CLAUDE_MD_LOCKED=true bash "$REPO_DIR/setup.sh" claude_md) out status line
+  if command -v flock >/dev/null; then
+    out=$(flock -w 120 "$lock" "${again[@]}")
+  elif command -v lockf >/dev/null; then
+    out=$(lockf -k -t 120 "$lock" "${again[@]}")
+  else
+    PULLED=true claude_md_now
+    return
+  fi
+  status=$?
+  while IFS= read -r line; do
+    [[ $line == "  "* ]] && change "${line#  }"
+  done <<<"$out"
+  return $status
+}
+claude_md_now() {
   local file=~/.claude/CLAUDE.md config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md
   local repo mine="" want backup target
   if [[ -L $file ]] && target=$(readlink "$file") && [[ $target == */claude/CLAUDE.md && ! -e ~/.config/switchboard/CLAUDE.md ]]; then
@@ -198,17 +238,27 @@ claude_md() {
     # A clone of another repository, from before the setting changed, is
     # moved aside rather than pulled.
     if [[ -d $clone/.git && $(git -C "$clone" remote get-url origin 2>/dev/null) != "$repo" ]]; then
+      ${SWITCHBOARD_PULL_ONLY:-false} && return 0
       backup="$clone.bak.$(date +%Y%m%d%H%M%S)"
       $CHECK || mv "$clone" "$backup" || return 1
       change "move the clone of your CLAUDE.md's old repository aside to $backup"
     fi
     if [[ ! -d $clone/.git ]] || { $CHECK && [[ -n $backup ]]; }; then
+      # A clone, which waits on the network, is left to setup and Settings.
+      ${SWITCHBOARD_PULL_ONLY:-false} && return 0
       if ! $CHECK; then
         mkdir -p "${clone%/*}" && git clone --quiet "$repo" "$clone" || { echo "  could not clone $repo for your CLAUDE.md" >&2; return 1; }
       fi
       change "clone your CLAUDE.md's repository"
-    elif ! $CHECK; then
+    elif ! $CHECK && ! ${PULLED:-false}; then
       git -C "$clone" pull --quiet --ff-only 2>/dev/null || echo "  could not update your CLAUDE.md's repository: git -C $clone pull --ff-only" >&2
+    fi
+    # The setting read again after the clone, which can take a while: changed
+    # meanwhile (Settings' Your CLAUDE.md), this run does the new one's work
+    # instead, so what it writes is always what the setting says.
+    if [[ $(jq -r '.repo // empty' "$config" 2>/dev/null) != "$repo" ]]; then
+      claude_md_now
+      return
     fi
     mine="$clone/$(jq -r '.file // "CLAUDE.md"' "$config")"
   else

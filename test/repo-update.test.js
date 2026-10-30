@@ -80,6 +80,17 @@ test("Update Switchboard with nothing new still runs the guided setup, saying wh
     fs.rmSync(path.join(tmp, ".local/state/switchboard/update-checked"), { force: true });
     spawnSync("bash", [script, "periodic"], { env, encoding: "utf8" });
     assert.doesNotMatch(fs.readFileSync(calls, "utf8"), /display-popup/);
+
+    // With your CLAUDE.md's rules in a repository, each look pulls it, through
+    // setup's CLAUDE.md step (a stand-in setup.sh here, noting how it ran).
+    fs.mkdirSync(path.join(tmp, ".config/switchboard"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, ".config/switchboard/claude.json"), JSON.stringify({ repo: "https://example.com/rules.git" }));
+    fs.writeFileSync(path.join(repo, "setup.sh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${path.join(tmp, "setup-calls")}'\n`, { mode: 0o755 });
+    fs.rmSync(path.join(tmp, ".local/state/switchboard/update-checked"), { force: true });
+    spawnSync("bash", [script, "periodic"], { env, encoding: "utf8" });
+    // It runs beside the look, in the background: waited for here.
+    for (let i = 0; i < 50 && !fs.existsSync(path.join(tmp, "setup-calls")); i++) execFileSync("sleep", ["0.1"]);
+    assert.equal(fs.readFileSync(path.join(tmp, "setup-calls"), "utf8"), "claude_md\n");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

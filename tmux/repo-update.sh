@@ -72,6 +72,21 @@ case "${1:-}" in
       [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || { say "$1" "${2:-}" "Switchboard is already looking for updates."; exit 0; }
     fi
     trap 'rmdir "$lock" 2>/dev/null' EXIT
+    # Your CLAUDE.md's rules, when they live in a git repository (Settings'
+    # Your CLAUDE.md): pulled with the same look, fast-forward only, by setup's
+    # CLAUDE.md step, which also writes ~/.claude/CLAUDE.md again if it must.
+    # It never asks for anything: git's own prompt is off, and so is its askpass
+    # (GIT_ASKPASS=false, which fails at once; a credential helper such as the
+    # Keychain still answers first), ssh may not open an askpass dialog
+    # (SSH_ASKPASS_REQUIRE=never), and this runs from the tmux
+    # server, with no terminal for ssh to ask on; your ssh settings
+    # (GIT_SSH_COMMAND, GIT_SSH, the clone's core.sshCommand, ~/.ssh/config)
+    # are left as they are. It runs beside the Switchboard look, not before
+    # it, so nothing it waits on can hold that up, and only pulls a clone
+    # already there (SWITCHBOARD_PULL_ONLY), cloning being setup's.
+    if [ -n "$(jq -r '.repo // empty' ~/.config/switchboard/claude.json 2>/dev/null)" ] && [ -x "$REPO/setup.sh" ]; then
+      GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=false SSH_ASKPASS_REQUIRE=never SWITCHBOARD_PULL_ONLY=true nohup bash "$REPO/setup.sh" claude_md >/dev/null 2>&1 </dev/null &
+    fi
     [ "$1" = now ] && tmux display-message -c "${2:-}" "Looking for Switchboard updates…"
     GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git_ fetch --quiet origin main 2>/dev/null || { say "$1" "${2:-}" "Couldn't reach GitHub to look for Switchboard updates."; setup_anyway "$1" "${2:-}" "Couldn't reach GitHub to look for updates; running the setup with what you have."; exit 0; }
     behind=$(git_ rev-list --count main..origin/main 2>/dev/null) || exit 0

@@ -126,7 +126,7 @@ test("setup.sh terminal adds Option as Alt to a Ghostty config of your own once,
   }
 });
 
-test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or a repository, and Switchboard's part, once", () => {
+test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or a repository, and Switchboard's part, once", async () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-claude-md-")));
   const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
   const file = path.join(home, ".claude/CLAUDE.md");
@@ -167,6 +167,23 @@ test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or
     assert.match(fs.readFileSync(file, "utf8"), /\n@~\/\.local\/share\/switchboard\/claude-md\/CLAUDE\.md\n@~\/switchboard\/claude\/switchboard\.md\n$/);
     assert.equal(fs.readFileSync(path.join(home, ".local/share/switchboard/claude-md/CLAUDE.md"), "utf8"), "# From my repo\n");
     assert.ok(!fs.readdirSync(path.join(home, ".claude")).filter((n) => n.startsWith("CLAUDE.md.bak.")).slice(1).length, "its own written file isn't moved aside again");
+
+    // One run at a time: a run finding the lock held waits for it, and a lock
+    // its holder left, by ending, is free.
+    const lock = path.join(home, ".local/state/switchboard/claude-md.lock");
+    fs.mkdirSync(path.dirname(lock), { recursive: true });
+    const holder = require("node:child_process").spawn("lockf", ["-k", lock, "sleep", "3"]);
+    execFileSync("sleep", ["0.5"]);
+    const started = Date.now();
+    assert.equal(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).status, 0);
+    assert.ok(Date.now() - started > 1500, "waited for the holder");
+    await new Promise((resolve) => holder.on("exit", resolve));
+
+    // The update check's run only pulls: a repository not cloned yet is left.
+    fs.rmSync(path.join(home, ".local/share/switchboard/claude-md"), { recursive: true, force: true });
+    assert.equal(spawnSync("bash", [script, "claude_md"], { env: { ...env, SWITCHBOARD_PULL_ONLY: "true" }, encoding: "utf8" }).status, 0);
+    assert.ok(!fs.existsSync(path.join(home, ".local/share/switchboard/claude-md")));
+    assert.equal(run().status, 0);
 
     // Another repository, through the claude_md part alone, as mission
     // control's Settings runs it: the old clone is moved aside, the new one cloned.

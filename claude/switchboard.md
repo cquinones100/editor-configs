@@ -5,6 +5,7 @@ What every Switchboard user's Claude Code needs to know about the workspace. You
 # Notes
 
 - "Notes" or "my note" means my terminal notes app (the Notes window in tmux, nvim with `switchboard/notes`), never macOS Notes. Notes are Markdown files in `~/Notes/`, named after their title (e.g. `~/Notes/Weekend Plans.md`); strike through with `~~text~~`. A note's first line is its title, `# Title`. Checklists are `- [ ]` and `- [x]`; ticking an item moves it under the unticked ones in its list, with what is indented under it, as the app does, so a list leads with what is left, one blank line between the unticked items and the ticked ones. Folders are subfolders of `~/Notes`; `.trash/` holds deleted notes, so leave it out of searches. Edit the file directly: the open app takes in changes without saving over them.
+- Working through a note's checklist, take the next unticked item from the top. In a note grouped into `## <feature>` sections, new items sit ungrouped at the top: when ticking one, move it, with what is indented under it, into the section it belongs to (or a new `## ` section when none fits), under that section's unticked items. Skip any section named for parked work, such as `## Defered` or `## Later`.
 
 # My tabs
 

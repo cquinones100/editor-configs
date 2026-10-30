@@ -2501,8 +2501,30 @@ test("moving onto the notifications brings a Notifications window to the front, 
   await sidebar.noticesKey(client, { key: "Enter" });
   assert.ok(client.choose.choices.some((c) => c.label === "Open it in Slack"));
   assert.equal(client.choose.body, "can you look at the deploy?");
+  assert.deepEqual(client.choose.choices.filter((c) => /^Dismiss/.test(c.label)).map((c) => c.label), ["Dismiss it"], "one Dismiss it, last");
   await sidebar.noticesKey(client, { key: "Escape" });
   assert.equal(client.choose, undefined);
+
+  // Any action dismisses the notification: here, Dismiss it itself.
+  await sidebar.noticesKey(client, { key: "Enter" });
+  await sidebar.missionKey(client, { key: "x" });
+  await new Promise((resolve) => setTimeout(resolve, 2_100));
+  assert.deepEqual(sidebar.noticeItems().map((i) => i.body), ["@you the review"], "the chosen one is gone");
+  fs.rmSync(path.join(stateDir, "slack-dismissed.json"), { force: true });
+});
+
+test("a dismissed meeting stays dismissed whichever source the day is read from, and only that meeting", () => {
+  const start = "2026-10-30T18:00:00Z";
+  const fromFeed = { id: "a1", title: "Interview", start };
+  const other = { id: "b2", title: "Interview", start };
+  // The saved day writes the same instant with its offset.
+  const saved = { title: "Interview", start: "2026-10-30T14:00:00-04:00" };
+  const gone = new Set(sidebar.meetingKeys(fromFeed));
+  assert.ok(sidebar.meetingGone(fromFeed, gone));
+  assert.ok(!sidebar.meetingGone(other, gone), "another of the same title and time stays");
+  assert.ok(sidebar.meetingGone(saved, gone), "as the saved day shows it");
+  const goneSaved = new Set(sidebar.meetingKeys(saved));
+  assert.ok(sidebar.meetingGone(fromFeed, goneSaved), "dismissed from the saved day, it stays gone once the feed loads");
 });
 
 test("Enter on an item in a built-in view offers its actions as a menu, its usual one first", async (t) => {

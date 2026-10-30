@@ -168,7 +168,8 @@ claude_settings() {
 # rules come from where ~/.config/switchboard/claude.json says, a git
 # repository ({"repo": "<url>", "file": "CLAUDE.md"}, cloned into
 # ~/.local/share/switchboard/claude-md and pulled on every run, fast-forward
-# only) or a file ({"path": "~/somewhere/CLAUDE.md"}), else
+# only; without "file", its CLAUDE.md at the root or nested least deep) or a
+# file ({"path": "~/somewhere/CLAUDE.md"}), else
 # ~/.config/switchboard/CLAUDE.md when there is one. Then ~/.claude/CLAUDE.md
 # is a short file importing both, which Claude Code follows (@path), so an edit
 # to either shows at once; a real file in its way that isn't one of these is
@@ -189,6 +190,17 @@ WRITTEN_MARK="<!-- Written by Switchboard's setup.sh: your rules, then Switchboa
 # the system lets go of when the run ends, however it ends (lockf on macOS,
 # flock on Linux), reading the setting afresh, so whichever writes last writes
 # what the setting says by then. A check (--check) takes no lock.
+# Brings the clone of your rules' repository up to date, when claude.json
+# names the one it is a clone of, fast-forward only. Outside the lock, since it
+# waits on the network.
+claude_md_pull() {
+  local config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md repo
+  repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
+  if [[ -n $repo && -d $clone/.git && $(git -C "$clone" remote get-url origin 2>/dev/null) == "$repo" ]]; then
+    git -C "$clone" pull --quiet --ff-only 2>/dev/null || echo "  could not update your CLAUDE.md's repository: git -C $clone pull --ff-only" >&2
+  fi
+  return 0
+}
 claude_md() {
   $CHECK && { claude_md_now; return; }
   # The locked run: its changes, a line each, for the run that started it to
@@ -198,11 +210,7 @@ claude_md() {
     PULLED=true claude_md_now
     return
   fi
-  local config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md repo
-  repo=$(jq -r '.repo // empty' "$config" 2>/dev/null)
-  if [[ -n $repo && -d $clone/.git && $(git -C "$clone" remote get-url origin 2>/dev/null) == "$repo" ]]; then
-    git -C "$clone" pull --quiet --ff-only 2>/dev/null || echo "  could not update your CLAUDE.md's repository: git -C $clone pull --ff-only" >&2
-  fi
+  claude_md_pull
   local lock=~/.local/state/switchboard/claude-md.lock
   mkdir -p "${lock%/*}"
   # The locked part runs as a run of this script of its own, holding the lock.
@@ -223,7 +231,8 @@ claude_md() {
 }
 claude_md_now() {
   local file=~/.claude/CLAUDE.md config=~/.config/switchboard/claude.json clone=~/.local/share/switchboard/claude-md
-  local repo mine="" want backup target
+  local repo mine="" want backup="" target named found="" least="" depth slashes
+  local -a candidates=()
   if [[ -L $file ]] && target=$(readlink "$file") && [[ $target == */claude/CLAUDE.md && ! -e ~/.config/switchboard/CLAUDE.md ]]; then
     if ! $CHECK; then
       mkdir -p ~/.config/switchboard &&
@@ -260,11 +269,48 @@ claude_md_now() {
       claude_md_now
       return
     fi
-    mine="$clone/$(jq -r '.file // "CLAUDE.md"' "$config")"
+    named=$(jq -r '.file // empty' "$config")
+    if [[ -n $named ]]; then
+      mine="$clone/$named"
+    elif [[ ! -d $clone/.git ]] || { $CHECK && [[ -n $backup ]]; }; then
+      # --check, before the clone: what it will most likely hold.
+      mine="$clone/CLAUDE.md"
+    else
+      # Its CLAUDE.md: at its root, else the one nested least deep, so a
+      # repository that keeps it in a folder (claude/CLAUDE.md) works too.
+      # NUL-separated, so a folder named with accents or quotes comes as it is.
+      while IFS= read -r -d '' found; do
+        # Only a file named CLAUDE.md: the pathspec also matches what is in a
+        # folder of that name, and one can be a link to a folder.
+        [[ ( $found == CLAUDE.md || $found == */CLAUDE.md ) && -f $clone/$found ]] || continue
+        slashes=${found//[^\/]/}
+        depth=${#slashes}
+        if [[ -z $least ]] || (( depth < least )); then
+          least=$depth
+          candidates=("$found")
+        elif (( depth == least )); then
+          candidates+=("$found")
+        fi
+      done < <(git -C "$clone" ls-files -z -- CLAUDE.md '*/CLAUDE.md')
+      if [[ -z $least ]]; then
+        echo "  no CLAUDE.md in your rules' repository ($repo): add one, or name the file with \"file\" in ~/.config/switchboard/claude.json" >&2
+        return 1
+      elif (( ${#candidates[@]} > 1 )); then
+        found=$(printf '%s, ' "${candidates[@]}")
+        echo "  your rules' repository has more than one CLAUDE.md (${found%, }): name yours with \"file\" in ~/.config/switchboard/claude.json" >&2
+        return 1
+      fi
+      mine="$clone/${candidates[0]}"
+    fi
   else
     mine=$(jq -r '.path // empty' "$config" 2>/dev/null)
     mine=${mine/#\~/$HOME}
     [[ -z $mine && -f ~/.config/switchboard/CLAUDE.md ]] && mine=~/.config/switchboard/CLAUDE.md
+  fi
+  # A file named that isn't there would be imported as nothing, quietly.
+  if [[ -n $mine && ! -f $mine ]] && ! { $CHECK && [[ -n $repo && $mine == "$clone"/* ]] && { [[ ! -d $clone/.git ]] || [[ -n $backup ]]; }; }; then
+    echo "  your rules aren't at ${mine/#$HOME/~}: fix the path in ~/.config/switchboard/claude.json, or pick them again in mission control's Settings" >&2
+    return 1
   fi
   if [[ -n $mine ]]; then
     want=$(printf '%s\n\n@%s\n%s' "$WRITTEN_MARK" "${mine/#$HOME/~}" "$SWITCHBOARD_MD")
@@ -1024,11 +1070,17 @@ fi
 # session's context use) and the permissions its loops need.
 # The whole setup is on when its commands are linked (CLAUDE.md no longer is).
 whole_claude() { [[ $(readlink ~/.claude/commands 2>/dev/null) == */claude/commands ]]; }
+# The changes it would make, or "error: " and why it can't.
 claude_md_pending() (
   CHECK=true
   changes=0
-  claude_md >/dev/null 2>&1
-  echo "$changes"
+  err=$(mktemp) || exit 1
+  if claude_md >/dev/null 2>"$err"; then
+    echo "$changes"
+  else
+    echo "error: $(sed -e 's/^ *//' "$err" | tail -1)"
+  fi
+  rm -f "$err"
 )
 claude_settings_pending() (
   CHECK=true
@@ -1036,6 +1088,9 @@ claude_settings_pending() (
   claude_settings >/dev/null 2>&1
   echo "$changes"
 )
+# The rules' clone brought up to date before anything here looks at it, since
+# a file just named, or moved, may be only in the repository's newest commits.
+$CHECK || claude_md_pull
 if whole_claude; then
   if (( $(pending claude) == 0 )); then
     ok "Claude Code, with this repo's whole setup"
@@ -1061,8 +1116,12 @@ fi
 
 # Your CLAUDE.md: your rules, wherever claude.json says, and Switchboard's
 # part, imported (claude_md). Part of the whole setup's run above.
-if ! whole_claude && command -v claude >/dev/null; then
-  if (( $(claude_md_pending) == 0 )); then
+# Why your rules can't be found is said whichever setup you have.
+md_pending=$(claude_md_pending)
+if [[ $md_pending == error:* ]] && command -v claude >/dev/null; then
+  todo "your CLAUDE.md: ${md_pending#error: }"
+elif ! whole_claude && command -v claude >/dev/null; then
+  if (( md_pending == 0 )); then
     ok "your CLAUDE.md imports Switchboard's part (the tabs, the notes app)"
   elif ask "Add Switchboard's part (how to read the tabs, the notes app) to your ~/.claude/CLAUDE.md, with your own rules from ~/.config/switchboard/claude.json when it names them?"; then
     claude_md >/dev/null && ok "your CLAUDE.md imports Switchboard's part" || todo "./setup.sh claude failed"

@@ -195,6 +195,70 @@ test("setup.sh claude writes your CLAUDE.md to import your rules, from a file or
     assert.equal(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).status, 0);
     assert.equal(fs.readFileSync(path.join(home, ".local/share/switchboard/claude-md/CLAUDE.md"), "utf8"), "# From my other repo\n");
     assert.ok(fs.readdirSync(path.join(home, ".local/share/switchboard")).some((n) => n.startsWith("claude-md.bak.")));
+
+    // A repository keeping it in a folder: the one nested least deep.
+    const clone = path.join(home, ".local/share/switchboard/claude-md");
+    execFileSync("git", ["-C", work, "rm", "-q", "CLAUDE.md"], { env });
+    fs.mkdirSync(path.join(work, "claude/deeper"), { recursive: true });
+    fs.writeFileSync(path.join(work, "claude/CLAUDE.md"), "# Nested\n");
+    fs.writeFileSync(path.join(work, "claude/deeper/CLAUDE.md"), "# Deeper\n");
+    execFileSync("git", ["-C", work, "add", "."], { env });
+    execFileSync("git", ["-C", work, "commit", "-q", "-m", "nested"], { env });
+    execFileSync("git", ["-C", work, "push", "-q", other, "main"], { env });
+    assert.equal(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).status, 0);
+    assert.match(fs.readFileSync(file, "utf8"), /\n@~\/\.local\/share\/switchboard\/claude-md\/claude\/CLAUDE\.md\n/);
+
+    // Two at that depth: which one is yours, asked for, and the file left as it was.
+    const before = fs.readFileSync(file, "utf8");
+    fs.mkdirSync(path.join(work, "other"));
+    fs.writeFileSync(path.join(work, "other/CLAUDE.md"), "# Another\n");
+    execFileSync("git", ["-C", work, "add", "."], { env });
+    execFileSync("git", ["-C", work, "commit", "-q", "-m", "two"], { env });
+    execFileSync("git", ["-C", work, "push", "-q", other, "main"], { env });
+    const two = spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" });
+    assert.notEqual(two.status, 0);
+    assert.match(two.stderr, /more than one CLAUDE\.md \(claude\/CLAUDE\.md, other\/CLAUDE\.md\): name yours with "file"/);
+    assert.equal(fs.readFileSync(file, "utf8"), before);
+    fs.writeFileSync(config, JSON.stringify({ repo: other, file: "other/CLAUDE.md" }));
+    assert.equal(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).status, 0);
+    assert.match(fs.readFileSync(file, "utf8"), /claude-md\/other\/CLAUDE\.md\n/);
+
+    // None at all, or a file named that isn't there: said, not imported as nothing.
+    fs.writeFileSync(config, JSON.stringify({ repo: other, file: "gone.md" }));
+    assert.match(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).stderr, /your rules aren't at ~\/\.local\/share\/switchboard\/claude-md\/gone\.md/);
+    execFileSync("git", ["-C", work, "rm", "-q", "-r", "claude", "other"], { env });
+
+    // A folder named with accents and quotes, which git would print escaped.
+    const odd = 'résumé "notes"';
+    fs.mkdirSync(path.join(work, odd));
+    fs.writeFileSync(path.join(work, odd, "CLAUDE.md"), "# Odd\n");
+    execFileSync("git", ["-C", work, "add", "."], { env });
+    execFileSync("git", ["-C", work, "commit", "-q", "-m", "odd"], { env });
+    execFileSync("git", ["-C", work, "push", "-q", other, "main"], { env });
+    fs.writeFileSync(config, JSON.stringify({ repo: other }));
+    assert.equal(spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" }).status, 0);
+    assert.ok(fs.readFileSync(file, "utf8").includes(`claude-md/${odd}/CLAUDE.md\n`));
+
+    execFileSync("git", ["-C", work, "rm", "-q", "-r", odd], { env });
+    fs.writeFileSync(path.join(work, "README.md"), "no rules\n");
+    // A folder named CLAUDE.md holds no rules.
+    fs.mkdirSync(path.join(work, "CLAUDE.md"));
+    fs.writeFileSync(path.join(work, "CLAUDE.md/README.md"), "not rules\n");
+    execFileSync("git", ["-C", work, "add", "."], { env });
+    execFileSync("git", ["-C", work, "commit", "-q", "-m", "none"], { env });
+    execFileSync("git", ["-C", work, "push", "-q", other, "main"], { env });
+    fs.writeFileSync(config, JSON.stringify({ repo: other }));
+    const none = spawnSync("bash", [script, "claude_md"], { env, encoding: "utf8" });
+    assert.notEqual(none.status, 0);
+    assert.match(none.stderr, /no CLAUDE\.md in your rules' repository/);
+    assert.ok(fs.existsSync(clone));
+
+    // The guided setup lists it as left to do, with Claude Code there.
+    const bin = path.join(home, "bin");
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, "claude"), "#!/bin/sh\n", { mode: 0o755 });
+    const guided = spawnSync("bash", [script, "--check"], { env: { ...env, PATH: `${bin}:${env.PATH}` }, encoding: "utf8" });
+    assert.match(guided.stdout, /✗ your CLAUDE\.md: no CLAUDE\.md in your rules' repository/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

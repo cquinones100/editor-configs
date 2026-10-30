@@ -276,6 +276,13 @@
     "default": true
   },
   {
+    "key": "review_before_push",
+    "category": "Safety",
+    "label": "Review before pushing",
+    "description": "In this repository, a push to main needs a clean /review-loop first (.githooks/pre-push); off, it pushes without one",
+    "default": true
+  },
+  {
     "key": "confirm_close",
     "category": "Safety",
     "label": "Ask before closing a pane",

@@ -22,7 +22,8 @@ Someone's own settings live in `~/.config/switchboard/`, never in this repositor
 
 Always ask before pushing this repo, every time, whatever the branch and
 whatever an earlier push was allowed. Before asking, run `/review-loop` on
-the unpushed commits: `.githooks/pre-push` refuses a push to main whose tip
+the unpushed commits, unless Settings' "Review before pushing"
+(`review_before_push`) is off, which the hook then follows too: `.githooks/pre-push` refuses a push to main whose tip
 isn't the commit the skill last found clean, or whose review started past
 where main is on the remote (both recorded in the clone's
 `review-loop-clean`, `git rev-parse --git-path review-loop-clean`, from

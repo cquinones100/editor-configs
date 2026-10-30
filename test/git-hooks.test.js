@@ -9,7 +9,8 @@ const repo = path.join(__dirname, "..");
 
 test("pre-push refuses a push to main whose tip /review-loop hasn't found clean, and lets other branches through", () => {
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pre-push-")));
-  const env = { ...process.env, HOME: tmp, GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
+  // Its own settings file, which isn't there, so none in the environment counts.
+  const env = { ...process.env, HOME: tmp, SWITCHBOARD_SETTINGS: path.join(tmp, "no-settings.json"), GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@e", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@e" };
   try {
     execFileSync("git", ["init", "-q", "-b", "main", tmp], { env });
     fs.writeFileSync(path.join(tmp, "a.txt"), "a\n");
@@ -29,6 +30,16 @@ test("pre-push refuses a push to main whose tip /review-loop hasn't found clean,
     assert.equal(push("refs/heads/feature").status, 0, "another branch isn't asked about");
 
     // Reviewed from the commit main is at on the remote: every commit it adds.
+    // Turned off in Settings, it asks for nothing.
+    fs.writeFileSync(path.join(tmp, "settings.json"), JSON.stringify({ review_before_push: "false" }));
+    assert.equal(spawnSync(path.join(repo, ".githooks/pre-push"), ["origin", "url"], { cwd: tmp, env: { ...env, SWITCHBOARD_SETTINGS: path.join(tmp, "settings.json") }, encoding: "utf8", input: `refs/heads/main ${sha} refs/heads/main ${base}\n` }).status, 1, "a string false is not off");
+    fs.writeFileSync(path.join(tmp, "settings.json"), "{}\n" + JSON.stringify({ review_before_push: false }));
+    assert.equal(spawnSync(path.join(repo, ".githooks/pre-push"), ["origin", "url"], { cwd: tmp, env: { ...env, SWITCHBOARD_SETTINGS: path.join(tmp, "settings.json") }, encoding: "utf8", input: `refs/heads/main ${sha} refs/heads/main ${base}\n` }).status, 1, "nor a file of two documents");
+    fs.writeFileSync(path.join(tmp, "settings.json"), "{\"review_before_push\":false,\"other\":NaN}");
+    assert.equal(spawnSync(path.join(repo, ".githooks/pre-push"), ["origin", "url"], { cwd: tmp, env: { ...env, SWITCHBOARD_SETTINGS: path.join(tmp, "settings.json") }, encoding: "utf8", input: `refs/heads/main ${sha} refs/heads/main ${base}\n` }).status, 1, "nor one only a looser parser takes");
+    fs.writeFileSync(path.join(tmp, "settings.json"), JSON.stringify({ review_before_push: false }));
+    assert.equal(spawnSync(path.join(repo, ".githooks/pre-push"), ["origin", "url"], { cwd: tmp, env: { ...env, SWITCHBOARD_SETTINGS: path.join(tmp, "settings.json") }, encoding: "utf8", input: `refs/heads/main ${sha} refs/heads/main ${base}\n` }).status, 0);
+
     fs.writeFileSync(path.join(tmp, ".git/review-loop-clean"), `${sha} ${base}\n`);
     assert.equal(push("refs/heads/main").status, 0, "the commit the review found clean");
     // Reviewed from a later commit than main is at: the ones between weren't.

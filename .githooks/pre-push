@@ -15,6 +15,16 @@
 # Enabled per clone by `./setup.sh git`, which points core.hooksPath at
 # .githooks.
 
+# Turned off in Settings (review_before_push), it asks for nothing.
+settings=${SWITCHBOARD_SETTINGS:-$HOME/.config/switchboard/settings.json}
+# Only JSON false counts, read with the parser Settings reads it with
+# (JSON.parse, in lib/settings.js): a string "false", or a file Settings can't
+# read, is not off. Without node to read it, it is on.
+command -v node >/dev/null 2>&1 && node -e '
+  const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.exit(s && typeof s === "object" && !Array.isArray(s) && s.review_before_push === false ? 0 : 1);
+' "$settings" 2>/dev/null && exit 0
+
 read -r reviewed reviewed_base 2>/dev/null <"$(git rev-parse --git-path review-loop-clean)"
 zero=0000000000000000000000000000000000000000
 status=0

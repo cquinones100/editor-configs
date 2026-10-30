@@ -35,6 +35,20 @@ check the unpushed commits for anything that identifies the user or their
 employer: organization or company names, ticket IDs, PR numbers, internal
 hosts, usernames, personal paths, tokens.
 
+## Committing
+
+Commit straight to `main`: there is no PR flow here, so a branch only adds a
+merge step. Each change gets a commit of its own, and nothing pushed is amended
+or reordered, since that rewrites public history and needs a force-push.
+
+Asked to squash unpushed commits, make one commit per feature, its message a
+description of the feature as it now stands, in prose, and keep other features'
+commits apart. Check the squashed commits' added lines and the new message for
+identifying details, as before a push (a real PR number in a test becomes
+12345). Branch a `backup/pre-<what>` first, rebase with `--autostash`, and after
+the rebase check that the tree equals the backup's and that the tests pass at
+every rewritten commit, run in a temporary worktree.
+
 ## Claude Code settings
 
 - `~/.claude/CLAUDE.md` is written by `setup.sh`'s `claude_md`: a short file importing (`@path`) the person's own rules, from a git repository or a file named in `~/.config/switchboard/claude.json` or else `~/.config/switchboard/CLAUDE.md`, and Switchboard's part, `claude/switchboard.md` (the tabs, the notes app, repository skills). With no rules named, a CLAUDE.md of their own gets only the import of Switchboard's part. A link into this repo's `claude/CLAUDE.md`, which once held its owner's rules and is gone, is turned into `~/.config/switchboard/CLAUDE.md`, copied from what it linked to or from git history, so a clone set up before keeps its rules; keep that until no clone needs it. No one's own rules live in this repository: what every user's Claude needs to know about the workspace goes in `claude/switchboard.md`.

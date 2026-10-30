@@ -49,10 +49,10 @@ esac
 if [[ $OS == macos ]]; then
   LAZYGIT_DIR="$HOME/Library/Application Support/lazygit"
   # Karabiner only exists on macOS.
-  PARTS=(lazygit neovim git claude claude_md karabiner tmux config ghostty terminal pgcli bin)
+  PARTS=(lazygit neovim git claude claude_md skills karabiner tmux config ghostty terminal pgcli bin)
 else
   LAZYGIT_DIR="$HOME/.config/lazygit"
-  PARTS=(lazygit neovim git claude claude_md tmux config ghostty terminal pgcli bin)
+  PARTS=(lazygit neovim git claude claude_md skills tmux config ghostty terminal pgcli bin)
 fi
 
 # ── Parts ───────────────────────────────────────────────────────────────────
@@ -384,6 +384,59 @@ part_claude() {
   for hook in "$SRC"/claude/hooks/*; do
     put_link "$hook" ~/.claude/hooks/
   done
+}
+
+# The skills that ship with Switchboard (/wt, /shape, /review-loop, /ci-loop
+# and the rest), each linked into ~/.claude/skills, where Claude Code finds a
+# personal skill. A skill of your own by the same name, a folder or a link
+# elsewhere, is yours and left as it is (own_skills names them for the guided
+# setup); only a link into a Switchboard clone's claude/skills (this one, or
+# one by another name) is pointed here.
+part_skills() {
+  dir ~/.claude/skills
+  # Every skill is tried, and the ones that couldn't be linked said at the end.
+  local skill failed=()
+  for skill in "$SRC"/claude/skills/*/; do
+    skill=${skill%/}
+    own_skill "${skill##*/}" || put_link "$skill" ~/.claude/skills/"${skill##*/}" || failed+=("${skill##*/}")
+  done
+  (( ${#failed[@]} == 0 )) && return 0
+  echo "  could not link these skills into ~/.claude/skills: ${failed[*]}" >&2
+  return 1
+}
+own_skill() {
+  local dest=~/.claude/skills/$1
+  [[ -e $dest || -L $dest ]] && ! from_switchboard "$1"
+}
+# Whether ~/.claude/skills/<name> links into a Switchboard clone, known by
+# what is in it, whatever its folder is called: one gone (a clone moved or
+# renamed) counts too, since the link leads nowhere.
+from_switchboard() {
+  local target clone
+  target=$(readlink ~/.claude/skills/"$1" 2>/dev/null) || return 1
+  # Written by hand, it may end in a /.
+  while [[ $target == */ ]]; do target=${target%/}; done
+  [[ $target == */claude/skills/$1 ]] || return 1
+  # A relative link leads from the folder it is in.
+  [[ $target == /* ]] || target=~/.claude/skills/$target
+  clone=${target%/claude/skills/$1}
+  [[ ! -e $target || ( -f $clone/setup.sh && -f $clone/tmux/tmux.conf && -d $clone/lib/sidebar ) ]]
+}
+own_skills() {
+  local skill names=()
+  for skill in "$SRC"/claude/skills/*/; do
+    skill=${skill%/}
+    own_skill "${skill##*/}" && names+=("${skill##*/}")
+  done
+  echo "${names[*]-}"
+}
+# Whether Switchboard's skills are installed: any of them linked from a clone.
+has_skills() {
+  local skill
+  for skill in "$SRC"/claude/skills/*/; do
+    from_switchboard "$(basename "$skill")" && return 0
+  done
+  return 1
 }
 
 part_karabiner() {
@@ -1150,6 +1203,28 @@ elif ! whole_claude && command -v claude >/dev/null; then
   else
     optional "Switchboard's part of CLAUDE.md, for the tabs and the notes app: ./setup.sh claude"
   fi
+fi
+
+# The skills that ship with Switchboard, asked for the first time and then
+# kept up to date, a new one linked without asking. With the whole setup they
+# are linked already.
+if whole_claude || ! command -v claude >/dev/null; then
+  :
+elif (( $(pending skills) == 0 )) && has_skills; then
+  ok "Switchboard's skills (/wt, /shape, /review-loop, /ci-loop and the rest)"
+elif has_skills; then
+  if $CHECK; then
+    todo "Switchboard has new skills to link: ./setup.sh skills"
+  else
+    apply skills && ok "Switchboard's skills, the new ones linked" || todo "./setup.sh skills failed"
+  fi
+elif ask "Install Switchboard's skills (/wt, /shape, /review-loop, /ci-loop and the rest) in ~/.claude/skills? A skill of your own by the same name is kept."; then
+  apply skills && ok "installed Switchboard's skills" || todo "./setup.sh skills failed"
+else
+  optional "Switchboard's skills (/wt, /shape, /review-loop, /ci-loop and the rest): ./setup.sh skills"
+fi
+if ! whole_claude && has_skills && [[ -n $(own_skills) ]]; then
+  optional "your own skills kept in place of Switchboard's of the same name: $(own_skills)"
 fi
 
 # Everything in claude/: its owner's skills, commands and hooks,

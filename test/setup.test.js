@@ -301,6 +301,51 @@ test("setup.sh claude_md adds gh as a credential helper of a rules clone on GitH
   }
 });
 
+test("setup.sh skills links Switchboard's skills, keeping one of your own by the same name, once", () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-skills-")));
+  const env = { ...process.env, HOME: home };
+  const skills = path.join(home, ".claude/skills");
+  const shipped = fs.readdirSync(path.join(repo, "claude/skills"));
+  try {
+    fs.symlinkSync(repo, path.join(home, "switchboard"));
+    // Your own wt, and a shape linked from a clone by its old name.
+    fs.mkdirSync(path.join(skills, "wt"), { recursive: true });
+    fs.writeFileSync(path.join(skills, "wt/SKILL.md"), "mine\n");
+    fs.symlinkSync("/somewhere/editor-configs/claude/skills/shape", path.join(skills, "shape"));
+    // A Switchboard link made by hand, ending in a /: Switchboard's, so written again as setup writes it.
+    fs.symlinkSync(path.join(home, "switchboard/claude/skills/oncall/"), path.join(skills, "oncall"));
+    // A note-watch of your own, linked from dotfiles laid out the same way.
+    fs.mkdirSync(path.join(home, "dotfiles/claude/skills/note-watch"), { recursive: true });
+    fs.symlinkSync(path.join(home, "dotfiles/claude/skills/note-watch"), path.join(skills, "note-watch"));
+    // And a today linked relatively, read from the folder the link is in.
+    fs.mkdirSync(path.join(home, "dotfiles/claude/skills/today"), { recursive: true });
+    fs.symlinkSync("../../dotfiles/claude/skills/today", path.join(skills, "today"));
+
+    assert.match(spawnSync("bash", [script, "--check", "skills"], { env, encoding: "utf8" }).stdout, /link .*\/\.claude\/skills\/review-loop/);
+    assert.ok(!fs.existsSync(path.join(skills, "review-loop")), "--check changes nothing");
+    assert.equal(spawnSync("bash", [script, "skills"], { env, encoding: "utf8" }).status, 0);
+    shipped.filter((name) => !["wt", "note-watch", "today"].includes(name)).forEach((name) => assert.equal(fs.readlinkSync(path.join(skills, name)), path.join(home, "switchboard/claude/skills", name)));
+    assert.equal(fs.readFileSync(path.join(skills, "wt/SKILL.md"), "utf8"), "mine\n", "your own is kept");
+    assert.equal(fs.readlinkSync(path.join(skills, "note-watch")), path.join(home, "dotfiles/claude/skills/note-watch"), "a link of your own too");
+    assert.equal(fs.readlinkSync(path.join(skills, "today")), "../../dotfiles/claude/skills/today", "a relative one as well");
+    assert.ok(!fs.readdirSync(skills).some((name) => name.includes(".bak.")), "and nothing moved aside");
+    assert.match(spawnSync("bash", [script, "skills"], { env, encoding: "utf8" }).stdout, /skills: up to date/, "a second run changes nothing");
+
+    // One that can't be linked doesn't stop the rest, and is said at the end.
+    fs.rmSync(path.join(skills, "ci-loop"));
+    fs.rmSync(path.join(skills, "wt"), { recursive: true });
+    fs.rmSync(path.join(skills, "shape"));
+    fs.mkdirSync(path.join(skills, "ci-loop"));
+    fs.chmodSync(skills, 0o555);
+    const failed = spawnSync("bash", [script, "skills"], { env, encoding: "utf8" });
+    fs.chmodSync(skills, 0o755);
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /could not link these skills into ~\/\.claude\/skills: shape wt$/m, "every one tried, the failures said together");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("setup.sh config (and tmux) moves the AWS login's Chrome profile into browser.json, once", () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-aws-")));
   const env = { ...process.env, HOME: home };

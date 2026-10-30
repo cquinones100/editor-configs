@@ -14,7 +14,10 @@ to `~/.zshrc`, and installs Neovim's pinned plugins, asking
 before each install or change to `~/.zshrc`. Then come the optional parts, each asked for
 and off unless you say yes: Claude Code's hooks for tab states and `M-a`
 (only those hooks, added to your own settings, plus the statusline if you
-have none), this repo's whole Claude Code setup in place of yours (`./setup.sh
+have none), the skills that ship with Switchboard (`./setup.sh skills`:
+`/wt`, `/shape`, `/review-loop`, `/ci-loop` and the rest, linked into
+`~/.claude/skills`, a skill of your own by the same name kept, and new ones
+linked on later runs), this repo's whole Claude Code setup in place of yours (`./setup.sh
 claude`, its owner's settings and telemetry included), and this clone's git
 hooks (`./setup.sh git`, for committing to it). It also lists GitHub, the
 Linear key and slack-relay, with the keys each one is for. `./setup.sh

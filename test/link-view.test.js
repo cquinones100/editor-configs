@@ -53,6 +53,22 @@ test("the picker lists a pane's links newest first, a link written into text wit
   ]);
 });
 
+test("the picker's copy mode copies the chosen link to the clipboard and says so", () => {
+  const pane = execFileSync("tmux", ["-S", socket, "display", "-p", "#{pane_id}"], { env, encoding: "utf8" }).trim();
+  // fzf picks the PR's row with Enter; pbcopy keeps what it was given.
+  const bin = path.join(tmp, "bin-copy");
+  fs.mkdirSync(bin, { recursive: true });
+  const copied = path.join(tmp, "copied");
+  fs.writeFileSync(path.join(bin, "fzf"), "#!/bin/sh\ncat > /dev/null\nprintf '\\nthe PR\\thttps://github.com/o/r/pull/2\\n'\n", { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, "pbcopy"), `#!/bin/sh\ncat > ${copied}\n`, { mode: 0o755 });
+  const run = spawnSync("bash", [path.join(__dirname, "../tmux/link-view.sh"), "pick", pane, "copy"], {
+    env: { ...env, TMUX: `${socket},0,0`, PATH: `${bin}:${process.env.PATH}`, LC_ALL: "en_US.UTF-8" },
+    encoding: "utf8",
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(fs.readFileSync(copied, "utf8"), "https://github.com/o/r/pull/2");
+});
+
 test("in the notes pane, the picker lists the open note's links, top to bottom, since Notes hides their addresses", () => {
   const notes = path.join(tmp, "NotesForLinks");
   fs.mkdirSync(notes, { recursive: true });

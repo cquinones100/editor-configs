@@ -10,12 +10,14 @@
 # (tmux/open-url.sh); q closes the pane.
 #
 # Usage:
-#   link-view.sh pick <pane> [browser]
+#   link-view.sh pick <pane> [browser|copy]
 #                                    M-p: choose a link shown in <pane>, with fzf;
 #                                    Enter reads it beside the pane, Ctrl-O opens
 #                                    it in the browser; with browser, the other
 #                                    way round (M-p's "Open a link from this
-#                                    pane in the browser")
+#                                    pane in the browser"); with copy, Enter
+#                                    copies it (M-p's "Copy a link from this
+#                                    pane"), Ctrl-O opens it
 #   link-view.sh links <pane>        the links pick lists for <pane>, a line each
 #   link-view.sh open <pane> <url>   read <url> in a pane beside <pane>
 #   link-view.sh show [<url>]        in that pane: read it, else LINK_VIEW_URL
@@ -97,6 +99,8 @@ case "${1:-}" in
     # The same list either way; Enter does what was asked for, Ctrl-O the other.
     if [ "$first" = browser ]; then
       prompt='Open: ' header='Enter opens it in the browser · Ctrl-O reads it beside the pane'
+    elif [ "$first" = copy ]; then
+      prompt='Copy: ' header='Enter copies it · Ctrl-O opens it in the browser'
     else
       prompt='Read: ' header='Enter reads it beside the pane · Ctrl-O opens it in the browser'
     fi
@@ -104,6 +108,24 @@ case "${1:-}" in
     key=$(printf '%s' "$choice" | sed -n 1p)
     url=$(printf '%s' "$choice" | sed -n 2p | cut -f2)
     [ -n "$url" ] || exit 0
+    if [ "$first" = copy ]; then
+      [ "$key" = ctrl-o ] && exec "$here/open-url.sh" "$url"
+      # The system clipboard (pbcopy on the Mac, wl-copy or xclip on Linux),
+      # said as copied only when it took the link; with none of them, tmux's
+      # paste buffer, which tmux passes on to the terminal's clipboard only
+      # where it can (OSC 52), so it says just that.
+      # tmux reads # in a message as a format: doubled, the link shows as it is.
+      shown=${url//#/##}
+      if command -v pbcopy >/dev/null; then printf '%s' "$url" | pbcopy
+      elif command -v wl-copy >/dev/null; then printf '%s' "$url" | wl-copy
+      elif command -v xclip >/dev/null; then printf '%s' "$url" | xclip -selection clipboard
+      else
+        tmux set-buffer -w -- "$url" && tmux display-message "Put $shown in tmux's paste buffer, and the terminal's clipboard if it allows" || tmux display-message "Couldn't copy $shown"
+        exit 0
+      fi
+      if [ $? = 0 ]; then tmux display-message "Copied $shown"; else tmux display-message "Couldn't copy $shown"; fi
+      exit 0
+    fi
     if { [ "$first" = browser ] && [ "$key" != ctrl-o ]; } || { [ "$first" != browser ] && [ "$key" = ctrl-o ]; }; then exec "$here/open-url.sh" "$url"; fi
     exec "$0" open "$pane" "$url"
     ;;

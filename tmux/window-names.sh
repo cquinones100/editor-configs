@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 # Names and colors every window tab in a session. The name is tab-label.sh's
-# label, cut to fit, with the PR number in front when there is one. The same
-# name uncut goes in the window's @tab_label, for bin/slack-relay, which has
-# the room to show it.
+# label, whole, with the PR number in front when there is one. The same name
+# goes in the window's @tab_label, for bin/slack-relay and the sidebar, with
+# its # as they are.
 #
 # Usage: window-names.sh <session>
 #
@@ -20,12 +20,7 @@ session="${1:-}"
 
 script_dir="$(dirname "$0")"
 
-# The label is cut by characters, which bash only counts under a UTF-8 locale.
 export LC_ALL=en_US.UTF-8
-
-# Long enough for a ticket ID and the start of its title. The second status
-# line shows the whole label for the focused window.
-MAX_LABEL=30
 
 # Each window's directory is its active pane's, but never a sidebar's (the
 # @sidebar pane option): with the sidebar's cursor on a tab, the sidebar is
@@ -47,17 +42,16 @@ tmux list-panes -s -t "$session" -F $'#{window_index}\t#{?@sidebar,s,#{?@notes_p
     # The same label tab-status.sh puts at the front of the second status line.
     name=$("$script_dir/tab-label.sh" "${session}:${idx}" "$path" "$label")
     full=$name
-    [ ${#name} -gt $MAX_LABEL ] && name="${name:0:$((MAX_LABEL - 3))}..."
     # rename-window expands formats in the name it is given, so a # from a
     # ticket title, branch or directory is doubled to stay a #: unescaped,
-    # "#{…}" or "#(…)" in one would be expanded, and ## would lose a #. After
-    # the cut, so the cut counts the characters shown. @tab_label is set with
-    # setw, which doesn't expand, so the full name keeps its # as they are.
+    # "#{…}" or "#(…)" in one would be expanded, and ## would lose a #.
+    # @tab_label is set with setw, which doesn't expand, so it keeps its # as
+    # they are.
     name=${name//\#/##}
 
     # The PR number goes first because it is the short, stable half: the tab
-    # is scannable by number even when the branch name is cut off. Written
-    # ##, tmux stores it as the #<number> wt-jump reads back.
+    # is scannable by number. Written ##, tmux stores it as the #<number>
+    # wt-jump reads back.
     [ -n "$pr" ] && name="##${pr} ${name}" && full="#${pr} ${full}"
 
     # One tmux call for all four, since this runs for every window on every

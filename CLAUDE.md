@@ -83,15 +83,14 @@ builds the same key independently, so changing its shape in one place silently
 gives tmux and the Claude statusline two different colors for one project. The window name is
 only ever read, so it is free to change.
 
-`tmux/window-names.sh` owns the tab: the label from `tmux/tab-label.sh`, cut to
-30 characters, prefixed with `#<number>` when the branch has a pull request.
+`tmux/window-names.sh` owns the tab: the label from `tmux/tab-label.sh`, whole,
+prefixed with `#<number>` when the branch has a pull request.
 `wt-jump` reads that prefix back to find PRs, so it stays at the front. `rename-window` expands formats in the name it is given, so `window-names.sh` doubles every `#` in the name it sets (`##12` for the PR prefix, which tmux stores as `#12`); anything else that renames a window from a title, branch or directory must do the same. `@tab_label`, set with `setw`, is stored as given. The
 label is the name set with "Rename the tab" in `M-p` (the window's `@tab_name`), else the Linear
 ticket and its title when the branch names one Linear confirms, else
-`accent-color.sh --name`. The same name uncut, PR prefix included, goes in
-the window's `@tab_label`, which `bin/slack-relay` shows in Slack in place of
-the cut one. The second status line (off by default, the `second_status` setting), `tmux/tab-status.sh`, starts
-with the same label uncut, so any change to what a window is called belongs in
+`accent-color.sh --name`. The same name, PR prefix included, goes in
+the window's `@tab_label` with its `#` as they are, which `bin/slack-relay` shows in Slack. The second status line (off by default, the `second_status` setting), `tmux/tab-status.sh`, starts
+with the same label, so any change to what a window is called belongs in
 `tab-label.sh` and reaches both.
 
 A tab is named from its active pane's directory, skipping the sidebar and the notes pane `M-e` moves beside your work (which runs in your home directory), so typing in the notes doesn't rename the tab; the notes pane names only a tab that has no other pane. `window-names.sh` keeps the directory each name came from in the window's `@tab_path`, and at the end of a Claude turn `agent-state.sh` names the tabs again (one tmux format check, then `run-shell -b`) when the pane is no longer there, since a command can take the pane's terminal somewhere else between focus changes.

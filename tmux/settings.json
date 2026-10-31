@@ -283,6 +283,13 @@
     "default": true
   },
   {
+    "key": "palette_learn",
+    "category": "Palette",
+    "label": "Learn from what you pick",
+    "description": "M-p remembers what you typed before each pick, and puts that command first when you type the same again",
+    "default": true
+  },
+  {
     "key": "review_security",
     "category": "Safety",
     "label": "Security review in the review loop",

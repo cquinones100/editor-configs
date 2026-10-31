@@ -19,6 +19,11 @@
 # The commands picked last come first, newest first: their keys are kept in
 # ~/.local/state/tmux-palette/recent, one per line, the last few only. The
 # rest follow alphabetically.
+#
+# What was typed before each pick is kept too, with the key picked
+# (~/.local/state/tmux-palette/queries, "<query>\t<key>", the last 300), and
+# a command picked after typing the same words ranks first when they are
+# typed again (see --rank). The palette_learn setting turns that off.
 
 set -u
 # What it keeps names your branches, tickets and prompts: yours alone.
@@ -31,11 +36,29 @@ umask 077
 # description, 2 when it starts one, 1 when it is inside one, and 0 otherwise,
 # and a row's score is the sum. Ties keep the alphabetical order. fzf still
 # filters and highlights, so loose matches stay in the list, below these.
+# Before all that, a command picked after this same query comes first, and
+# one picked after a longer query this one starts, as "sha" for "shape", next,
+# each tier by how often, so what you reach for is found as you type.
 #
-# Usage (from fzf's reload): palette.sh --rank <file> <query>
+# Usage (from fzf's reload): palette.sh --rank <file> <query> [<queries file>]
 if [ "${1:-}" = --rank ]; then
-  awk -F'\t' -v query="${3:-}" '
-    BEGIN { n = split(tolower(query), terms, " ") }
+  # Through the environment, which awk takes as written: -v would read a
+  # backslash in either as an escape.
+  RANK_QUERY=${3:-} RANK_PICKS=${4:-} awk -F'\t' '
+    BEGIN {
+      query = ENVIRON["RANK_QUERY"]; picks = ENVIRON["RANK_PICKS"]
+      n = split(tolower(query), terms, " ")
+      typed = ""
+      for (i = 1; i <= n; i++) typed = typed (i > 1 ? " " : "") terms[i]
+      if (typed != "" && picks != "")
+        while ((getline line < picks) > 0) {
+          tab = index(line, "\t")
+          if (!tab) continue
+          past = substr(line, 1, tab - 1)
+          if (past == typed) same[substr(line, tab + 1)]++
+          else if (index(past, typed) == 1) longer[substr(line, tab + 1)]++
+        }
+    }
     {
       text = tolower($2)
       gsub(/[^a-z0-9]+/, " ", text)
@@ -51,8 +74,8 @@ if [ "${1:-}" = --rank ]; then
         }
         score += best
       }
-      printf "%d\t%d\t%s\n", score, NR, $0
-    }' "$2" | sort -t$'\t' -k1,1nr -k2,2n | cut -f3-
+      printf "%d\t%d\t%d\t%d\t%s\n", same[$1], longer[$1], score, NR, $0
+    }' "$2" | sort -t$'\t' -k1,1nr -k2,2nr -k3,3nr -k4,4n | cut -f5-
   exit 0
 fi
 
@@ -116,6 +139,8 @@ show_key='
 # would push the description out of sight.
 recent_file=${XDG_STATE_HOME:-$HOME/.local/state}/tmux-palette/recent
 RECENT_MAX=6
+queries_file=${recent_file%/*}/queries
+QUERIES_MAX=300
 # fzf's border, pointer, margins and scrollbar take 7 columns; the key gets 10,
 # the tags 24, and the description the rest.
 columns=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2)
@@ -127,7 +152,8 @@ rows=$(mktemp)
 trap 'rm -f "$rows"' EXIT
 # Commands tagged #github or #linear are left out while that setting is off
 # (tmux/settings.sh), so the palette offers nothing that would ask it.
-IFS='|' read -r github linear < <(tmux display -p '#{@setting_github}|#{@setting_linear}')
+IFS='|' read -r github linear learn < <(tmux display -p '#{@setting_github}|#{@setting_linear}|#{@setting_palette_learn}')
+[ "$learn" = off ] && learned_from="" || learned_from=$queries_file
 bindings | awk -F'\t' -v github="$github" -v linear="$linear" '
     $1 == "M-p" { next }
     github == "off" && $2 ~ / #github( |$)/ { next }
@@ -148,12 +174,16 @@ bindings | awk -F'\t' -v github="$github" -v linear="$linear" '
       printf "%s\t%s \033[38;5;240m%s \033[38;5;244m%s\033[0m\n", $1, pad(cut(text, tw), tw), pad(cut(tags, gw), gw), shown($1)
     }' > "$rows"
 
-choice=$(
-  fzf --ansi --delimiter=$'\t' --with-nth=2 --no-sort --no-hscroll --exact \
-    --bind "change:reload('$0' --rank '$rows' {q})" \
-    --prompt='action> ' --layout=reverse --border=rounded --height=100% < "$rows" |
-    cut -f1
+# --print-query gives what was typed on the first line, the pick on the second.
+# The paths reach the reload in the environment, so none is ever read as shell.
+export PALETTE_SELF=$0 PALETTE_ROWS=$rows PALETTE_LEARNED=$learned_from
+picked=$(
+  fzf --ansi --delimiter=$'\t' --with-nth=2 --no-sort --no-hscroll --exact --print-query \
+    --bind 'change:reload("$PALETTE_SELF" --rank "$PALETTE_ROWS" {q} "$PALETTE_LEARNED")' \
+    --prompt='action> ' --layout=reverse --border=rounded --height=100% < "$rows"
 )
+query=$(head -1 <<<"$picked" | tr '[:upper:]' '[:lower:]' | tr -s ' \t' ' ' | sed 's/^ //; s/ $//')
+choice=$(sed -n 2p <<<"$picked" | cut -f1)
 
 if [ -n "$choice" ]; then
   tmux set -g @palette_choice "$choice"
@@ -163,5 +193,9 @@ if [ -n "$choice" ]; then
   mkdir -p "${recent_file%/*}"
   { printf '%s\n' "$choice"; grep -vxF -- "$choice" "$recent_file" 2>/dev/null; } | head -n "$RECENT_MAX" > "$recent_file.$$" &&
     mv "$recent_file.$$" "$recent_file"
+  if [ -n "$query" ] && [ -n "$learned_from" ]; then
+    { tail -n $((QUERIES_MAX - 1)) "$queries_file" 2>/dev/null; printf '%s\t%s\n' "$query" "$choice"; } > "$queries_file.$$" &&
+      mv "$queries_file.$$" "$queries_file"
+  fi
 fi
 exit 0

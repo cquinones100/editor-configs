@@ -36,7 +36,7 @@ tmux new-session -A -s main
 
 | Key | What it does |
 |---|---|
-| `M-p` | Find any command by what it does, Settings included |
+| `M-p` | Find any command by what it does, Settings included; what you picked after typing the same words comes first |
 | `M-a` | Go to the next tab that needs you, one waiting on you before one that finished |
 | `M-j` | Find a tab by typing its name |
 | `M-S-f` | Search your notes, Linear, GitHub and Slack at once |

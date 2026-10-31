@@ -320,7 +320,7 @@ to it before pressing the key.
 
 The palette lists the commands picked last first, newest first, from
 `~/.local/state/tmux-palette/recent` (the last six keys, written by
-`palette.sh` after each pick), then the rest by description. Its columns are
+`palette.sh` after each pick), then the rest by description. As you type, a command picked before after the same words comes first, then one picked after longer words starting with them (`~/.local/state/tmux-palette/queries`, `<query>\t<key>`, the last 300, read by `--rank`; the `palette_learn` setting). Its columns are
 fitted to the popup, 60% of the screen, so a description or tag list too long
 for its column is cut with an ellipsis. `tmux.conf` empties the `palette`
 table before binding it (`unbind -aq -T palette`), so a command taken out of
